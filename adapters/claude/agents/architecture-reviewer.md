@@ -1,6 +1,6 @@
 ---
 name: architecture-reviewer
-description: Reviews code changes for layering compliance, separation of concerns, API contracts, and integration with existing patterns. Read-only — reports findings without modifying code. Dispatched by /review during Phase 4.
+description: "Reviews code changes for layering compliance, separation of concerns, API contracts, and integration with existing patterns. Read-only — reports findings without modifying code. Dispatched by /review during Phase 4."
 model: sonnet
 tools: Read, Grep, Glob, Bash
 ---

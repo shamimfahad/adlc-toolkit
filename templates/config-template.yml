@@ -34,6 +34,33 @@ stack:
 workflow:
   isolation: auto
 
+# Autonomy — used only by /ship (the autonomous pipeline). /proceed ignores this
+# block and always pauses at every gate. If this block is absent, /ship falls back
+# to safe defaults (gates: assisted, git: read-only, escalation: cautious) and
+# tells you it's doing so. Uncomment and tune to opt into more autonomy.
+#
+# autonomy:
+#   gates: auto              # manual | assisted | auto   (who clears each gate)
+#   git: commit+push         # read-only | commit | commit+push
+#                            #   push is feature-branch + fast-forward only —
+#                            #   never main, never force, never history rewrite
+#   escalation: balanced     # cautious | balanced | aggressive  (decision-maker bias)
+#   rework_cap_per_gate: 2   # max REWORK loops at one gate before forced HALT
+#   rework_budget_total: 5   # max REWORK loops across the whole run
+#   confidence_floor: 0.6    # any verdict below this confidence becomes HALT
+#   packet_max_bytes: 24576  # cap on the gate packet sent to the decision-maker
+#   hard_stops:              # categories that always HALT for the human
+#     - auth
+#     - security
+#     - secrets
+#     - payments
+#     - data-migration
+#     - public-api-contract
+#     - irreversible
+#   notify:
+#     on_halt: true          # ping when the run halts and needs you
+#     on_complete: true      # ping when the terminal review is ready
+
 # Repository layout. For single-repo projects, leave the `repos:` block out
 # entirely — skills fall back to single-repo behavior.
 # For multi-repo features, every repo that may originate a REQ gets its own

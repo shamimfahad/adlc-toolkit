@@ -1,6 +1,6 @@
 ---
 name: architect
-description: Design the architecture and task breakdown for a REQ. Phase 2 of /proceed. Dispatches codebase-explorer to inform the design, then drafts architecture.md and tasks/TASK-*.md. Ends in the architecture gate — user must approve before /implement.
+description: "Design the architecture and task breakdown for a REQ. Phase 2 of /proceed. Dispatches codebase-explorer to inform the design, then drafts architecture.md and tasks/TASK-*.md. Ends in the architecture gate — user must approve before /implement."
 ---
 
 Toolkit root: .adlc-toolkit

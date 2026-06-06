@@ -1,6 +1,6 @@
 ---
 name: review
-description: Multi-perspective code review for a REQ. Phase 4 of /proceed. Dispatches 4 read-only review agents in parallel (correctness, quality, architecture, reflector), consolidates findings by severity, and ends in the verify gate.
+description: "Multi-perspective code review for a REQ. Phase 4 of /proceed. Dispatches 4 read-only review agents in parallel (correctness, quality, architecture, reflector), consolidates findings by severity, and ends in the verify gate."
 ---
 
 Toolkit root: .adlc-toolkit

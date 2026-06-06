@@ -163,11 +163,11 @@ const TOOLS = {
     label: "Claude Code",
     cmd: (s) => ({
       path: `skills/${s.name}/SKILL.md`,
-      body: `---\nname: ${s.name}\ndescription: ${s.description}\n---\n\n${protocolBody("claude", s)}\n`,
+      body: `---\nname: ${s.name}\ndescription: ${yamlStr(s.description)}\n---\n\n${protocolBody("claude", s)}\n`,
     }),
     agent: (a) => ({
       path: `agents/${a.name}.md`,
-      body: `---\nname: ${a.name}\ndescription: ${a.description}\nmodel: ${model("claude", a.tier)}\ntools: ${claudeTools(a)}\n---\n\n${agentBody(a)}\n`,
+      body: `---\nname: ${a.name}\ndescription: ${yamlStr(a.description)}\nmodel: ${model("claude", a.tier)}\ntools: ${claudeTools(a)}\n---\n\n${agentBody(a)}\n`,
     }),
     memory: { path: "CLAUDE.md", body: memoryFile("Claude Code") },
   },

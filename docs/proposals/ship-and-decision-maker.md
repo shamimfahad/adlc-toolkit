@@ -61,9 +61,30 @@ The heart of `/ship`. A disciplined gate **adjudicator**, not a general-purpose 
 2. **REWORK** `{directives}` → loop back to the current phase with specific, actionable fixes. **Bounded** — capped per gate (default 2) before it's forced to escalate. (This is Brett's 3-strike idea, which the manual pipeline deliberately dropped — but it's exactly right here.)
 3. **HALT** `{reason, open-question}` → stop the run, write `.awaiting-approval`, surface to the human. Used for hard-stops, exhausted rework budget, or sub-threshold confidence.
 
-Every verdict records: evidence considered, the decision, a 0–1 confidence, and a one-line rationale. Below the confidence threshold → HALT even if nothing else trips.
+Every verdict records: evidence considered, the decision, a 0–1 confidence, and a one-line rationale. Below the confidence threshold → HALT even if nothing else trips. **No verdict is silent** — `gate-decisions.md` is written at every gate, including the APPROVEs. A passed gate is logged with the same detail as a halted one; that record is what makes the batched terminal review trustworthy.
 
-**Portability** (consistent with our adapter design): the decision-maker is a real sub-agent on Claude/Codex/Gemini/Copilot, and degrades to "the main agent adopts the decision-maker rubric in a separate pass" on Cursor — same rubric in `core/`, two fidelity levels. On tools where it runs inline, independence is weaker; the audit log still captures every verdict.
+### Why a separate agent, and not the main chat?
+
+You *can* run the main orchestrator as the decision-maker — but you shouldn't prefer it, for one reason: **independence**. In `/ship`, the main agent is the one running the pipeline — it drafted the spec, dispatched the implementer, watched the code get written. If that same agent also renders the verdict, it's grading its own homework, and it's biased toward APPROVE because it already "knows" the work is fine. A dedicated sub-agent gets a **fresh, isolated context**: it sees only the gate packet (artifact + findings + rubric), not the rationalized history of how the work came to be. That independence *is* the check — the same reason the review agents are separate read-only agents rather than the main agent reviewing its own diff.
+
+So: dedicated `decision-maker` sub-agent wherever the tool supports sub-agents (Claude, Codex, Gemini, Copilot). **Main-chat-as-decision-maker is the Cursor-only fallback** (Cursor has no isolated sub-agents). When it runs inline, independence is reduced; the decision-maker must record `independence: reduced (inline)` in `gate-decisions.md` so the human knows that gate's verdict came from the same context that produced the work. Same rubric in `core/`, two honestly-labeled fidelity levels.
+
+### Keeping the decision-maker cheap: fast-path / slow-path + packet discipline
+
+A sub-agent call costs input tokens for whatever you hand it. Dumping the full diff, spec, architecture, findings, and vault context at all five gates would be wasteful — and redundant, since the reviewers already processed the code and conventions. Two rules keep it lean:
+
+**Fast-path / slow-path.** Most gates are unambiguous and must NOT spend an LLM call. The orchestrator runs cheap deterministic pre-checks first:
+- Clean validation + zero findings + low risk → **deterministic APPROVE** (logged, no agent call).
+- A hard-stop category present, or any critical/major finding → **deterministic HALT** (logged, no agent call).
+- Only the **ambiguous middle** (minor findings, medium risk, partial criteria) dispatches the `decision-maker`.
+
+**Curated packet, not a dump.** When dispatched, the packet is assembled *downstream of review* and is bounded by a size cap (`autonomy.packet_max_bytes`, default 24 KB):
+- Consolidated findings **summary** (counts by severity + the minor findings' one-liners), not raw per-file diffs.
+- The risk profile and the acceptance-criteria checklist status.
+- The specific artifact under judgment (spec / architecture / PR draft) — these are bounded.
+- **Pointers** (path + line range) for anything deeper; the agent Reads on demand only if a finding is genuinely in question.
+
+Net: ≤ 5 agent calls per REQ, most short-circuited by the fast path, each with a compact packet. The decision-maker's token spend feeds the resource circuit breaker, so a pathological run trips the fuse rather than burning budget silently.
 
 ## Adaptive autonomy: risk scoring
 
@@ -143,11 +164,12 @@ A single file the human reads after an unattended run:
 ```yaml
 autonomy:
   gates: auto              # manual | assisted | auto
-  git: commit              # read-only | commit | commit+push
+  git: commit+push         # read-only | commit | commit+push   (push = feature branch only, FF-only, never main)
   escalation: balanced     # cautious | balanced | aggressive
   rework_cap_per_gate: 2
   rework_budget_total: 5
   confidence_floor: 0.6
+  packet_max_bytes: 24576  # cap on the gate packet handed to the decision-maker
   hard_stops:              # categories that always HALT (extend per project)
     - auth
     - security
@@ -156,15 +178,18 @@ autonomy:
     - data-migration
     - public-api-contract
     - irreversible
-  notify:                  # optional: ping on HALT / completion for unattended runs
-    on_halt: false
-    on_complete: false
+  notify:                  # ping on HALT / completion for unattended runs
+    on_halt: true
+    on_complete: true
 ```
+
+Defaults above reflect the chosen configuration: `balanced` escalation, rework caps of 2 per gate / 5 total, git = local commits plus fast-forward pushes to the feature branch only (never `main`, never force), and notifications on for both halt and completion.
 
 ## Acceptance criteria
 
 - [ ] `/ship <desc>` runs a REQ through all five phases with no human input until the terminal gate (when dials are `auto`).
-- [ ] The `decision-maker` agent emits APPROVE / REWORK / HALT with confidence + cited evidence, written to `gate-decisions.md`.
+- [ ] The `decision-maker` agent emits APPROVE / REWORK / HALT with confidence + cited evidence, written to `gate-decisions.md` at **every** gate (approvals included — no silent decisions).
+- [ ] When the decision-maker runs inline (Cursor fallback), the log records `independence: reduced (inline)`.
 - [ ] Hard-stop categories and a sub-floor confidence force HALT regardless of dials.
 - [ ] Per-gate and global rework caps, plus the recurring-failure tripwire, halt runaway loops.
 - [ ] Risk profile is computed and high-risk REQs auto-downgrade to HALT at the relevant gate.
@@ -173,12 +198,13 @@ autonomy:
 - [ ] `--dry-run` produces the decision plan and executes nothing.
 - [ ] Works as a sub-agent where supported and degrades to inline on Cursor, sharing one rubric.
 
-## Open questions (for Shamim)
+## Resolved decisions
 
-- [ ] **Autonomy default** when unset in config — `cautious` or `balanced`? (I lean `balanced`: escalate on major+ findings or low confidence, proceed otherwise.)
-- [ ] **Rework cap** default — 2 per gate / 5 total feels right; agree?
-- [ ] **Push tier** — should the default git dial be `commit` (local only, you push) or `commit+push` (it pushes the feature branch, never main)? You said "power to make commits" — I read that as local commits by default, with `commit+push` available. Confirm.
-- [ ] **Notifications** — want HALT/completion pings wired to the scheduled-task/notification capability now, or leave the config stubs for later?
+- [x] **Autonomy default** — `balanced` (escalate on major+ findings or low confidence, proceed otherwise).
+- [x] **Rework caps** — 2 per gate, 5 total.
+- [x] **Git dial** — `commit+push`: local commits plus fast-forward pushes to the feature branch only. Never `main`, never force, never history rewrite.
+- [x] **Notifications** — on, for both HALT and completion (`notify.on_halt` / `notify.on_complete` = true).
+- [x] **Token economy** — fast-path/slow-path adjudication + curated, size-capped gate packet (see section above).
 
 ## Out of scope (for now)
 

@@ -1,6 +1,6 @@
 ---
 name: health-auditor
-description: Standalone codebase health audit — tech debt, code smells, dead code, complexity hotspots, missing tests. Operates on the whole codebase, not a single REQ. Read-only. Dispatched by /analyze.
+description: "Standalone codebase health audit — tech debt, code smells, dead code, complexity hotspots, missing tests. Operates on the whole codebase, not a single REQ. Read-only. Dispatched by /analyze."
 model: sonnet
 tools: Read, Grep, Glob, Bash
 ---
