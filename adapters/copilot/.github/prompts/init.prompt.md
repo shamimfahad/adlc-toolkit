@@ -1,0 +1,11 @@
+---
+description: "Bootstrap the .adlc/ vault in a new repo — copies templates, generates the CLAUDE.md schema doc, creates empty vault files (now, hot, index, decisions, glossary, gotchas), and scans for existing documentation (README, ARCHITECTURE, CONTRIBUTING, lint configs, prior ADRs, GLOSSARY) to seed context/ and architecture/ with STATUS-flagged starting content."
+---
+
+Toolkit root: .adlc-toolkit
+
+Execute the ADLC **init** protocol — defined in `.adlc-toolkit/core/skills/init.md` — against the `.adlc/` vault in the current repository.
+
+Read that file in full and follow **every step literally**. It is a protocol, not a guideline (ADLC ETHOS principle 5 — load `.adlc-toolkit/ETHOS.md`).
+
+**Git policy:** never run git write commands (add, commit, push, merge, branch -d, gh pr create/merge, force-push). Read git state and draft commit/PR artifacts; the user runs all git themselves.

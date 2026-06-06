@@ -1,0 +1,78 @@
+# .adlc/config.yml — Per-project configuration
+# This file holds everything stack-specific. Skills read it at runtime.
+# Replace every <placeholder> with a real value, or delete sections that don't apply.
+
+project:
+  name: <project-name>
+  description: <one-line description>
+
+stack:
+  # Declare what's in use. Skills read these to decide what stack-specific
+  # behavior to enable.
+  languages: [<typescript|python|csharp|...>]
+  frontends: [<react|vue|ios|android|...>]   # optional
+  backends: [<node|dotnet|django|cloud-run|lambda|...>]   # optional
+  databases: [<postgres|firestore|sqlserver|...>]   # optional
+
+# Isolation strategy for in-flight REQs. Determines whether /architect and
+# /bugfix create an isolated git worktree per REQ or work directly on a
+# feature branch in the user's current checkout.
+#
+#   auto      — default. Branch for single-REQ skills (/proceed, /bugfix);
+#               worktree for /sprint (parallelism requires it) and for
+#               cross-repo REQs (mode is forced regardless of this setting).
+#   branch    — always use a branch on the current checkout. /sprint and
+#               cross-repo REQs still escalate to worktree.
+#   worktree  — always create an isolated worktree per REQ. Older default;
+#               useful if you don't use a stateful editor like VS Code, or
+#               prefer one-line aborts via `git worktree remove --force`.
+#
+# Trade-off: branch mode keeps your editor session intact across REQ start
+# and abort, but requires a clean working tree at the start of each REQ.
+# Worktree mode tolerates a dirty main checkout but each REQ start is a
+# folder switch in your editor.
+workflow:
+  isolation: auto
+
+# Repository layout. For single-repo projects, leave the `repos:` block out
+# entirely — skills fall back to single-repo behavior.
+# For multi-repo features, every repo that may originate a REQ gets its own
+# .adlc/ vault and its own config.yml. Configs are mirror images of each
+# other: each repo marks itself primary: true and lists the others as siblings.
+repos:
+  <this-repo-id>:
+    primary: true
+  # <sibling-id>:
+  #   path: ../<sibling-folder>
+
+# merge_order: default order when merging cross-repo REQs.
+# Only used when more than one repo is touched.
+# merge_order:
+#   - <repo-id>
+#   - <repo-id>
+
+# Per-repo service metadata. Used by deploy-aware skills (none in this toolkit
+# by default — Claude doesn't run deploys). Keep this block if you have
+# external scripts that consume it; remove otherwise.
+# services:
+#   <repo-id>:
+#     deploy_target: <name>
+#     region: <region>
+
+# Stack-specific deploy targets. Used only by skills that surface deploy
+# checklists for *you* to run. Claude never deploys.
+# deploy:
+#   staging: <command-or-target>
+#   production: <command-or-target>
+
+# Optional: paths Claude should treat as read-only legacy code
+# (Karpathy's "raw sources" layer — the immutable input the vault curates).
+# Read-only verification is allowed; writes never are.
+# read_only_sources:
+#   - D:/legacy/codebase
+#   - D:/legacy/contracts
+
+# Optional: paths Claude is forbidden from reading at all (secrets, prod data).
+# forbidden_paths:
+#   - .env.production
+#   - secrets/

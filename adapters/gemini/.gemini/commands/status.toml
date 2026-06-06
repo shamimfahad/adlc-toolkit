@@ -1,0 +1,12 @@
+description = "Read-only overview of all active work — REQs in flight, current phases, gate states, blockers, recent activity from hot.md. Use to orient at session start or to triage when /sprint has multiple REQs in flight."
+prompt = """
+Toolkit root: .adlc-toolkit
+
+Execute the ADLC **status** protocol — defined in `.adlc-toolkit/core/skills/status.md` — against the `.adlc/` vault in the current repository.
+
+Read that file in full and follow **every step literally**. It is a protocol, not a guideline (ADLC ETHOS principle 5 — load `.adlc-toolkit/ETHOS.md`).
+
+**Git policy:** never run git write commands (add, commit, push, merge, branch -d, gh pr create/merge, force-push). Read git state and draft commit/PR artifacts; the user runs all git themselves.
+
+{{args}}
+"""

@@ -1,0 +1,214 @@
+{
+  "main": {
+    "id": "f1ef8d34ceeb2f6b",
+    "type": "split",
+    "children": [
+      {
+        "id": "642fbd907b82c46e",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "39d6dcb1e390c823",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "README.md",
+                "mode": "preview",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "README"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "ea55449a5913b4fc",
+    "type": "split",
+    "children": [
+      {
+        "id": "1733750f20d7c7fd",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e9f459ac65e3d84c",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "bb3d0520341829dc",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "238146ce33f3d0d9",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "92d7b795f67c3aca",
+    "type": "split",
+    "children": [
+      {
+        "id": "789cdb5fed2e113f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6869428f46f42bba",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "ETHOS.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for ETHOS"
+            }
+          },
+          {
+            "id": "92b6f26eb23fa5a9",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "ETHOS.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from ETHOS"
+            }
+          },
+          {
+            "id": "75358f579c7a1ee2",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "100aace0bac00ff7",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "a41e47d7f4cce8c2",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "ETHOS.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of ETHOS"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "39d6dcb1e390c823",
+  "lastOpenFiles": [
+    "ETHOS.md",
+    "README.md",
+    "proceed/SKILL.md",
+    "agents/codebase-explorer.md",
+    "agents/architecture-reviewer.md.tmp.8732.3a751633ff51",
+    "agents/task-implementer.md",
+    "wrapup/SKILL.md.tmp.41004.dc4a45a27a63",
+    "bugfix/SKILL.md.tmp.12672.61f4fb5abcc5",
+    "bugfix/SKILL.md.tmp.12672.38d9e7b494fb",
+    "bugfix/SKILL.md.tmp.12672.2b4ed6c80238",
+    "bugfix/SKILL.md.tmp.12672.9a04a3aa478f",
+    "agents/pipeline-runner.md.tmp.18296.cd02a452da3b",
+    "agents/pipeline-runner.md.tmp.18296.05e9650fe857",
+    "agents/pipeline-runner.md.tmp.18296.d00412c79364",
+    "implement/SKILL.md.tmp.34096.a362e1565606",
+    "agents/reflector.md",
+    "agents/quality-reviewer.md",
+    "agents/pipeline-runner.md",
+    "agents/performance-scanner.md",
+    "agents/health-auditor.md",
+    "agents/correctness-reviewer.md",
+    "agents/architecture-reviewer.md",
+    "recover/SKILL.md",
+    "init/SKILL.md",
+    "spec/SKILL.md"
+  ]
+}
