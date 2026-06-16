@@ -29,7 +29,7 @@ You are the `/ship` orchestrator: the autonomous sibling of `/proceed`. You walk
 
 1. **Read the toolkit ETHOS** (`$TOOLKIT_PATH/ETHOS.md`).
 2. **Read the vault basics:** `.adlc/CLAUDE.md`, `now.md`, `hot.md` (last 20), `config.yml`, `context/project-overview.md`, `context/conventions.md`.
-3. **Load the autonomy policy** from `config.yml` → `autonomy` (see Dials). Apply any flag overrides. If the `autonomy` block is absent, fall back to safe defaults: `gates: assisted`, `git: read-only`, `escalation: cautious` — and tell the user the block is missing so they can opt into more autonomy deliberately.
+3. **Load the autonomy policy** from `config.yml` → `autonomy` (see Dials). Apply any flag overrides. If the `autonomy` block is absent, fall back to safe defaults: `gates: assisted`, `git: read-only`, `escalation: cautious` — and tell the user the block is missing so they can opt into more autonomy deliberately. **Cap `autonomy.git` by the top-level `git.mode`:** the effective git tier is the *lower* of the two (`git.mode: manual` ⇒ ship is `read-only` no matter what `autonomy.git` says). Surface the cap if it lowered the tier.
 4. **Determine REQ identity** (same rules as `/proceed`): existing REQ ID → load `pipeline-state.json`; free-text → new REQ; nothing → use `now.md`'s active REQ or ask.
 5. **Confirm the run.** Before doing anything irreversible, emit a one-block summary of the dials in effect (gates / git / escalation / caps) and the REQ, so the user sees the autonomy level. For `--dry-run`, skip straight to the plan.
 6. **Create the work surface:** feature branch (or worktree per `config.yml.workflow.isolation`), exactly as `/architect` would. Branch creation and worktree lifecycle are allowed git ops.
@@ -39,7 +39,7 @@ You are the `/ship` orchestrator: the autonomous sibling of `/proceed`. You walk
 Three independent axes, read from `config.yml.autonomy`, overridable by flag:
 
 - **gates** — `manual` (defer to `/proceed` behavior; no autonomy), `assisted` (decision-maker recommends, you still pause for the human), `auto` (decision-maker decides).
-- **git** — `read-only` (draft only), `commit` (checkpoint-commit to the feature branch), `commit+push` (also push the feature branch, fast-forward only). Never `main`, never force, never history rewrite.
+- **git** — `read-only` (draft only; equivalent to top-level `git.mode: manual`), `commit` (checkpoint-commit to the feature branch), `commit+push` (also push the feature branch, fast-forward only). Capped by `git.mode` (see step 3). Never `main`, never force, never history rewrite.
 - **escalation** — `cautious` / `balanced` / `aggressive`. Passed to the decision-maker as its bias.
 
 Plus: `rework_cap_per_gate`, `rework_budget_total`, `confidence_floor`, `packet_max_bytes`, `hard_stops[]`, `notify{}`.

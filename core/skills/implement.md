@@ -196,7 +196,7 @@ If `abort`:
 
 ## Constraints
 
-- **No git mutations.** Claude does not commit. The user commits using `commits-draft.md` after the gate clears.
+- **Commits follow `git.mode`** (`.adlc/config.yml`, default `manual`). In `manual`, Claude does not commit — it writes `commits-draft.md` and the user commits after the gate clears. In `commit`/`commit+push`, Claude commits the approved work on the REQ's feature branch using `commits-draft.md` as the message (and pushes it, ff-only, in `commit+push`) once the gate clears — never a protected branch.
 - **Tier discipline.** Don't dispatch tier N+1 until tier N is fully complete.
 - **Halt on first failure.** Don't paper over a failed task to keep the pipeline moving. The whole point of explicit gates is catching failures early.
 - **Honor task scope.** If a task-implementer reports scope creep or a deviation, surface it to the user — don't approve it autonomously.

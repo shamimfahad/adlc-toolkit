@@ -4,12 +4,20 @@ Cursor uses **slash commands** (`.cursor/commands/*.md`) and **rules** (`.cursor
 
 Adapter source: `adapters/cursor/.cursor/` → `commands/<name>.md`, `commands/adlc-agent-<name>.md`, `rules/adlc.mdc`.
 
+## Install — one command (recommended)
+
+```bash
+node scripts/install.mjs --tool=cursor          # add --dry-run to preview; --repo=<path> for one project
+```
+
+Cursor is the partial case: slash commands install globally (symlinked into `~/.cursor/commands/`, available in every project), but **rules are project-scoped** in Cursor — they can't be installed as a global file. The installer prints the path to `adlc.mdc`; paste it into **Settings → Rules (User Rules)** for an all-projects memory, or use `--repo=<path>` to drop `.cursor/rules/adlc.mdc` into a specific project. The manual steps below show the equivalent placement.
+
 ## Prerequisites
 
 - Cursor installed. Custom commands are read from `.cursor/commands/` in the project (and `~/.cursor/commands/` globally).
 - Node 18+ only if regenerating adapters.
 
-## Option A — Project-local (recommended)
+## Manual — project-local
 
 Cursor auto-discovers `.cursor/` in the open project. Just drop the folder in.
 
@@ -29,7 +37,7 @@ Copy-Item -Recurse -Force .adlc-toolkit\adapters\cursor\.cursor .\.cursor
 
 If the project already has a `.cursor/` folder, copy the *contents* of `commands/` and `rules/` in rather than replacing the directory.
 
-## Option B — Global (solo, all repos)
+## Manual — global (all repos)
 
 Put the commands in your user-level Cursor folder so they appear in every project. Rules remain project-scoped in Cursor, so the ADLC memory rule is best kept per-project.
 

@@ -358,7 +358,7 @@ This is read-only and doesn't change pipeline state.
 ## Constraints
 
 - **You never skip a phase.** Even if the user asks. The right tool for that is `/bugfix` (which has a different, slimmer pipeline) or invoking specific phase skills directly.
-- **You never run git mutations.** Every git action is in the phase skills, and only worktree creation is allowed there. The two exceptions are worktree *creation* in Phase 2 (architect) and worktree *removal* in `--cancel` — both are lifecycle operations, not content mutations. Code commits, branch deletes, pushes, PRs, and merges are always the user's to run.
+- **The orchestrator itself runs no git writes** beyond worktree lifecycle (creation in Phase 2 / architect, removal in `--cancel`). Any commits/pushes happen inside the phase skills, governed by `git.mode` (`.adlc/config.yml`, default `manual`): in `manual` the user runs them; in `commit`/`commit+push` the phase skills commit (and push, ff-only) the REQ's feature branch after each gate. Branch deletes, PRs, and merges are always the user's to run, in every mode.
 - **`--revert` never touches code.** The vault is rolled back; code rollback is drafted as `code-revert-plan.md` for the user to execute. If the user declines to run the git ops, the vault and code are now divergent — that's a `/recover` case.
 - **`--cancel` is REQ-wide.** Distinct from the gate-time `abort` response, which only aborts the current phase's work. `--cancel` terminates the entire REQ with a tombstone.
 - **You never auto-fix gate failures.** A reviewer flag, a test failure, a missing artifact → surface to the user.

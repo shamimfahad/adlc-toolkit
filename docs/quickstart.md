@@ -2,7 +2,7 @@
 
 The ADLC toolkit gives any AI coding assistant a **spec-driven pipeline with a human approval gate at every phase**. It works with Claude Code, Cursor, GitHub Copilot, OpenAI Codex, and Gemini CLI, on macOS, Windows, and Linux.
 
-This page gets you from zero to your first gated REQ in five steps. For tool-specific detail, see the [per-tool install guides](install/).
+This page gets you from zero to your first gated REQ in four steps. For tool-specific detail, see the [per-tool install guides](install/).
 
 ## How it fits together
 
@@ -17,51 +17,53 @@ adlc-toolkit/            ← the toolkit (shared across all your projects)
   core/                  ← protocol: skills/ + agents/ + manifest.json   (the one source of truth)
   templates/             ← vault + in-REQ templates
   adapters/<tool>/       ← generated stubs for each assistant
+  scripts/install.mjs    ← one-command install (global by default)
   scripts/build.mjs      ← regenerates adapters/
 
 your-project/            ← any code repo you work in
   .adlc/                 ← the vault, created by `init`
-  <adapter files>        ← copied/symlinked from adapters/<your-tool>/
 ```
 
-## The five steps
+The adapters install into your assistant's **user-level** config once, so individual projects only ever hold the `.adlc/` vault.
+
+## The four steps
 
 ### 1. Get the toolkit
 
 ```bash
-git clone <repo-url> adlc-toolkit
+git clone <repo-url> ~/code/adlc-toolkit
 ```
 
-Decide where it lives. Two models, both cross-platform:
+Keep it wherever you like — just leave it there. The installed commands read the protocol from this folder at runtime, so it's the toolkit's permanent home.
 
-- **Vendored (recommended, simplest):** copy the toolkit into each project at `.adlc-toolkit/`. No symlinks, identical on every OS, and the project is self-contained.
-- **Global:** keep one copy somewhere central and point every project at it by absolute path. Less duplication; needs the path stamped per machine.
-
-### 2. Generate adapters for your tool (and your path)
-
-The committed adapters assume the vendored path `.adlc-toolkit`. If that matches, skip this. Otherwise regenerate with your path:
+### 2. Install for your tool — one command, global by default
 
 ```bash
-cd adlc-toolkit
-node scripts/build.mjs --tool=cursor --toolkit-path=.adlc-toolkit          # vendored
-node scripts/build.mjs --tool=cursor --mode=global --toolkit-path=/abs/path/to/adlc-toolkit
+cd ~/code/adlc-toolkit
+node scripts/install.mjs --tool=copilot      # or claude · codex · gemini · cursor · all
 ```
 
-`--tool=all` builds every tool. The stamped path is the only thing that changes between the two models.
+This regenerates the adapter for your tool and links it into your assistant's **user-level** config, so the pipeline is available in **every repo you open** — no per-project setup. Add `--dry-run` first to preview every action; nothing is written until you run it for real.
 
-### 3. Install the adapter into your assistant
+**Want it in just one project instead?** Point the installer at that repo:
 
-Copy `adapters/<tool>/` into the right location for your tool. Each tool differs — see its guide:
+```bash
+node scripts/install.mjs --tool=copilot --repo=/path/to/project
+```
 
-| Tool | Guide | Lands in |
+Per-tool detail (exact locations, verification, caveats) lives in each install guide:
+
+| Tool | Guide | Global lands in |
 |---|---|---|
-| Claude Code | [install/claude.md](install/claude.md) | `~/.claude/` or `.claude/` |
-| Cursor | [install/cursor.md](install/cursor.md) | `.cursor/` |
-| GitHub Copilot | [install/copilot.md](install/copilot.md) | `.github/` |
-| OpenAI Codex | [install/codex.md](install/codex.md) | `AGENTS.md` + `~/.codex/` |
-| Gemini CLI | [install/gemini.md](install/gemini.md) | `GEMINI.md` + `.gemini/` |
+| Claude Code | [install/claude.md](install/claude.md) | `~/.claude/` |
+| GitHub Copilot | [install/copilot.md](install/copilot.md) | `~/.copilot/` + VS Code user prompts |
+| OpenAI Codex | [install/codex.md](install/codex.md) | `~/.codex/` |
+| Gemini CLI | [install/gemini.md](install/gemini.md) | `~/.gemini/` |
+| Cursor | [install/cursor.md](install/cursor.md) | per-repo (`--repo`); global rules are manual |
 
-### 4. Initialize a project
+> The installer builds machine-specific stubs (with an absolute path to the toolkit) into the gitignored `dist/` folder and symlinks from there, so the committed `adapters/` stays portable and your `git status` stays clean. Update every install later with `git -C ~/code/adlc-toolkit pull` — the symlinks pick it up automatically.
+
+### 3. Initialize a project
 
 Open your assistant in a code repo and run the init command (`/init`, or `init` — depends on the tool):
 
@@ -71,7 +73,7 @@ Open your assistant in a code repo and run the init command (`/init`, or `init` 
 
 It creates `.adlc/`, scans existing docs (README, ARCHITECTURE, CONTRIBUTING, lint configs, ADRs) to seed the vault, and asks a few project questions. Then edit `.adlc/config.yml` for your stack.
 
-### 5. Run your first REQ
+### 4. Run your first REQ
 
 ```
 /spec      → approve → /architect → approve → /implement → approve → /review → approve → /wrapup → approve
@@ -79,9 +81,21 @@ It creates `.adlc/`, scans existing docs (README, ARCHITECTURE, CONTRIBUTING, li
 
 Or run the whole thing with `/proceed`. Each gate pauses for your approval. For bugs, use `/bugfix`.
 
+## Changing settings
+
+Project settings live in `.adlc/config.yml` and are easiest to change with the **`/config`** command — no hand-editing YAML:
+
+```
+/config                      # show current settings
+/config git.mode=commit      # change one setting directly
+/config                      # (interactive) pick a setting, choose from valid options
+```
+
+`/config` validates each value, edits the file surgically (your comments stay intact), and re-syncs anything derived from a setting — e.g. changing `git.mode` also refreshes the git-policy block in `.adlc/CLAUDE.md`. The most common knob is **`git.mode`** (`manual` → `commit` → `commit+push`): how much git the assistant runs. It's set during `/init` and defaults to `manual` (drafts only; you run git). See [Git policy](../README.md#git-policy) for the modes and their invariants.
+
 ## What stays true on every tool
 
-- **You decide; the assistant drafts.** Gates pause for you; you run all git.
+- **You decide; the assistant drafts.** Gates pause for you; git is yours by default (`git.mode: manual`), and you can grant more via `/config` when you want it.
 - **The vault is portable.** It's just markdown — switch tools or use several at once against the same `.adlc/`.
 - **Read-only reviewers** report findings; they never edit.
 

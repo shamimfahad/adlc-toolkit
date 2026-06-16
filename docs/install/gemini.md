@@ -6,12 +6,20 @@ Adapter source: `adapters/gemini/` → `GEMINI.md`, `.gemini/commands/<name>.tom
 
 > Gemini is the one tool whose commands are TOML, not Markdown. The generator handles that — the protocol text lives in the TOML `prompt = """..."""` field.
 
+## Install — one command (recommended)
+
+```bash
+node scripts/install.mjs --tool=gemini          # add --dry-run to preview; --repo=<path> for one project
+```
+
+Global install symlinks commands into `~/.gemini/commands/`, agents into `~/.gemini/agents/`, and the memory file to `~/.gemini/GEMINI.md` — available in every repo. Symlinks track the toolkit, so `git -C <toolkit> pull` updates everything. The manual steps below are the equivalent, if you prefer to place files yourself.
+
 ## Prerequisites
 
 - Gemini CLI installed (`gemini --version`).
 - Node 18+ only if regenerating adapters.
 
-## Option A — Project-local (recommended)
+## Manual — project-local
 
 **macOS / Linux**
 ```bash
@@ -31,7 +39,7 @@ Copy-Item -Force .adlc-toolkit\adapters\gemini\GEMINI.md .\GEMINI.md
 
 If the repo already has `.gemini/` or `GEMINI.md`, copy the contents / merge the block.
 
-## Option B — Global (solo, all repos)
+## Manual — global (all repos)
 
 ```bash
 git clone <repo-url> ~/code/adlc-toolkit

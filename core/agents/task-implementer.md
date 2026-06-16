@@ -117,7 +117,7 @@ You **may** run:
 - `git status` and `git diff` — to verify your changes look right
 - `git log -<n>` — to check recent history for context
 
-If you find yourself wanting to run a forbidden command, **stop**. The user runs git. You draft the message.
+If you find yourself wanting to run a forbidden command, **stop**. You only write code and draft the commit message. Committing is the orchestrating skill's job at the gate — and only if `git.mode` permits it (default `manual`: the user commits). A sub-agent never commits, even in `commit`/`commit+push` mode, so parallel task-implementers can't race on the branch.
 
 ### Scope discipline
 

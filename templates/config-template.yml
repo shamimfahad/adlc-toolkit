@@ -6,6 +6,27 @@ project:
   name: <project-name>
   description: <one-line description>
 
+# Git policy — how much git the assistant may run. The WHOLE pipeline respects
+# this; /ship's autonomy.git (below) may lower it but never exceed it. Set by /init.
+#
+#   manual       — (default) the assistant never runs git writes. It drafts the
+#                  commit message (commits-draft.md), PR body (pr-draft.md), and
+#                  merge-checklist.md; you run every git command yourself.
+#   commit       — the assistant may `git add` + `git commit` on the REQ's feature
+#                  branch, after that phase's gate is approved, using the drafted
+#                  message. You still push and open/merge the PR.
+#   commit+push  — also `git push` the REQ's feature branch (fast-forward only).
+#                  You still open and merge the PR.
+#
+# Invariants in EVERY mode (never overridable): only the REQ's own feature branch;
+# never commit/push to a `protect:` branch; never force-push, rebase, amend
+# published commits, `reset --hard` away commits, delete branches, run
+# `gh pr create` / `gh pr merge`, or use `--no-verify`. Read commands
+# (status / diff / log / show) are always allowed.
+git:
+  mode: manual
+  protect: [main, master, release/*]
+
 stack:
   # Declare what's in use. Skills read these to decide what stack-specific
   # behavior to enable.
@@ -42,8 +63,11 @@ workflow:
 # autonomy:
 #   gates: auto              # manual | assisted | auto   (who clears each gate)
 #   git: commit+push         # read-only | commit | commit+push
-#                            #   push is feature-branch + fast-forward only —
-#                            #   never main, never force, never history rewrite
+#                            #   the autonomous git ceiling for /ship. Capped by
+#                            #   the top-level `git.mode` — it can lower it but
+#                            #   never exceed it (git.mode: manual ⇒ /ship is
+#                            #   read-only too). push is feature-branch +
+#                            #   fast-forward only — never main, force, or rewrite
 #   escalation: balanced     # cautious | balanced | aggressive  (decision-maker bias)
 #   rework_cap_per_gate: 2   # max REWORK loops at one gate before forced HALT
 #   rework_budget_total: 5   # max REWORK loops across the whole run

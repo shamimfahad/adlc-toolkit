@@ -274,7 +274,7 @@ Reply:
 
 ## Constraints
 
-- **Never run git mutations.** Same rules as everywhere else.
+- **Commits follow `git.mode`** (`.adlc/config.yml`, default `manual`) — same rules as the full pipeline. In `manual`, draft `commits-draft.md` and the user commits. In `commit`/`commit+push`, commit the fix on the bug's own feature branch after the gate (and push it, ff-only), never on a protected branch.
 - **Never expand scope mid-bug.** If during investigation the fix grows past a small area, surface and recommend reframing.
 - **Always add a regression test.** No exceptions. A bug fix without a regression test is borrowing against future debugging.
 - **Always capture knowledge.** At least one non-discard verdict (promote OR demote-to-gotcha) at Phase 5. The verdict step exists precisely to keep the vault high-signal — discards are allowed, but a bug fix that ends in all-discards needs explicit user confirmation, not a silent skip.

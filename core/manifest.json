@@ -16,7 +16,8 @@
     { "name": "analyze",   "category": "standalone",   "gate": false, "agents": ["health-auditor"],                                                          "summary": "Standalone codebase health audit." },
     { "name": "optimize",  "category": "standalone",   "gate": false, "agents": ["performance-scanner"],                                                     "summary": "Standalone performance/cost scan." },
     { "name": "status",    "category": "utility",      "gate": false, "agents": [],                                                                          "summary": "Show every active REQ and gate state." },
-    { "name": "recover",   "category": "utility",      "gate": false, "agents": [],                                                                          "summary": "Reconcile pipeline-state with git reality; back-fill the vault." }
+    { "name": "recover",   "category": "utility",      "gate": false, "agents": [],                                                                          "summary": "Reconcile pipeline-state with git reality; back-fill the vault." },
+    { "name": "config",    "category": "utility",      "gate": false, "agents": [],                                                                          "summary": "View/change .adlc/config.yml settings via guided options; re-sync derived files." }
   ],
   "agents": [
     { "name": "codebase-explorer",   "tier": "haiku",  "readonly": true,  "dispatchable": true,  "role": "One structured recon pass: similar patterns, blast radius, integration points." },
@@ -27,7 +28,7 @@
     { "name": "reflector",           "tier": "sonnet", "readonly": true,  "dispatchable": true,  "role": "Self-review against captured lessons. Read-only." },
     { "name": "health-auditor",      "tier": "sonnet", "readonly": true,  "dispatchable": true,  "role": "Codebase health audit for /analyze. Read-only." },
     { "name": "performance-scanner", "tier": "sonnet", "readonly": true,  "dispatchable": true,  "role": "API cost + DB perf + latency for /optimize. Read-only." },
-    { "name": "pipeline-runner",     "tier": "opus",   "readonly": false, "dispatchable": true,  "role": "Runs the full pipeline for one REQ in a worktree for /sprint. No sub-agents. No git." },
+    { "name": "pipeline-runner",     "tier": "opus",   "readonly": false, "dispatchable": true,  "role": "Runs the full pipeline for one REQ in a worktree for /sprint. No sub-agents. Git per git.mode — feature branch only, never main/force/PR." },
     { "name": "decision-maker",      "tier": "opus",   "readonly": true,  "dispatchable": true,  "role": "Adjudicates one pipeline gate during an autonomous /ship run — APPROVE / REWORK / HALT with confidence + cited evidence. Conservative by default; escalates on doubt." }
   ],
   "tierToModel": {

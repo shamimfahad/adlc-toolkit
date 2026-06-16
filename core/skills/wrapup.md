@@ -338,8 +338,8 @@ If `abort`:
 
 ## Constraints
 
-- **NEVER** run `git add`, `git commit`, `git push`, `gh pr create`, `gh pr merge`, branch deletes, or force pushes. The merge checklist exists because **you don't run those commands**.
-- **Vault updates** are written, but never committed by Claude. They go up with the user's final commit (or as a separate commit the user chooses to add).
+- **Git follows `git.mode`** (`.adlc/config.yml`, default `manual`). In `manual`, NEVER run `git add/commit/push` — the merge checklist exists because you don't run those. In `commit`/`commit+push`, you may commit the vault/lesson updates on the REQ's feature branch (and push it, ff-only, in `commit+push`) after the wrapup gate is approved. In **every** mode, NEVER run `gh pr create`, `gh pr merge`, branch deletes, force-pushes, or anything touching a protected branch — opening and merging the PR is always the user's.
+- **Vault updates** go on the REQ's feature branch: committed by you in `commit`/`commit+push`, or left for the user's final commit in `manual`.
 - **`pr-draft.md` is a draft.** The user can paste it into `gh pr create --body-file` or copy/paste into a web form. Don't auto-submit anywhere.
 - **Capture liberally as candidates, prune deliberately at verdict.** Candidates are cheap — one line in a scratch file. Lessons are precious — the vault stays high-signal because the verdict step is rigorous, not because the candidate bar is high. Silent zero-capture is a failure mode: if no candidates surfaced upstream and the sweep over `verification.md` finds nothing either, surface that as a question to the user at the gate ("REQ produced zero knowledge — confirm or revise"), don't pass silently.
 

@@ -295,7 +295,7 @@ If `abort`:
 - **Don't apply fixes during the review pass.** Fixes happen only after the user approves them at the gate.
 - **Deduplicate honestly.** Two reviewers flagging the same issue from different angles is a strong signal — don't lose that by collapsing too aggressively.
 - **Surface vault-stale findings.** Reflector findings recommending the vault (not the code) change need special attention — the user decides whether to update the lesson/gotcha/ADR.
-- **Never run git mutations.** Fixes write code; the user commits them.
+- **Review applies code fixes but does not itself commit.** Committing follows `git.mode` (`.adlc/config.yml`, default `manual`) and happens at the implement/wrapup gate boundaries — never here, and never on a protected branch.
 
 ## Output artifacts
 

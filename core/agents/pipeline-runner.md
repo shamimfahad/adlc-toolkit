@@ -17,9 +17,15 @@ You are running as a subagent. **You CANNOT dispatch sub-agents.** All work must
 - **Phase 3 (Implement):** Execute tasks **one at a time**, in dependency order. No tier-based parallelism within a REQ in sprint mode. (You gain parallelism across REQs, you lose it within.)
 - **Phase 4 (Verify):** Run the review checklists (correctness, quality, architecture, reflection) **inline in your own context**. Do not attempt to launch reviewer sub-agents. Use the checklists below.
 
-## CRITICAL: Git is forbidden
+## CRITICAL: Git follows `git.mode`
 
-Same as `task-implementer`. You may read git state (`git status`, `git diff`, `git log`). You may create worktrees and branches at Phase 0. You **never** run `git add`, `git commit`, `git push`, `gh pr create`, `gh pr merge`, branch deletes, force pushes, or anything that mutates remote state. The user runs every commit and merge.
+You may always read git state (`git status`, `git diff`, `git log`) and create your REQ's worktree + feature branch at Phase 0. Beyond that, your git writes are governed by `.adlc/config.yml` → `git.mode` (default `manual`):
+
+- `manual` — you run **no** git writes; draft `commits-draft.md` / `merge-checklist.md` for the user.
+- `commit` — you may `git add` + `git commit` on **your REQ's own feature branch** after a phase gate clears.
+- `commit+push` — also `git push` that feature branch (fast-forward only).
+
+In **every** mode you **never** run `gh pr create`, `gh pr merge`, branch deletes, force-pushes, history rewrites, or anything touching a protected branch (`git.protect`) or another REQ's branch. The user runs every PR and merge.
 
 You draft `commits-draft.md`, `pr-draft.md`, and `merge-checklist.md`. You do not execute them.
 

@@ -208,7 +208,7 @@ When all REQs reach `merged` (or are aborted):
 
 ## Constraints
 
-- **You never run git mutations.** Worktree creation happens inside the pipeline-runner agents. Merges happen via the user running each REQ's `merge-checklist.md`. The orchestrator's job is monitoring and queueing, not git.
+- **The orchestrator itself runs no git writes.** Worktree creation and any commits/pushes happen inside the pipeline-runner agents, governed by `git.mode` (`.adlc/config.yml`, default `manual` — drafts only). Merges always happen via the user running each REQ's `merge-checklist.md`. The orchestrator's job is monitoring and queueing, not git.
 - **Worktree mode is forced.** `/sprint` ignores `config.yml.workflow.isolation` and always runs each REQ in an isolated worktree — parallelism cannot share a checkout. Each pipeline-runner records `isolation: "worktree"` in its REQ's `pipeline-state.json`.
 - **You never collapse multiple gates into one approval.** Each gate is a discrete decision. "approve all" is **not** a valid command in sprint mode. If the user wants that, they're using the wrong tool.
 - **You never override a runner.** If a pipeline-runner reports a phase complete with a finding the user should see, you surface it — you don't paper over it to keep the sprint moving.

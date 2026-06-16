@@ -6,7 +6,7 @@ These six principles are injected into every SDLC skill. They define how Claude 
 
 ## 1. You Decide; Claude Drafts
 
-Every phase boundary pauses for your approval. Every git operation is yours to run. Claude's job is to draft — specs, architecture, code, commit messages, PR bodies, lessons — and to surface findings clearly. Your job is to decide what's right, fix what's wrong, and push the buttons.
+Every phase boundary pauses for your approval. Git is yours by default — you can grant the assistant more via `.adlc/config.yml` → `git.mode` (`manual` → `commit` → `commit+push`), but even at its most autonomous it only ever touches the REQ's own feature branch and never a protected branch, a force-push, a history rewrite, or a merge/PR. Claude's job is to draft — specs, architecture, code, commit messages, PR bodies, lessons — and to surface findings clearly. Your job is to decide what's right, fix what's wrong, and push the buttons that matter.
 
 When Claude finds a gate failure, the loop is **not** "retry until it works." It's "stop, surface what failed, wait for direction." Auto-fix is borrowed time; explicit human approval compounds into reliable judgment.
 

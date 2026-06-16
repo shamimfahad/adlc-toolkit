@@ -4,12 +4,20 @@ Claude Code calls commands **skills** (`SKILL.md` in a folder per command) and s
 
 Adapter source: `adapters/claude/` → `skills/<name>/SKILL.md`, `agents/<name>.md`, `CLAUDE.md`.
 
+## Install — one command (recommended)
+
+```bash
+node scripts/install.mjs --tool=claude          # add --dry-run to preview; --repo=<path> for one project
+```
+
+Global install symlinks `~/.claude/skills`, `~/.claude/agents`, and `~/.claude/CLAUDE.md` to the toolkit, so every repo gets the pipeline and `git -C <toolkit> pull` updates all of them. The manual Options below are the equivalent, if you'd rather place files yourself.
+
 ## Prerequisites
 
 - Claude Code installed (`claude --version`).
 - Node 18+ only if you need to regenerate adapters (`node scripts/build.mjs`).
 
-## Option A — Project-local (recommended for teams)
+## Manual — project-local (good for teams)
 
 The pipeline travels with the repo. Run from your project root.
 
@@ -38,9 +46,9 @@ Copy-Item -Recurse -Force .adlc-toolkit\adapters\claude\agents .claude\agents
 Copy-Item -Force .adlc-toolkit\adapters\claude\CLAUDE.md .\CLAUDE.md
 ```
 
-## Option B — Global (recommended for solo, all repos)
+## Manual — global (all repos)
 
-Install once into `~/.claude`; available in every project. Symlink so `git pull` on the toolkit updates everything.
+What the one-command installer does, by hand: install once into `~/.claude`, available in every project. Symlink so `git pull` on the toolkit updates everything.
 
 **macOS / Linux**
 ```bash

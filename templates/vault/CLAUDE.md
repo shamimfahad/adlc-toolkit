@@ -35,7 +35,7 @@ You do not need to read every page in the vault. The index plus targeted lookups
 | Source | Authority |
 |---|---|
 | This file (`CLAUDE.md`) | The rules of the road |
-| `ETHOS.md` (toolkit-level) | The five principles |
+| `ETHOS.md` (toolkit-level) | The six principles |
 | `config.yml` | Stack, paths, deploy config |
 | `context/*` | Project-wide architecture, conventions, overview |
 | `architecture/adr-*.md` (status: accepted) | Architectural decisions in effect |
@@ -58,31 +58,25 @@ ADRs with status `proposed` or `superseded` are not in effect — don't follow t
 
 ### Git policy
 
-Claude **never** runs:
+How much git Claude may run is set by `config.yml` → `git.mode` (default **`manual`**):
 
-- `git add`
-- `git commit`
-- `git push`
-- `gh pr create`
-- `gh pr merge`
-- `git branch -D` or any other branch delete
-- `git push --force` or any other force push
-- Anything that mutates remote state
+| `git.mode` | Claude may also run |
+|---|---|
+| `manual` (default) | nothing below — drafts only (see "always drafts") |
+| `commit` | `git add` + `git commit` on the REQ's feature branch, **after that phase's gate is approved**, using `commits-draft.md` as the message |
+| `commit+push` | the above **plus** `git push` of the REQ's feature branch (fast-forward only) |
 
-Claude **may** run:
+Claude **always may** run (every mode): `git status`, `git diff`, `git log`, `git show` (observation); `git worktree add` (isolated REQ worktree at REQ start); `git checkout -b` (the REQ's feature branch); `git worktree list`, `git worktree remove --force` (worktree lifecycle).
 
-- `git status`, `git diff`, `git log`, `git show` — observation only
-- `git worktree add` — for creating isolated REQ worktrees at the start of a REQ
-- `git checkout -b` — for creating the feature branch tied to that worktree
-- `git worktree list`, `git worktree remove --force` — for managing the worktree lifecycle
+Claude **never** runs, in **any** mode: commit or push to a `git.protect` branch (default `main`, `master`, `release/*`); `git push --force` / `--force-with-lease`; `git rebase`; `git commit --amend` on published commits; `git reset --hard` that drops commits; `git branch -D` / any branch delete; `gh pr create`; `gh pr merge`; tag deletion; `--no-verify`; any history rewrite.
 
-Claude **drafts** (writes to files in `specs/REQ-xxx/`):
+Claude **always drafts** (writes to files in `specs/REQ-xxx/`), so you have them whatever the mode:
 
 - `commits-draft.md` — suggested commit messages per logical chunk
 - `pr-draft.md` — PR title, body, change summary, lesson references
-- `merge-checklist.md` — the git/gh commands the user runs to finish a REQ
+- `merge-checklist.md` — the git/gh commands you run to finish a REQ (push if `manual`, then PR create + merge)
 
-The user runs every commit, push, PR creation, and merge.
+In `manual` mode the user runs every commit, push, PR creation, and merge. In `commit`/`commit+push` mode Claude handles the feature-branch commits (and push), and the user still opens and merges the PR.
 
 ### Isolation modes
 

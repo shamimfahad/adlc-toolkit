@@ -8,7 +8,7 @@ Inspired by Brett Luelling's [adlc-toolkit](https://github.com/atelier-fashion/s
 
 ## Start here
 
-→ **[Quickstart](docs/quickstart.md)** — zero to your first gated REQ in five steps.
+→ **[Quickstart](docs/quickstart.md)** — zero to your first gated REQ in four steps.
 → **Install for your tool:** [Claude Code](docs/install/claude.md) · [Cursor](docs/install/cursor.md) · [GitHub Copilot](docs/install/copilot.md) · [OpenAI Codex](docs/install/codex.md) · [Gemini CLI](docs/install/gemini.md)
 → **[Fidelity matrix](docs/fidelity-matrix.md)** — what's first-class vs. degraded on each tool.
 
@@ -27,29 +27,73 @@ The toolkit keeps the protocol in **one tool-agnostic place** (`core/`) and gene
 ```
 adlc-toolkit/
   core/
-    skills/<name>.md       # the 13 command protocols (tool-agnostic)
-    agents/<name>.md        # the 9 agent role definitions
+    skills/<name>.md       # the 15 command protocols (tool-agnostic)
+    agents/<name>.md        # the 10 agent role definitions
     manifest.json           # catalog the generator reads
   templates/                # vault + in-REQ templates (stack-agnostic)
   adapters/<tool>/          # generated stubs — clone-and-go for each assistant
+  scripts/install.mjs       # one-command install (global by default)
   scripts/build.mjs         # regenerates adapters/
   docs/                     # quickstart, fidelity matrix, per-tool install guides
-ETHOS.md                    # the 5 guiding principles
+ETHOS.md                    # the 6 guiding principles
 ```
 
 Per project, the `init` command creates a **`.adlc/` vault** — an Obsidian-compatible markdown knowledge base holding that repo's specs, architecture, conventions, decisions, lessons, and gotchas. The vault is plain markdown, so it's portable across tools and survives switching assistants.
 
-## Regenerating adapters
+## Install
 
-The committed adapters assume the vendored path `.adlc-toolkit`. To stamp a different path (e.g. a global install):
+One command, **global by default** — the pipeline becomes available in every repo you open:
 
 ```bash
-node scripts/build.mjs --tool=all --toolkit-path=.adlc-toolkit              # vendored (default)
-node scripts/build.mjs --tool=all --mode=global --toolkit-path=/abs/path    # global
+git clone <repo-url> ~/code/adlc-toolkit
+cd ~/code/adlc-toolkit
+node scripts/install.mjs --tool=copilot     # or claude · codex · gemini · cursor · all
+```
+
+The installer regenerates the adapter for your tool and symlinks it into that tool's user-level config (`~/.copilot/`, `~/.claude/`, `~/.codex/`, `~/.gemini/`, …). Add `--dry-run` to preview, or `--repo=/path/to/project` to install into a single project instead. See the [quickstart](docs/quickstart.md) and [per-tool guides](docs/install/).
+
+Under the hood it builds machine-specific stubs (absolute toolkit path) into the gitignored `dist/` and links from there, so the committed `adapters/` stays portable. Update every install later with `git -C ~/code/adlc-toolkit pull`.
+
+### Or let your AI assistant install it
+
+Open this repo in your AI coding assistant (Claude Code, Copilot, Cursor, Codex, or Gemini CLI) and paste this prompt — it figures out the rest:
+
+```text
+You are helping me install this repo (the ADLC toolkit) into my AI coding assistant.
+
+1. Identify which assistant you are and map it to one of: claude, copilot, codex, gemini, cursor.
+2. Read README.md and docs/install/<that-tool>.md in this repo so you know the exact locations and caveats.
+3. From the repo root, run:  node scripts/install.mjs --tool=<that-tool> --dry-run
+   Show me the planned actions and confirm they look right.
+4. Then run it for real (drop --dry-run). It installs GLOBALLY (available in all my repos) by
+   default; only add --repo=<path> if I say I want a single project.
+5. Report any manual follow-up the installer printed (e.g. a VS Code settings line, or reloading
+   the window), then walk me through the "Verify" steps from docs/install/<that-tool>.md.
+
+Constraints: do not run any git write commands, and don't move or rename this toolkit folder
+(the installed stubs read core/ from here at runtime). Node 18+ is required to run the installer.
+```
+
+## Regenerating adapters
+
+You normally don't run this — `scripts/install.mjs` calls the generator for you (into the gitignored `dist/`). Run `build.mjs` directly only to refresh the committed, portable `adapters/` after editing `core/`, or to stamp a custom toolkit path by hand:
+
+```bash
+node scripts/build.mjs --tool=all --toolkit-path=.adlc-toolkit              # vendored (default; what's committed)
+node scripts/build.mjs --tool=all --mode=global --toolkit-path=/abs/path    # absolute path
 node scripts/build.mjs --tool=cursor                                        # just one tool
 ```
 
-Change the protocol once in `core/`, regenerate, and every tool's adapter updates together.
+Every generated stub is a thin pointer that says "run the protocol defined at `<toolkit-path>/core/...`". So the **only** thing that varies between installs is that stamped path — that's what these flags control:
+
+- `--tool=<claude|cursor|copilot|codex|gemini|all>` — which assistant(s) to emit. Default `all`.
+- `--toolkit-path=<path>` — the path stamped into every stub, i.e. where the stub will find `core/` at runtime, **as seen from the repo where you'll use it.**
+  - **vendored** (default): a relative path like `.adlc-toolkit` — use when the toolkit is copied into each project.
+  - **global**: an absolute path like `/Users/you/code/adlc-toolkit` — use when one central copy serves every repo.
+- `--mode=vendored|global` — only sets the *default* for `--toolkit-path` (relative vs. the toolkit's own absolute path). An explicit `--toolkit-path` always wins.
+- `--out=<dir>` — where to write the stubs. Defaults to `adapters/`; the installer overrides this to `dist/`.
+
+The committed `adapters/` are built vendored (relative `.adlc-toolkit`) so they stay portable across machines — **don't commit absolute paths.** For a global install, let `install.mjs` build into `dist/` instead. Change the protocol once in `core/`, regenerate, and every tool's adapter updates together.
 
 ## Skills
 
@@ -62,12 +106,14 @@ Change the protocol once in `core/`, regenerate, and every tool's adapter update
 | `review` | Dispatch reviewers, consolidate findings | Yes |
 | `wrapup` | Draft PR + lessons + vault updates + git checklist | Yes |
 | `proceed` | Run all five phase skills with gates between | — |
+| `ship` | Autonomous pipeline — routes each gate through the decision-maker; ends in one terminal human review | — |
 | `sprint` | Parallel multi-REQ orchestrator (gate-pause) | — |
 | `bugfix` | Slimmer pipeline for bugs | Yes |
 | `analyze` | Standalone codebase health audit | No |
 | `optimize` | Standalone performance/cost scan | No |
 | `status` | Show every active REQ and gate state | No |
 | `recover` | Reconcile pipeline-state with git reality; back-fill the vault | No |
+| `config` | View/change `.adlc/config.yml` settings (git mode, isolation, autonomy…) via guided options | No |
 
 ## Agents
 
@@ -81,7 +127,8 @@ Change the protocol once in `core/`, regenerate, and every tool's adapter update
 | reflector | Sonnet | Self-review against captured lessons. Read-only. |
 | health-auditor | Sonnet | Codebase health audit for `analyze`. Read-only. |
 | performance-scanner | Sonnet | API cost + DB perf + latency for `optimize`. Read-only. |
-| pipeline-runner | Opus | Runs the full pipeline for one REQ in a worktree for `sprint`. No sub-agents. No git. |
+| pipeline-runner | Opus | Runs the full pipeline for one REQ in a worktree for `sprint`. No sub-agents. Git per `git.mode` (feature branch only). |
+| decision-maker | Opus | Adjudicates one pipeline gate during an autonomous `ship` run — APPROVE / REWORK / HALT with cited evidence. Read-only. |
 
 Model tiers map to each tool's models via `core/manifest.json` → `tierToModel`, overridable per project in `.adlc/config.yml`. Read-only enforcement strength varies by tool — see the [fidelity matrix](docs/fidelity-matrix.md).
 
@@ -105,11 +152,19 @@ The `.adlc/` directory is an Obsidian-compatible vault — open it in Obsidian f
 
 ## Git policy
 
-The assistant never runs `git add`, `git commit`, `git push`, `gh pr create`, `gh pr merge`, branch deletes, or force pushes. It reads git state (`git status`, `git diff`, `git log`) and creates worktrees / feature branches at the start of a REQ. Everything else is yours. At gate boundaries it drafts what you'll need: `commits-draft.md` after `implement`, `pr-draft.md` after `wrapup`.
+How much git the assistant runs is **your choice per project**, set at `init` and stored in `.adlc/config.yml` → `git.mode`:
+
+| `git.mode` | Behavior |
+|---|---|
+| `manual` (default) | The assistant runs no git writes. It reads git state, creates the REQ's worktree/feature branch, and drafts `commits-draft.md` (after `implement`) and `pr-draft.md` (after `wrapup`). You run every commit, push, and merge. |
+| `commit` | The assistant also `git add` + `git commit`s the approved work on the REQ's feature branch at each gate. You push and open/merge the PR. |
+| `commit+push` | The assistant also `git push`es the feature branch (fast-forward only). You open and merge the PR. |
+
+In **every** mode the hard invariants hold: only the REQ's own feature branch, and never a protected branch (`git.protect`, default `main`/`master`/`release/*`), force-push, rebase, history rewrite, branch delete, `gh pr create`, `gh pr merge`, or `--no-verify`. `/ship`'s `autonomy.git` is capped by `git.mode` and can never exceed it.
 
 ## Philosophy
 
-The five principles in [ETHOS.md](ETHOS.md), injected into every skill: **you decide / the assistant drafts**; **spec first, code second**; **read-only reviewers**; **knowledge compounds**; **process is explicit**.
+The six principles in [ETHOS.md](ETHOS.md), injected into every skill: **you decide / the assistant drafts**; **spec first, code second**; **read-only reviewers**; **knowledge compounds**; **process is explicit**; **ask in options, not open prose**.
 
 ## Contributing / extending
 

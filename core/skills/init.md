@@ -33,6 +33,12 @@ Ask the user (use your assistant's structured-question UI if it has one; otherwi
 - **One-line description** — used in README and project-overview
 - **Stack snapshot** — languages, frontends, backends, databases (free text; the user can refine in config.yml later)
 - **Cross-repo?** — single-repo (default) or multi-repo. If multi-repo, gather sibling repo paths.
+- **Git policy** — how much git the assistant may run. Present these as discrete options (ETHOS principle 6) and record the answer as `git.mode`:
+  - **manual** (default, recommended) — the assistant never runs git writes; it drafts the commit message, PR body, and merge checklist, and you run every git command.
+  - **commit** — the assistant may `git add` + `git commit` on the REQ's feature branch after a phase's gate is approved; you still push and open/merge the PR.
+  - **commit+push** — also pushes the feature branch (fast-forward only); you still open and merge the PR.
+
+  Default to **manual** if the user is unsure or skips. In every mode the hard invariants still hold: only the REQ's feature branch, never a `protect:` branch, never force-push / rebase / amend-published / branch-delete / `gh pr create` / `gh pr merge` / `--no-verify`.
 
 If the user prefers to skip and fill `config.yml` themselves, accept that and proceed with placeholder values.
 
@@ -200,6 +206,7 @@ Open `.adlc/config.yml` and pre-fill what you gathered:
 
 - `project.name`
 - `project.description`
+- `git.mode` (the value chosen in step 1; default `manual`)
 - `stack.languages` (best effort from the user's free text)
 - `repos.<this-repo-id>.primary: true`
 
@@ -384,7 +391,7 @@ Suggest the user `cd .adlc` and open the vault in Obsidian if they want the view
 - **Never modify source documentation.** Discovery is read-only — source files stay where they are, untouched.
 - **Always mark synthesized content** with `STATUS: needs verification` and cite the source path.
 - **Never invent content.** If a source has no info for a target section, leave the section empty with the template placeholder, not with fabricated text.
-- **Never commit** the new vault — the user runs that.
+- **Never commit** the new vault, regardless of `git.mode` — bootstrapping happens before any REQ branch exists, so the user reviews and commits the initial `.adlc/` themselves.
 - **Never write outside** `.adlc/` and (with explicit confirmation) `.gitignore`.
 - **Preserve original ADR IDs** when importing — don't renumber.
 

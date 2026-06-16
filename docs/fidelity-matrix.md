@@ -36,8 +36,11 @@ All five assistants converged on the same three primitives — a memory/context 
 
 ## Choosing where to install
 
-- **Project-local** (copy adapter files into the repo) — best for teams: the pipeline travels with the repo, everyone gets the same commands, and it's reviewable in PRs. All tools support this.
-- **Global / user-level** (`~/.claude`, `~/.codex`, `~/.gemini`, user-level Cursor/Copilot) — best for solo work across many repos: install once, available everywhere. Copilot is the most project-oriented of the five.
+`scripts/install.mjs` does either for you. Global is the default; pass `--repo=<path>` for project-local.
+
+- **Global / user-level** (default) — install once into `~/.claude`, `~/.copilot`, `~/.codex`, `~/.gemini`, `~/.cursor/commands`; the pipeline is then available in every repo you open. Best for solo work across many repos. All five tools support user-level slash commands and (except Cursor) user-level memory + sub-agents — modern VS Code Copilot reads `~/.copilot/agents`, user-level prompt files, and `~/.copilot/instructions`, so it is no longer project-bound.
+- **Project-local** (`--repo=<path>`) — writes the adapter into the repo (`.claude/`, `.github/`, `.cursor/`, etc.). Best for teams: the pipeline travels with the repo, everyone gets the same commands, and it's reviewable in PRs.
+- **Cursor is the partial case:** slash commands install globally, but its memory **rule** is project-scoped — install per-repo, or paste it into Cursor's User Rules.
 
 ## Notes on accuracy
 

@@ -1,6 +1,6 @@
 Toolkit root: .adlc-toolkit
 
-Execute the ADLC **init** protocol — defined in `.adlc-toolkit/core/skills/init.md` — against the `.adlc/` vault in the current repository.
+Execute the ADLC **config** protocol — defined in `.adlc-toolkit/core/skills/config.md` — against the `.adlc/` vault in the current repository.
 
 Read that file in full and follow **every step literally**. It is a protocol, not a guideline (ADLC ETHOS principle 5 — load `.adlc-toolkit/ETHOS.md`).
 

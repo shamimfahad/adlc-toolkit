@@ -4,14 +4,22 @@ Codex uses `AGENTS.md` (auto-loaded, hierarchical from repo root down) as the me
 
 Adapter source: `adapters/codex/` → `AGENTS.md`, `prompts/<name>.md`, `agents/<name>.toml`.
 
+## Install — one command (recommended)
+
+```bash
+node scripts/install.mjs --tool=codex          # add --dry-run to preview; --repo=<path> for one project
+```
+
+Global install symlinks commands into `~/.codex/prompts/`, agents into `~/.codex/agents/`, and the memory file to `~/.codex/AGENTS.md` (Codex reads it for every session). Symlinks track the toolkit, so `git -C <toolkit> pull` updates everything. The manual steps below are the equivalent, if you prefer to place files yourself.
+
 ## Prerequisites
 
 - Codex CLI installed (`codex --version`).
 - Node 18+ only if regenerating adapters.
 
-## Install
+## Manual install
 
-Codex prompts and agents are **user-level** (`~/.codex/`), while `AGENTS.md` is **per-repo**. So this is a hybrid: global commands, project memory.
+What the one-command installer does, by hand. Codex prompts and agents are **user-level** (`~/.codex/`); `AGENTS.md` works at the repo root or, for an all-repos default, at `~/.codex/AGENTS.md` (where the installer places it).
 
 **macOS / Linux**
 ```bash
