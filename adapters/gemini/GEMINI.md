@@ -4,12 +4,13 @@ This repository uses the **ADLC toolkit**: a spec-driven development pipeline wi
 
 **Knowledge vault:** `.adlc/` holds specs, architecture, conventions, decisions (ADRs), lessons, gotchas, and glossary. Read `.adlc/context/conventions.md`, `.adlc/context/project-overview.md`, and `.adlc/now.md` before non-trivial work. The toolkit itself lives at `.adlc-toolkit/`.
 
-**The five principles (full text: `.adlc-toolkit/ETHOS.md`):**
+**The six principles (full text: `.adlc-toolkit/ETHOS.md`):**
 1. **You decide; the assistant drafts.** Every phase boundary pauses for the user. Every git operation is the user's to run.
 2. **Spec first, code second.** Never implement without a validated spec.
 3. **Read-only reviewers.** Review/audit agents report findings; they never edit. The user decides what gets fixed.
 4. **Knowledge compounds.** Every change leaves the vault smarter — lessons, gotchas, concepts, ADRs.
 5. **Process is explicit.** Skill steps are a protocol, not a guideline. No shortcuts; no `--no-verify`.
+6. **Ask in options, not open prose.** When you need a decision from the user, present discrete labeled options with a recommendation, not an open-ended question. On Claude, use the `AskUserQuestion` tool; elsewhere, a short numbered list inline. The user can always go off-menu.
 
 **Git policy:** never run `git add/commit/push/merge`, branch deletes, force-pushes, or `gh pr create/merge`. Read git state and draft commit/PR text; the user runs git.
 

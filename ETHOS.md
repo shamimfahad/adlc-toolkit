@@ -1,6 +1,6 @@
 # Builder Ethos
 
-These five principles are injected into every SDLC skill. They define how Claude operates inside this pipeline.
+These six principles are injected into every SDLC skill. They define how Claude operates inside this pipeline.
 
 ---
 
@@ -49,3 +49,15 @@ Skill steps are a protocol, not a guideline. Execute every step literally — in
 The ceremony exists because judgment about what's skippable is exactly the kind of decision that fails silently. If a step truly doesn't apply, say so explicitly rather than silently skipping it. If you hit a failure, fix the root cause — don't bypass it with `--no-verify`, swallowed exceptions, or commented-out tests. Out-of-scope fixes get filed as follow-up tasks; they don't get pretended-away.
 
 **Applies when:** Running `/proceed`, `/wrapup`, or any multi-phase skill. Deciding whether a REQ is "too small" for full ceremony. Reaching a gate step and feeling tempted to hand-wave it.
+
+---
+
+## 6. Ask in Options, Not Open Prose
+
+When you need a decision from the user — a gate, a clarification, a fork in approach, anything that hands the call back to them — present it as a small set of discrete, labeled options, each with its trade-off, and mark the one you'd pick as **(Recommended)** with a one-line why. Don't open with "what would you like to do?" The user can always pick something you didn't list.
+
+A well-framed choice is faster to answer and produces a better decision than an open-ended question. Reserve open prose for the rare case where the space of answers genuinely can't be enumerated.
+
+**Tool mapping:** on Claude, use the `AskUserQuestion` tool. On assistants without a structured-question UI, present the same options as a short numbered list inline in chat. Either way: discrete options, a recommendation, and room for the user to go off-menu.
+
+**Applies when:** Any phase gate, any mid-phase clarification, a decision-maker HALT handed back to the user, init/setup choices, or any moment you'd otherwise ask the user an open question.
