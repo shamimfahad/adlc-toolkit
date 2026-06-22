@@ -24,19 +24,22 @@ If during investigation the bug turns out to be larger than expected, **stop and
 2. **Load vault basics.** `.adlc/CLAUDE.md`, `now.md`, `hot.md` (last 20), `config.yml`, `context/conventions.md`, `context/architecture.md`.
 3. **Assign a BUG ID.** Scan `.adlc/bugs/` for the highest `BUG-NNN-*` folder; increment, pad to 3 digits.
 4. **Create the bug folder:** `.adlc/bugs/BUG-NNN-<slug>/`.
+5. **Resolve a source reference (optional).** If invoked with an issue reference (e.g. `/bugfix #8`) or an issue URL, and `config.yml.sources.issues` is set (not `none`), resolve it with the same mechanism order as `/spec` (CLI such as `gh issue view <n> --json title,body,labels,comments,author,createdAt` first → MCP → URL fetch; default repo from `sources.repo`, a full URL overrides). This is the *same resolver* `/spec` uses. If a label indicates the issue is a feature rather than a defect, note it — the Phase 1 gate's `reframe` path will route it to `/spec`. If nothing resolves or no service is configured, print one line (`couldn't reach <service> for <ref> — drafting the report manually`) and continue; the seed is strictly additive.
 
 ## Phase 1 — Bug report (gate)
 
 ### Draft
 
-Copy `templates/bug-template.md` to `.adlc/bugs/BUG-NNN-<slug>/bug.md`. Substitute placeholders and fill content from the user's description:
+Copy `templates/bug-template.md` to `.adlc/bugs/BUG-NNN-<slug>/bug.md`. Substitute placeholders and fill content from the user's description — **or, if a source reference was resolved at preflight step 5, seed from the issue**:
 
-- Symptom
-- Reproduction steps
-- Environment
-- Severity estimate (the user provides or you propose)
+- Symptom — issue title + body
+- Reproduction steps — issue body and **comments** (repro steps and stack traces usually live in the thread, not the opening post)
+- Environment — any OS/browser/runtime/version mentioned; leave blank fields for the user to confirm
+- Severity estimate — map from labels (`P0`/`critical` → critical, etc.) or propose one
+- Reporter / Reported — issue author and creation date
+- Add the issue link to the bug's "Related" section for provenance.
 
-If repro steps aren't clear, ask follow-ups in chat. Don't proceed to investigate without a runnable repro (or an explicit "I can't reproduce — investigate from this stack trace").
+Seeded content is a **draft, not truth**. The gate's runnable-repro requirement is unchanged: a tracker issue often lacks clean repro steps, so fill what the issue gives, then — if repro steps still aren't runnable — ask follow-ups in chat. **Don't proceed to investigate without a runnable repro** (or an explicit "I can't reproduce — investigate from this stack trace"), seeded or not.
 
 ### Initialize pipeline state
 
@@ -246,6 +249,10 @@ Mirrors `/wrapup`'s "Process candidates" step, but bound to the bugfix folder:
 
 Same shape as `/wrapup`'s `merge-checklist.md`.
 
+### Source write-back (optional, gated)
+
+Same rule as `/wrapup`'s step 5a. Only if `config.yml.sources.write` includes the issue tracker and this bug was seeded from (or links to) an issue: draft the comment/transition into `.adlc/bugs/BUG-NNN-<slug>/source-writeback.md` (e.g. "Fixed in PR <link> — BUG-NNN-<slug>", `→ Closed`). Never auto-send; surface it at the ship gate and execute only on explicit approval. External write — hard-stop-eligible, capped by `sources.write` and (under `/ship`) `autonomy.sources`.
+
 ### Gate prompt
 
 ```
@@ -253,6 +260,11 @@ Same shape as `/wrapup`'s `merge-checklist.md`.
 
 PR drafted: .adlc/bugs/BUG-NNN-<slug>/bug-fix-pr-draft.md
 Merge checklist: .adlc/bugs/BUG-NNN-<slug>/merge-checklist.md
+
+Source write-back (only if sources.write is configured):
+  Proposed: comment on <issue> + transition → Closed
+  Draft:    .adlc/bugs/BUG-NNN-<slug>/source-writeback.md
+  ⚠ Not sent until you approve — external write, hard-stop-eligible.
 
 Vault updates from candidates:
   Candidates considered:    <N>
@@ -278,6 +290,7 @@ Reply:
 - **Never expand scope mid-bug.** If during investigation the fix grows past a small area, surface and recommend reframing.
 - **Always add a regression test.** No exceptions. A bug fix without a regression test is borrowing against future debugging.
 - **Always capture knowledge.** At least one non-discard verdict (promote OR demote-to-gotcha) at Phase 5. The verdict step exists precisely to keep the vault high-signal — discards are allowed, but a bug fix that ends in all-discards needs explicit user confirmation, not a silent skip.
+- **Source seeding is additive; source write-back is gated.** Reading an issue to seed the report (Phase 1) never blocks — if it fails, draft manually. Writing back (Phase 5) is off unless `sources.write` lists the tracker, drafted to `source-writeback.md`, and sent only on explicit approval — never silently. Same rules as `/wrapup`.
 
 ## Output artifacts
 
@@ -290,5 +303,6 @@ Per `BUG-NNN-<slug>`:
 - `bug-fix-pr-draft.md`
 - `merge-checklist.md`
 - `lesson-candidates.md` (created or appended to across phases 2-4; verdicts appended at Phase 5; persists as decision history)
+- `source-writeback.md` (only when `sources.write` is configured and a write-back was drafted at Phase 5)
 - `pipeline-state.json`
 - Vault updates: gotchas, lessons, hot.md, index.md

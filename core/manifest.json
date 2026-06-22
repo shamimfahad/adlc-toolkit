@@ -38,5 +38,29 @@
     "copilot": { "haiku": "default", "sonnet": "default", "opus": "default" },
     "codex": { "haiku": "default-fast", "sonnet": "default", "opus": "default" },
     "gemini": { "haiku": "default-fast", "sonnet": "default", "opus": "default" }
+  },
+  "sources": {
+    "$comment": "External systems a project can SEED artifacts from. Declared per project in .adlc/config.yml -> sources; this catalog tells /init what to offer and tells skills which phases may use each service, with what read/write capability, via which mechanisms (auto-resolved at runtime, first that works wins). Reads are default-on for a declared service; writes require the service in config sources.write and are always gated.",
+    "kinds": {
+      "issues": {
+        "phases": ["spec", "bugfix", "wrapup"],
+        "services": ["github", "linear", "jira"],
+        "capability": "read+write",
+        "comment": "Read seeds /spec and /bugfix Phase 1 from a ticket; write (gated, opt-in) posts PR links / transitions issues at /wrapup and /bugfix Phase 5."
+      },
+      "design": {
+        "phases": ["architect"],
+        "services": ["figma"],
+        "capability": "read",
+        "comment": "Read seeds /architect UI/component specs from a frame."
+      }
+    },
+    "mechanisms": {
+      "$comment": "Resolution order per service, first that works wins. Declared as a hint; actual availability is detected at runtime and degrades to manual authoring.",
+      "github": ["gh", "mcp", "url"],
+      "linear": ["mcp", "url"],
+      "jira": ["mcp", "url"],
+      "figma": ["mcp", "url"]
+    }
   }
 }

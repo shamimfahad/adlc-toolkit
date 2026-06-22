@@ -13,7 +13,7 @@ You are running Phase 1 of the ADLC pipeline: drafting and validating a requirem
 
 ## Inputs
 
-- The user's feature description (free text in chat).
+- The user's feature description (free text in chat), **or** a source reference — a bare issue number (`#8`), a tracker key (`PROJ-8`), or a full issue URL — when `sources.issues` is configured. The reference seeds the draft; the user still reviews it at the gate.
 - An optional REQ ID (if the user is overwriting an existing spec). Default: assign a new sequential ID.
 
 ## Preflight
@@ -25,6 +25,11 @@ You are running Phase 1 of the ADLC pipeline: drafting and validating a requirem
    - Otherwise, scan `.adlc/specs/` for existing `REQ-NNN-*` folders, take the max, increment. Pad to 3 digits.
 4. **Determine the slug.** Short kebab-case description from the user's input (e.g., `firestore-composite-indexes`). Keep ≤40 chars.
 5. **Create the REQ folder:** `.adlc/specs/REQ-NNN-<slug>/`.
+6. **Resolve a source reference (optional).** If the user invoked with an issue reference (e.g. `/spec #8`) or pasted an issue URL, and `config.yml.sources.issues` is set (not `none`):
+   - **Resolve the mechanism, first that works wins:** a dedicated CLI if installed and authed (for `github`, `gh issue view <n> --json title,body,labels,comments,author,createdAt`, defaulting the repo to `sources.repo`); else an attached MCP server for that service; else a plain fetch if the reference is a full URL. A full URL may point at a different repo/service than the default — honor it.
+   - **If a mechanism resolves,** read the issue title/body/labels/linked discussion and carry them into step 1 as draft material (problem framing, goal, candidate acceptance criteria). Record provenance: add the issue link to the spec's "Related" section so the vault stays traceable.
+   - **If nothing resolves** (no CLI, no MCP, not a fetchable URL) or no service is configured, print one line — `couldn't reach <service> for <ref> — drafting the spec manually` — and continue. The seed is strictly additive; its absence never blocks.
+   - Seeded content is a **draft, not truth**: every field still passes inline validation (step 4) and the human gate (step 6). Never copy issue prose verbatim into acceptance criteria without making each one testable.
 
 ## Steps
 

@@ -10,7 +10,9 @@ Every phase boundary pauses for your approval. Git is yours by default — you c
 
 When Claude finds a gate failure, the loop is **not** "retry until it works." It's "stop, surface what failed, wait for direction." Auto-fix is borrowed time; explicit human approval compounds into reliable judgment.
 
-**Applies when:** Hitting any phase gate, completing any review pass, encountering a failure mid-phase, finishing any artifact that needs to be acted on.
+**Gates live at the boundaries, not between every keystroke.** Friction at the phase line is the point; friction on every edit inside a phase is not. Within a REQ's **blast radius** — its own worktree/branch and the files its tasks name — the implementer edits freely. At the *edge* of that radius it stops and surfaces: files no task named, new top-level dependencies, schema or data migrations, anything touching auth, security, or secrets. "Smooth inside, hard stop at the line." How much in-phase friction you want is yours to set (`config.yml` → `workflow.edits`); the boundary gates are never negotiable.
+
+**Applies when:** Hitting any phase gate, completing any review pass, encountering a failure mid-phase, finishing any artifact that needs to be acted on, or deciding whether an edit is inside the REQ's blast radius or crossing its edge.
 
 ---
 

@@ -35,6 +35,38 @@ stack:
   backends: [<node|dotnet|django|cloud-run|lambda|...>]   # optional
   databases: [<postgres|firestore|sqlserver|...>]   # optional
 
+# External sources — where this project's requirements and designs live, so the
+# pipeline can SEED an artifact from them instead of you retyping it. Optional:
+# omit the block entirely and the pipeline runs fully hermetic, exactly as before.
+# Set by /init.
+#
+# Two layers:
+#   SERVICE   — which system holds the work (github | linear | jira | none for
+#               issues; figma | none for design). A stable project fact; chosen
+#               once at /init.
+#   MECHANISM — HOW a skill reaches that service at runtime. NOT MCP-only. The
+#               skill auto-resolves, first that works wins:
+#                 1. a dedicated CLI if installed + authed (`gh` for GitHub)
+#                 2. an attached MCP server for that service
+#                 3. a plain URL fetch when the reference is a full link
+#                 4. none available → fall back to manual authoring (one-line notice)
+#               Pin `mechanism:` only to override the auto order.
+#
+# Reads are safe and on by default for declared services. WRITES (posting a PR
+# link, transitioning an issue) are OFF unless the service is listed in `write`,
+# and even then every write is a drafted action surfaced at a gate — never a
+# silent side effect. /ship's autonomy.sources ceiling is capped by this list,
+# exactly as autonomy.git is capped by git.mode.
+#
+# Invocation once a service is set: `/spec #8`, `/bugfix #8`, `/proceed #8`, or a
+# full issue URL. The same resolver serves /spec and /bugfix.
+# sources:
+#   issues:  github            # github | linear | jira | none
+#   design:  figma             # figma | none   (used by /architect)
+#   repo:    <owner/name>      # default repo for bare refs like `/spec #8`
+#   write:   []                # services the pipeline may write back to (default: none)
+#   mechanism: auto            # auto (default) | gh | mcp | url
+
 # Isolation strategy for in-flight REQs. Determines whether /architect and
 # /bugfix create an isolated git worktree per REQ or work directly on a
 # feature branch in the user's current checkout.
@@ -52,8 +84,23 @@ stack:
 # and abort, but requires a clean working tree at the start of each REQ.
 # Worktree mode tolerates a dirty main checkout but each REQ start is a
 # folder switch in your editor.
+#
+# `edits` — how much per-edit friction the implementer carries WITHIN a phase.
+# The phase-boundary gates are unaffected either way; this only governs editing
+# inside the REQ's blast radius (its worktree/branch and the files its tasks name).
+#
+#   confirm-out-of-scope  — (default) the implementer edits freely inside the
+#                           REQ's blast radius, but STOPS and surfaces before
+#                           touching anything at the edge: files no task named,
+#                           new top-level dependencies, schema/migrations, or
+#                           auth/security/secrets. "Smooth inside, hard stop at
+#                           the line."
+#   confirm-each          — every file write is surfaced for confirmation.
+#                           Highest friction; use when you don't trust the
+#                           isolation or are working without a worktree.
 workflow:
   isolation: auto
+  edits: confirm-out-of-scope
 
 # Autonomy — used only by /ship (the autonomous pipeline). /proceed ignores this
 # block and always pauses at every gate. If this block is absent, /ship falls back
@@ -68,6 +115,11 @@ workflow:
 #                            #   never exceed it (git.mode: manual ⇒ /ship is
 #                            #   read-only too). push is feature-branch +
 #                            #   fast-forward only — never main, force, or rewrite
+#   sources: read-only       # read-only | write
+#                            #   the autonomous external-write ceiling for /ship.
+#                            #   Capped by `sources.write` above — can lower it but
+#                            #   never exceed it (empty sources.write ⇒ read-only).
+#                            #   External writes are hard-stop-eligible (see below).
 #   escalation: balanced     # cautious | balanced | aggressive  (decision-maker bias)
 #   rework_cap_per_gate: 2   # max REWORK loops at one gate before forced HALT
 #   rework_budget_total: 5   # max REWORK loops across the whole run
@@ -81,6 +133,7 @@ workflow:
 #     - data-migration
 #     - public-api-contract
 #     - irreversible
+#     - external-write       # posting/transitioning issues or PRs on a connected service
 #   notify:
 #     on_halt: true          # ping when the run halts and needs you
 #     on_complete: true      # ping when the terminal review is ready

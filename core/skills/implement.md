@@ -17,6 +17,7 @@ You are running Phase 3 of the ADLC pipeline: implementing the tasks for a REQ.
 3. **Load context.** `.adlc/CLAUDE.md`, `now.md`, `config.yml`, `context/conventions.md`, `specs/REQ-NNN-<slug>/requirement.md`, `architecture.md`, `exploration.md`, all `tasks/TASK-*.md`.
 4. **Verify the work path exists.** Read `pipeline-state.json.workPath`, `isolation`, and `branch`. Check `workPath` is a valid directory. In `worktree` mode, also verify the worktree is still registered (`git -C <repo-path> worktree list`). In `branch` mode, verify the branch ref exists (`git -C <workPath> rev-parse --verify <branch>`). If anything is missing, stop and surface — `/architect` should have established the work path.
 5. **Confirm cwd discipline.** All Bash calls must use absolute paths or `git -C <workPath>` form. Shell cwd does not persist between Bash calls.
+6. **Establish the blast radius and edit posture.** Read `config.yml.workflow.edits` (default `confirm-out-of-scope`). The REQ's **blast radius** is its work path (`pipeline-state.json.workPath`) plus the union of files named in the `tasks/TASK-*.md` "Files to touch" tables. This is the zone the implementer may edit freely. The *edge* of the radius — where the implementer must stop and surface instead of editing — is: a file no task named, a new top-level dependency, a schema/migration change, or anything touching auth/security/secrets. In `confirm-each` mode, every write is surfaced regardless. Carry this posture into every dispatch below (ETHOS principle 1: "smooth inside, hard stop at the line").
 
 ## Steps
 
@@ -44,6 +45,10 @@ Architecture: .adlc/specs/REQ-NNN-<slug>/architecture.md
 Exploration: .adlc/specs/REQ-NNN-<slug>/exploration.md
 
 Implement the task per your skill instructions. Write code in the worktree.
+Edit posture: <workflow.edits>. Blast radius = this work path + the files this
+task names. Edit freely inside it. STOP and report (do not edit) if the work
+needs to cross the edge: a file no task named, a new top-level dependency, a
+schema/migration, or anything touching auth/security/secrets.
 Draft commit messages to .adlc/specs/REQ-NNN-<slug>/commits-draft.md (append).
 Run tests, verify they pass.
 Surface lesson candidates to .adlc/specs/REQ-NNN-<slug>/lesson-candidates.md per your skill instructions (bar: when in doubt, surface).
@@ -197,6 +202,7 @@ If `abort`:
 ## Constraints
 
 - **Commits follow `git.mode`** (`.adlc/config.yml`, default `manual`). In `manual`, Claude does not commit — it writes `commits-draft.md` and the user commits after the gate clears. In `commit`/`commit+push`, Claude commits the approved work on the REQ's feature branch using `commits-draft.md` as the message (and pushes it, ff-only, in `commit+push`) once the gate clears — never a protected branch.
+- **Edits stay inside the blast radius** (`config.yml.workflow.edits`, default `confirm-out-of-scope`). Free editing is confined to the work path and the files the tasks name. Crossing the edge — an unnamed file, a new top-level dependency, a schema/migration, or auth/security/secrets — is a **stop-and-surface**, never a silent reach. This reduces in-phase friction without weakening the phase gate; the gate still owns the boundary.
 - **Tier discipline.** Don't dispatch tier N+1 until tier N is fully complete.
 - **Halt on first failure.** Don't paper over a failed task to keep the pipeline moving. The whole point of explicit gates is catching failures early.
 - **Honor task scope.** If a task-implementer reports scope creep or a deviation, surface it to the user — don't approve it autonomously.

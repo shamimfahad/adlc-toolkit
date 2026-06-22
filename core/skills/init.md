@@ -40,6 +40,13 @@ Ask the user (use your assistant's structured-question UI if it has one; otherwi
 
   Default to **manual** if the user is unsure or skips. In every mode the hard invariants still hold: only the REQ's feature branch, never a `protect:` branch, never force-push / rebase / amend-published / branch-delete / `gh pr create` / `gh pr merge` / `--no-verify`.
 
+- **External sources** — where this project's requirements and designs live, so `/spec` and `/bugfix` can seed a draft from a ticket and `/architect` can seed from a design. Present as discrete options (ETHOS principle 6) and record under `sources`:
+  - **Issue tracker** — `github` (recommended if the repo is on GitHub), `linear`, `jira`, or `none`. If a tracker is chosen, also capture the default `repo` (e.g. `owner/name`) for bare references like `/spec #8`.
+  - **Design tool** — `figma` or `none`.
+  - **Write-back?** — default **none** (reads only). Only if the user explicitly wants it, add the issue tracker to `sources.write` so `/wrapup` and `/bugfix` can offer (always gated) to post a PR link or transition the issue.
+
+  Default every source to `none` if the user is unsure or skips — the pipeline then runs fully hermetic, exactly as before. The *mechanism* (gh CLI / MCP / URL) is auto-resolved at runtime and need not be asked; mention only that for GitHub the `gh` CLI, if installed and authed, is used first.
+
 If the user prefers to skip and fill `config.yml` themselves, accept that and proceed with placeholder values.
 
 ### 2. Discover existing documentation
@@ -209,6 +216,7 @@ Open `.adlc/config.yml` and pre-fill what you gathered:
 - `git.mode` (the value chosen in step 1; default `manual`)
 - `stack.languages` (best effort from the user's free text)
 - `repos.<this-repo-id>.primary: true`
+- `sources` (the services chosen in step 1). If the user picked an issue tracker or design tool, uncomment the `sources:` block and fill `issues`, `design`, `repo`, and `write` accordingly. If they chose `none` for everything, leave the block commented out so the pipeline stays hermetic.
 
 Leave everything else as commented placeholders for the user to fill.
 
@@ -334,12 +342,14 @@ If `.gitignore` exists at the repo root, **propose** (don't auto-write) appendin
 .adlc/specs/*/commits-draft.md
 .adlc/specs/*/pr-draft.md
 .adlc/specs/*/merge-checklist.md
+.adlc/specs/*/source-writeback.md
 .adlc/specs/*/last-seen.json
 .adlc/bugs/*/pipeline-state.json
 .adlc/bugs/*/.awaiting-approval
 .adlc/bugs/*/commits-draft.md
 .adlc/bugs/*/pr-draft.md
 .adlc/bugs/*/merge-checklist.md
+.adlc/bugs/*/source-writeback.md
 .adlc/bugs/*/last-seen.json
 .adlc/sprints/*.json
 ```

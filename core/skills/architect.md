@@ -28,6 +28,10 @@ You are running Phase 2 of the ADLC pipeline: designing the architecture and bre
       - **`branch` mode.** Verify the working tree is clean: `git -C <repo-path> status --porcelain`. If the output is non-empty, **stop and surface** — direct the user to commit or stash, or to set `workflow.isolation: worktree` in `config.yml` if they want parallel uncommitted work to coexist with this REQ. If clean, run `git -C <repo-path> checkout -b <branch-name>`. Update `pipeline-state.json` with `isolation: "branch"`, `workPath: <repo-path>`, `branch: <branch-name>`, `worktree: null`.
       - **`worktree` mode.** Derive the worktree path: `<repo-path>/.worktrees/REQ-NNN-<slug>`. Run `git -C <repo-path> worktree add <worktree-path> -b <branch-name>`. Update `pipeline-state.json` with `isolation: "worktree"`, `workPath: <worktree-path>`, `worktree: <worktree-path>`, `branch: <branch-name>`.
    e. Append to `hot.md`: `## [DATE] work-path-set | REQ-NNN-<slug> | <mode> at <workPath>`.
+5. **Resolve a design reference (optional).** If `config.yml.sources.design` is set (not `none`) and the spec or the user supplies a design reference (a Figma frame/file link, or a node mentioned in `requirement.md`):
+   - Resolve the mechanism, first that works wins: an attached MCP server for the design tool, else a plain fetch if the reference is a full URL.
+   - If it resolves, pull the frame/flow and carry it into step 2 as draft material for UI structure, component boundaries, and UI-facing acceptance criteria. Add the design link to architecture.md's "Related" section for provenance.
+   - If nothing resolves or no design service is configured, print one line (`couldn't reach <design service> — proceeding from the spec alone`) and continue. The seed is strictly additive and never blocks the architecture.
 
 ## Steps
 
@@ -58,6 +62,7 @@ Copy `.adlc/templates/architecture-template.md` to `.adlc/specs/REQ-NNN-<slug>/a
 - Project conventions (`context/conventions.md`)
 - Existing ADRs (`architecture/adr-*.md` with status `accepted`)
 - Relevant lessons, gotchas, and concepts from the vault
+- The resolved design reference, if any (preflight step 5) — for UI structure, component boundaries, and UI-facing acceptance criteria. Treat it as draft input the gate still reviews, not a binding contract.
 
 Sections to fill:
 

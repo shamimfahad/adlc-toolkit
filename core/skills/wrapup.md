@@ -246,6 +246,14 @@ When merge is complete, tell Claude in chat:
 This updates pipeline-state and adds a hot.md entry.
 ```
 
+### 5a. Draft source write-back (optional, gated)
+
+Only if `config.yml.sources.write` includes the issue tracker **and** this REQ was seeded from (or links to) an issue. Otherwise skip this step entirely.
+
+- **Draft, don't send.** Write the proposed write-back into `.adlc/specs/REQ-NNN-<slug>/source-writeback.md`: the target issue, the comment text (e.g. "Addressed in PR <link> — REQ-NNN-<slug>"), and any status transition (e.g. `→ In Review`). Use the PR link only if one exists yet; otherwise leave a placeholder the user fills after opening the PR.
+- **Never auto-submit.** This is surfaced at the ship gate as a proposed action and executed only on explicit approval, using the resolved mechanism (`gh issue comment` / MCP / etc.). External writes are hard-stop-eligible.
+- **Capped.** Under `/proceed`, the user approves it at the gate like everything else. Under `/ship`, it is additionally capped by `autonomy.sources` (default `read-only` ⇒ never auto-sent) and `sources.write`.
+
 ### 6. Update pipeline state
 
 ```json
@@ -279,6 +287,11 @@ PR drafted:
   Files: <count> changed, +<N>/-<N>
 
 Merge checklist: .adlc/specs/REQ-NNN-<slug>/merge-checklist.md
+
+Source write-back (only if sources.write is configured):
+  Proposed: comment on <issue> + transition <from> → <to>
+  Draft:    .adlc/specs/REQ-NNN-<slug>/source-writeback.md
+  ⚠ Not sent until you approve — external write, hard-stop-eligible.
 
 Vault updates from candidates:
   Candidates considered:    <N>
@@ -341,6 +354,7 @@ If `abort`:
 - **Git follows `git.mode`** (`.adlc/config.yml`, default `manual`). In `manual`, NEVER run `git add/commit/push` — the merge checklist exists because you don't run those. In `commit`/`commit+push`, you may commit the vault/lesson updates on the REQ's feature branch (and push it, ff-only, in `commit+push`) after the wrapup gate is approved. In **every** mode, NEVER run `gh pr create`, `gh pr merge`, branch deletes, force-pushes, or anything touching a protected branch — opening and merging the PR is always the user's.
 - **Vault updates** go on the REQ's feature branch: committed by you in `commit`/`commit+push`, or left for the user's final commit in `manual`.
 - **`pr-draft.md` is a draft.** The user can paste it into `gh pr create --body-file` or copy/paste into a web form. Don't auto-submit anywhere.
+- **Source write-back is off unless `sources.write` lists the tracker, and always gated.** Even when configured, the comment/transition is drafted to `source-writeback.md` and sent only on explicit approval — never as a silent side effect. It's an external write: hard-stop-eligible, and capped by `autonomy.sources` under `/ship`.
 - **Capture liberally as candidates, prune deliberately at verdict.** Candidates are cheap — one line in a scratch file. Lessons are precious — the vault stays high-signal because the verdict step is rigorous, not because the candidate bar is high. Silent zero-capture is a failure mode: if no candidates surfaced upstream and the sweep over `verification.md` finds nothing either, surface that as a question to the user at the gate ("REQ produced zero knowledge — confirm or revise"), don't pass silently.
 
 ## Output artifacts
@@ -348,5 +362,6 @@ If `abort`:
 - `.adlc/specs/REQ-NNN-<slug>/pr-draft.md`
 - `.adlc/specs/REQ-NNN-<slug>/merge-checklist.md`
 - `.adlc/specs/REQ-NNN-<slug>/lesson-candidates.md` (now includes the `## Candidate verdicts` table appended at the bottom; retained after wrapup as decision history)
+- `.adlc/specs/REQ-NNN-<slug>/source-writeback.md` (only when `sources.write` is configured and a write-back was drafted at step 5a)
 - New / updated vault files: `lessons/`, `gotchas.md`, `concepts/`, `components/`, `architecture/`, `index.md`, `decisions.md`, `hot.md`, `now.md`, `glossary.md`
 - Updates to `pipeline-state.json`

@@ -42,6 +42,23 @@ All five assistants converged on the same three primitives — a memory/context 
 - **Project-local** (`--repo=<path>`) — writes the adapter into the repo (`.claude/`, `.github/`, `.cursor/`, etc.). Best for teams: the pipeline travels with the repo, everyone gets the same commands, and it's reviewable in PRs.
 - **Cursor is the partial case:** slash commands install globally, but its memory **rule** is project-scoped — install per-repo, or paste it into Cursor's User Rules.
 
+## External sources (issues / designs)
+
+Optional. When `.adlc/config.yml` declares a `sources` block, `/spec` and `/bugfix` can **seed** a draft from a tracker issue and `/architect` from a design frame; `/wrapup` and `/bugfix` Phase 5 can optionally **write back** (gated). The *service* is fixed at `/init`; the *mechanism* — how a skill reaches that service — is auto-resolved at runtime, first that works wins. This degrades gracefully: with no mechanism available, the skill says so in one line and you author the artifact manually, exactly as a hermetic project always has.
+
+| Mechanism | What it needs | Typical availability |
+|---|---|---|
+| **Dedicated CLI** (`gh` for GitHub) | the CLI installed and authed on your machine | Available on any assistant that can run shell commands — the broadest path, and the default for GitHub. |
+| **MCP server** for the service | the user has attached that server to their assistant | Claude Code, Cursor, Codex, Gemini CLI, Copilot all support MCP, with differing setup; availability is per the user's host config, not the toolkit. |
+| **URL fetch** | the reference is a full link the assistant can fetch | Fallback for public/authenticated links when neither CLI nor MCP is present. |
+
+| Capability | Notes |
+|---|---|
+| Read-seed (`/spec`, `/bugfix`, `/architect`) | First-class wherever any one mechanism resolves. The same resolver serves `/spec` and `/bugfix`. |
+| Write-back (`/wrapup`, `/bugfix` P5) | Off unless `sources.write` lists the service. Always drafted to `source-writeback.md` and sent only on approval. Under `/ship`, additionally capped by `autonomy.sources`. External writes are hard-stop-eligible. |
+
+The honest line, as everywhere else in this matrix: sources are **strictly additive**. The hermetic pipeline is always intact; a missing CLI, unattached MCP, or unreachable URL never blocks a phase — it just means you type the draft yourself.
+
 ## Notes on accuracy
 
 These tools ship changes frequently. The adapter formats here reflect each tool's documented mechanism at the time of writing; if a tool changes its frontmatter keys or command location, update the relevant emitter in `scripts/build.mjs` and regenerate — every adapter for that tool updates at once. The Codex agent TOML keys in particular are worth confirming against your installed Codex version.
