@@ -35,6 +35,20 @@ stack:
   backends: [<node|dotnet|django|cloud-run|lambda|...>]   # optional
   databases: [<postgres|firestore|sqlserver|...>]   # optional
 
+# User-facing repo documentation. These are the docs the doc-staleness sweep
+# (/review's reflector, backstopped at /wrapup) checks for drift when a REQ
+# changes documented behavior — DISTINCT from the .adlc/ knowledge vault, which
+# /wrapup owns. List the paths (files or directories) that describe behavior to
+# humans: READMEs, a docs site, API reference, changelogs. Globs allowed.
+#
+# Omit the block entirely and the sweep falls back to a default scan of
+# `README*` at the repo root plus a `docs/` directory if one exists. Set `docs:
+# []` to disable the repo-doc sweep for this project.
+# docs:
+#   - README.md
+#   - docs/
+#   - CHANGELOG.md
+
 # External sources — where this project's requirements and designs live, so the
 # pipeline can SEED an artifact from them instead of you retyping it. Optional:
 # omit the block entirely and the pipeline runs fully hermetic, exactly as before.

@@ -67,7 +67,7 @@ Copy `.adlc/templates/architecture-template.md` to `.adlc/specs/REQ-NNN-<slug>/a
 Sections to fill:
 
 - **Summary** — what changes, where, why (one paragraph)
-- **Blast radius** — table populated from exploration findings
+- **Blast radius** — table populated from exploration findings. **Include user-facing docs:** if the change alters behavior the repo's docs describe (the paths in `config.yml` → `docs:`, or `README*` + `docs/` by default) — an API signature, a CLI flag, a default, a documented workflow — list those doc files in the blast radius too. They're part of the change, not an afterthought; scoping them in here is what gets them updated in the diff and reviewed instead of going stale. (`/review`'s reflector runs a doc-drift sweep as the backstop, but catching it here is cheaper.)
 - **Approach** — how the change is structured. Where the new code lives, what patterns it follows
 - **Task DAG** — tasks broken into dependency tiers
 - **Test strategy** — what gets tested at what level
@@ -89,7 +89,7 @@ Tasks should be:
 Each task file includes:
 
 - Goal (one sentence)
-- Files to touch (table)
+- Files to touch (table) — when a task changes behavior covered by a doc in the blast radius, list that doc file here so the update is implemented and reviewed alongside the code
 - Approach (2-3 bullets)
 - Acceptance criteria (checklist)
 - Dependencies (`depends on: TASK-001, TASK-002`)

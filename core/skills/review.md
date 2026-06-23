@@ -183,6 +183,7 @@ Edit the **Summary** section at the top of `verification.md`:
 - Top patterns observed (e.g., "Three correctness findings around null handling; suggest review of the pattern in src/foo/")
 - Whether any finding directly contradicts an accepted ADR (calls out reflector findings of category `adr-conflict`)
 - Whether any finding is `vault-stale` (reflector suggests the vault, not the code, should change)
+- Whether any finding is `repo-doc-stale` (reflector found user-facing docs the change left out of date) — count these out separately; they're fixed by updating the doc in this REQ's diff, ideally before the gate clears
 
 ### 6. Cross-check against acceptance criteria
 
@@ -236,6 +237,11 @@ Files:
 
 Lesson candidates surfaced: <total> (corr: <N>, qual: <N>, arch: <N>, reflect: <N>)
   See lesson-candidates.md. Verdicts come at /wrapup.
+
+Stale repo docs (repo-doc-stale): <N>
+  <doc-path> — <the claim that's now wrong>
+  Fix in this diff before merging; /wrapup re-checks any left unresolved.
+  (omit this line when <N> is 0)
 
 Top findings (Critical + Major):
 

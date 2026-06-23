@@ -23,6 +23,8 @@ You are running Phase 5 of the ADLC pipeline: drafting the PR, capturing knowled
 
 Run `git -C <workPath> diff <base-branch>..<branch> --stat` and compare against architecture.md's blast radius. Surface any mismatch — files changed that weren't in the architecture, or files in architecture that weren't actually touched.
 
+**Doc-staleness backstop.** Re-read `verification.md` for reflector findings of category `repo-doc-stale`. For each one, check whether the diff actually updated that doc (it appears in `git diff --stat`). Any `repo-doc-stale` finding whose doc is *not* in the diff is an unresolved stale doc — surface it at the gate so the user fixes it before merging, rather than shipping docs that contradict the code. Also re-confirm the cheap case: any doc file that architecture.md listed in the blast radius but the diff didn't touch is a likely missed update — flag it the same way. This is a safety net; the real fix should already have landed at `/implement` and cleared `/review`.
+
 Check for residual artifacts one more time:
 
 - No `console.log`, `print(`, debug logging
@@ -311,6 +313,7 @@ Vault updates from candidates:
 
 Final diff sanity:
 [✓ / ⚠] Blast radius matches architecture
+[✓ / ⚠] User-facing docs updated (no unresolved repo-doc-stale findings)
 [✓ / ⚠] No residual debug artifacts
 [✓ / ⚠] No --no-verify traces
 [✓ / ⚠] Commit drafts all landed in git log
