@@ -1,6 +1,6 @@
 ---
 name: review
-description: Multi-perspective code review for a REQ. Phase 4 of /proceed. Dispatches 4 read-only review agents in parallel (correctness, quality, architecture, reflector), consolidates findings by severity, and ends in the verify gate.
+description: Multi-perspective code review for a REQ. Phase 4 of /proceed. Dispatches 4 read-only review agents in parallel (correctness, quality, architecture, reflector) — plus a 5th ui-reviewer that runs the app in a browser when the change touches a UI surface — consolidates findings by severity, and ends in the verify gate.
 ---
 
 You are running Phase 4 of the ADLC pipeline: reviewing the implemented code through four lenses and consolidating findings.
@@ -17,6 +17,12 @@ You are running Phase 4 of the ADLC pipeline: reviewing the implemented code thr
 3. **Load context.** `.adlc/CLAUDE.md`, `config.yml`, `context/conventions.md`, `specs/REQ-NNN-<slug>/requirement.md`, `architecture.md`, `commits-draft.md`.
 4. **Verify the work path and branch.** Read `pipeline-state.json.workPath`, `isolation`, and `branch`. Check `workPath` is a valid directory. Verify the branch ref exists: `git -C <workPath> rev-parse --verify <branch>`. (In `branch` mode, HEAD may be on a different branch — that's fine; comparisons below use `<branch>` by name.)
 5. **Identify the diff.** Determine the base branch from `config.yml` (default `main`). Capture the list of changed files: `git -C <workPath> diff --name-only <base-branch>...<branch>`.
+6. **Decide whether the UI reviewer runs.** Condition (a) is mandatory: `config.yml` → `stack.frontends` must be non-empty (the project has a frontend at all). If it's empty, never dispatch — there is no UI to review. With a frontend present, dispatch if **either** of these holds:
+
+   - **(b) Direct UI change** — the diff touches a UI surface: component / page / view / route / style / template files (`*.jsx/tsx/vue/svelte`, `*.css/scss/less`, paths under `components/`, `pages/`, `views/`, `app/`, `routes/`, `public/`, `templates/`), or the spec has UI-facing acceptance criteria implicated by the change.
+   - **(c) Indirect UI impact — an API/contract change the frontend consumes.** A back-end-only diff is *not* automatically safe. If the change alters an API the frontend calls — a changed response shape, a renamed/removed field, a new required request param, a new error or status code, a changed default, a modified shared DTO/type or GraphQL schema/OpenAPI spec — then a screen that consumes it can break (crash on a missing field, mis-render, swallow a new error) even though no frontend file changed. **Check for the coupling:** take the endpoints/paths/fields/types the diff changed and grep the frontend for references (its API client, fetch/axios/RTK-Query/react-query calls, shared types package, generated client) — and consult `exploration.md`'s integration points. If any frontend code consumes the changed contract, the condition holds.
+
+   If (a) holds and (b) or (c) does, dispatch the ui-reviewer. Pass it the **trigger reason** and the relevant surface: for (b), the changed UI files; for (c), the changed endpoints/contracts **and** the frontend call sites that consume them, so the reviewer knows which screens to exercise against the new contract. If only (a) holds (a truly back-end-internal change with no frontend consumer — e.g. an API purely for outside consumers), do **not** dispatch; record in `verification.md`'s UI section that no direct or indirect UI surface was present, and note the coupling check was run.
 
 ## Steps
 
@@ -58,6 +64,10 @@ _(written by architecture-reviewer)_
 ## Reflection findings
 
 _(written by reflector)_
+
+## UI/UX findings
+
+_(written by ui-reviewer — only when the change touches a UI surface; otherwise "_(no UI surface in this change — ui-reviewer not dispatched)_")_
 
 ---
 
@@ -104,14 +114,15 @@ This packet contains the diff with full file context, the REQ spec, the REQ arch
 <verbatim exploration.md, or "_(no exploration report)_">
 `````
 
-### 2. Dispatch four reviewers in parallel
+### 2. Dispatch the reviewers in parallel
 
-In a single message, launch all four agents:
+In a single message, launch the four static reviewers — **plus the ui-reviewer when preflight step 6 said the change touches UI**:
 
 - **correctness-reviewer** (Sonnet)
 - **quality-reviewer** (Sonnet)
 - **architecture-reviewer** (Sonnet)
 - **reflector** (Sonnet)
+- **ui-reviewer** (Sonnet) — *only if the UI-surface condition held*
 
 Each agent receives:
 
@@ -132,18 +143,40 @@ Append any lesson candidates to the candidates file per your skill instructions 
 Follow your skill instructions for output format.
 ```
 
-### 3. Wait for all four to complete
+The **ui-reviewer**, when dispatched, additionally receives (it needs runtime context the packet doesn't carry):
+
+```
+Trigger: direct-ui-change | indirect-api-impact
+UI surface (changed): <changed UI files — for a direct change>
+Changed API contract: <endpoints/fields/types the diff changed — for indirect impact>
+Frontend consumers: <the frontend call sites that consume the changed contract — for indirect impact>
+Frontends: <config.yml stack.frontends>
+UI config: <config.yml ui: block, or "infer dev script from package.json">
+Design reference: <Figma link from architecture.md → Related / requirement.md, or "none">
+UI acceptance criteria: <the UI-facing ACs from requirement.md>
+
+Run the app and review per your skill instructions. Resolve the browser mechanism
+(Claude in Chrome → headless → static + checklist), exercise the affected screens —
+for indirect-api-impact, the screens that consume the changed contract, verified
+against the NEW contract — apply the interaction & state-correctness lens, cover
+every UI AC, and tear down any dev server you start.
+The packet-gap discipline does NOT apply to you — your job is inherently outside the
+packet (you run the app and read config); reading those is expected, not a gap.
+```
+
+### 3. Wait for all reviewers to complete
 
 Each reviewer writes its findings to its section of `verification.md`. Collect terminal claims from each:
 
-- All four return findings → proceed to consolidation
+- All dispatched reviewers (four, or five with the ui-reviewer) return findings → proceed to consolidation
 - Any reviewer fails (tool error, timeout) → halt and surface
+- The ui-reviewer degrading to its static tier (no browser available) is **not** a failure — it still returns findings plus a manual checklist; carry both forward
 
 ### 4. Consolidate findings
 
 Read `verification.md` after the reviewers finish. Build the **Consolidated by severity** section:
 
-For each finding across all four sections:
+For each finding across all reviewer sections (including UI/UX findings when the ui-reviewer ran):
 
 - Deduplicate: if two reviewers flagged the same file + line + concern, merge into one entry citing both
 - Sort by severity (Critical > Major > Minor > Trivial)
@@ -184,6 +217,7 @@ Edit the **Summary** section at the top of `verification.md`:
 - Whether any finding directly contradicts an accepted ADR (calls out reflector findings of category `adr-conflict`)
 - Whether any finding is `vault-stale` (reflector suggests the vault, not the code, should change)
 - Whether any finding is `repo-doc-stale` (reflector found user-facing docs the change left out of date) — count these out separately; they're fixed by updating the doc in this REQ's diff, ideally before the gate clears
+- Whether the ui-reviewer ran and at what tier (chrome / headless / static-only), its severity counts, and whether it left a manual-verification checklist the user still needs to run
 
 ### 6. Cross-check against acceptance criteria
 
@@ -228,15 +262,20 @@ Files:
 ```
 🛑 Gate: Verify — REQ-NNN-<slug>
 
-4 reviewers dispatched. Findings:
+<4 or 5> reviewers dispatched <(+ ui-reviewer: this change touches UI)>. Findings:
 
   Critical: <N>  ← must fix
   Major:    <N>  ← strongly recommend fix
   Minor:    <N>  ← your call
   Trivial:  <N>  ← noise filter
 
-Lesson candidates surfaced: <total> (corr: <N>, qual: <N>, arch: <N>, reflect: <N>)
+Lesson candidates surfaced: <total> (corr: <N>, qual: <N>, arch: <N>, reflect: <N>, ui: <N>)
   See lesson-candidates.md. Verdicts come at /wrapup.
+
+UI/UX review: <ran @ chrome|headless tier — C<crit>/M<major>/m<minor>, <N> screenshots>
+             <— or — static-only (no browser available): manual checklist left for you>
+             <— or — not run: no UI surface in this change>
+  (omit this block entirely when there is no frontend in the project)
 
 Stale repo docs (repo-doc-stale): <N>
   <doc-path> — <the claim that's now wrong>

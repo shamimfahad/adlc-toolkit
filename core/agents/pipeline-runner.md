@@ -101,7 +101,7 @@ After all tasks: update state. **Gate.** Emit terminal claim `gate-blocked:imple
 
 When the user clears the implement gate, proceed.
 
-Run **four review checklists inline** (you cannot dispatch reviewer agents). Use the checklists in the "Inline review checklists" section below.
+Run the **review checklists inline** (you cannot dispatch reviewer agents). Use the checklists in the "Inline review checklists" section below. Always run correctness, quality, architecture, and reflection. **Also run the UI checklist** when `config.yml` → `stack.frontends` is set and **either** this REQ's diff touches a UI surface (components/pages/views/styles/templates) **or** it changes an API the frontend consumes (grep the frontend for the changed endpoints/fields/types — a changed contract can break a screen with no UI file touched). Skip it only for changes with no frontend or no frontend consumer.
 
 Write `verification.md` with findings consolidated by severity (Critical / Major / Minor / Trivial). Deduplicate where checklists overlap.
 
@@ -180,6 +180,18 @@ Check the captured vault knowledge:
 - Does it touch any file referenced in `knowledge/gotchas.md`? If so, does it respect the gotcha?
 - Does it conflict with any accepted ADR in `architecture/`?
 - Did exploration miss a similar implementation in the codebase that this code duplicates?
+- Did the change alter behavior described in a user-facing doc (`config.yml` → `docs:`, or `README*` + `docs/`) without updating that doc? Flag stale docs (`repo-doc-stale`) to fix in this diff.
+
+### UI checklist (when the change touches UI directly or via a consumed API)
+
+You can't dispatch the ui-reviewer, but you can still run its lens inline. Resolve a browser the same way it does — Claude in Chrome if available → headless Playwright/Puppeteer if installed → otherwise a static read plus a manual checklist for the user. When a browser is available, start the app (`config.yml` → `ui.dev_server`, or the `package.json` dev script) backgrounded, exercise the affected screens (for an API-contract change, the screens that consume it, against the new contract), and **tear the dev server down when done**. Check:
+
+- Renders clean — the changed screen mounts, no error boundary, no blank page, no breaking console error
+- Flow works — the interaction the change introduced actually does something end to end
+- **Interaction & state correctness — not just the view.** Submit/save is disabled on a pristine or invalid form and enabled only when changed *and* valid; validation fires and blocks submit; async actions show a pending state and can't double-submit; success, error, and empty/loading states are all handled (no silent swallow, no perpetual spinner, no crash); a disabled control is actually guarded, not just greyed in CSS. Test behavior in each state, not appearance.
+- Matches the design reference (Figma in `architecture.md` → Related) / the UI acceptance criteria
+- Responsive at a narrow and a wide viewport; new controls are keyboard-reachable and labeled
+- On the static tier, write a `## UI manual-verification checklist` into `verification.md` with concrete steps for the user
 
 ## Surface lesson candidates
 

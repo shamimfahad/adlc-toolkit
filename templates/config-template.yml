@@ -49,6 +49,29 @@ stack:
 #   - docs/
 #   - CHANGELOG.md
 
+# UI/UX runtime review. When `stack.frontends` is set, /review dispatches the
+# ui-reviewer if the change touches UI either directly (components/pages/views/
+# styles/templates) OR indirectly — a back-end API the frontend consumes changed
+# (renamed field, new error, changed shape), which can break a screen with no UI
+# file touched. It starts the app and drives a browser to confirm the change
+# renders, the flows work, the interaction states are right (disabled/loading/
+# error/empty), and it matches the design. A change with no frontend, or a pure
+# API with no frontend consumer, never triggers it. This block tells the reviewer
+# how to run the app; omit it and the reviewer infers the dev script from
+# package.json and notes the assumption.
+#
+# The browser mechanism auto-resolves, first that works: Claude in Chrome (richest
+# — real browser, click-through flows) → headless Playwright/Puppeteer if installed
+# → static review + a manual checklist for you. It never blocks the pipeline.
+# Visual comparison reuses `sources.design` (a Figma reference) when present.
+# ui:
+#   dev_server: npm run dev     # command that serves the app
+#   url: http://localhost:3000  # where it serves once up
+#   routes:                     # optional — specific paths/flows to exercise;
+#     - /                       #   inferred from the changed components if omitted
+#     - /checkout
+#   browser: auto               # auto (default) | chrome | headless | static
+
 # External sources — where this project's requirements and designs live, so the
 # pipeline can SEED an artifact from them instead of you retyping it. Optional:
 # omit the block entirely and the pipeline runs fully hermetic, exactly as before.
