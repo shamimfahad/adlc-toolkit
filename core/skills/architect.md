@@ -1,6 +1,6 @@
 ---
 name: architect
-description: Design the architecture and task breakdown for a REQ. Phase 2 of /proceed. Dispatches codebase-explorer to inform the design, then drafts architecture.md and tasks/TASK-*.md. Ends in the architecture gate — user must approve before /implement.
+description: Design the architecture and task breakdown for a REQ. Phase 2 of /proceed. Dispatches codebase-explorer to inform the design, then drafts architecture.md and tasks/TASK-*.md. On high-stakes REQs, dispatches the architecture-adversary to attack the design before the gate so the user reviews a stress-tested plan. Ends in the architecture gate — user must approve before /implement.
 ---
 
 You are running Phase 2 of the ADLC pipeline: designing the architecture and breaking the work into tasks.
@@ -129,7 +129,52 @@ Walk this checklist:
 - [ ] **If a new ADR was drafted**, it's linked from architecture.md.
 - [ ] **Test strategy is concrete** — specific test files to add, not just "add tests".
 
-### 7. Update pipeline state
+### 7. Adversarial hardening (proportional)
+
+Inline validation (step 6) confirms the plan has the right *parts*. This step pressure-tests whether the *decisions* are right — before the gate, so the user reviews a stress-tested plan instead of being the first to find the holes. This is the cheapest point in the pipeline to kill an expensive mistake: an architectural error caught here costs a paragraph; the same error caught at `/review` costs a rebuild.
+
+The cost is proportional to the stakes — don't attack a trivial change.
+
+**Decide the depth.** Run the **full pass** if *any* of these hold:
+
+- A new ADR was drafted in step 4 (a real decision is being made).
+- The blast radius is large — roughly 8+ files, or it spans 3+ modules/layers.
+- The REQ is cross-repo (`config.yml` declares multiple `repos:` and tasks touch more than one).
+- The change touches a sensitive surface: auth, security, secrets, a data/schema migration, a public API contract, or anything irreversible.
+
+Otherwise run the **quick self-check** (no dispatch): you yourself ask the four sharpest questions of the plan — what acceptance criterion has no task, what failure mode is unhandled, what's the rollback story, what decision is implicit — and fix or note anything that surfaces. One short paragraph in the gate prompt; move on.
+
+**Full pass — dispatch the adversary.** Launch the `architecture-adversary` agent (read-only) with:
+
+```
+REQ: REQ-NNN-<slug>
+Work path: <workPath>
+Branch: <branch>
+Trigger: <new-adr | large-blast-radius | cross-repo | sensitive-surface>
+Artifacts:
+  - .adlc/specs/REQ-NNN-<slug>/requirement.md
+  - .adlc/specs/REQ-NNN-<slug>/architecture.md
+  - .adlc/specs/REQ-NNN-<slug>/tasks/*.md
+  - .adlc/specs/REQ-NNN-<slug>/exploration.md (if present)
+  - <new ADR path, if drafted>
+Output file: .adlc/specs/REQ-NNN-<slug>/architecture-adversary.md
+
+Attack the design before the gate. Report findings only — do not edit any artifact.
+Follow your skill instructions for lenses, self-refutation, and output format.
+```
+
+Dispatch it as a subagent and wait for it to finish (it writes `architecture-adversary.md`).
+
+**Address what survives.** Read the agent's report. For each surviving finding, take exactly one action and record which:
+
+- **Fix** — revise `architecture.md` / `tasks/` to close the gap. Re-run the relevant step-6 checks for anything you changed.
+- **Accept + document** — if the risk is acceptable, write it into architecture.md's **Open questions** / **Risks** with the reasoning, so the gate decision is informed rather than blind.
+
+Do not pass an unaddressed `critical` finding to the gate. A critical with no fix and no documented acceptance is a `revise`, not an `approve` — surface it as such.
+
+The gate prompt (step 10) reports what was attacked, what survived, and how each surviving finding was handled. If the quick self-check ran instead, say so in one line.
+
+### 8. Update pipeline state
 
 ```json
 "currentPhase": 2,
@@ -138,7 +183,7 @@ Walk this checklist:
 "currentPhaseGate": "architect"
 ```
 
-### 8. Write the gate marker
+### 9. Write the gate marker
 
 Create `.awaiting-approval` with:
 
@@ -150,10 +195,11 @@ Files:
   - .adlc/specs/REQ-NNN-<slug>/architecture.md
   - .adlc/specs/REQ-NNN-<slug>/tasks/*.md
   - .adlc/specs/REQ-NNN-<slug>/exploration.md
+  - .adlc/specs/REQ-NNN-<slug>/architecture-adversary.md (if the full pass ran)
   - .adlc/architecture/adr-NNN-<slug>.md (if drafted)
 ```
 
-### 9. Emit the gate prompt
+### 10. Emit the gate prompt
 
 ```
 🛑 Gate: Architect — REQ-NNN-<slug>
@@ -175,6 +221,14 @@ Inline validation:
 [✓ / ⚠] Conventions followed or deviations justified
 [✓ / ⚠] Test strategy concrete
 [✓ / ⚠] Lessons / gotchas / ADRs referenced
+
+Adversarial hardening:
+  Depth: full pass (trigger: <new-adr | large-blast-radius | cross-repo | sensitive-surface>)
+         — or — quick self-check (low-stakes REQ)
+  Surviving findings: <C critical / M major / m minor>   (full pass only; report: architecture-adversary.md)
+    1. <locus> — <short title> → fixed
+    2. <locus> — <short title> → accepted, documented in Risks
+  [⚠ if any critical is unaddressed — this should be a revise, not an approve]
 
 Vault references:
 - [[knowledge/lessons/LESSON-xxx]] — short note
@@ -202,7 +256,7 @@ If `approve`:
 If `revise: ...`:
 
 1. Apply revisions.
-2. Re-run inline validation.
+2. Re-run inline validation. If the revision materially changed the approach, task DAG, or blast radius — or was prompted by an adversary finding — re-run step 7 (re-attack the changed surface; a quick re-pass is fine if only a narrow part changed).
 3. Re-emit gate prompt.
 
 If `abort`:
