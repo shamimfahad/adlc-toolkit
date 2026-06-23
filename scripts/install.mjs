@@ -32,49 +32,65 @@
  */
 
 import {
-  readFileSync, writeFileSync, mkdirSync, readdirSync,
-  existsSync, lstatSync, rmSync, renameSync, symlinkSync, realpathSync,
-} from "node:fs";
-import { dirname, join, resolve, basename } from "node:path";
-import { fileURLToPath } from "node:url";
-import { homedir, platform } from "node:os";
-import { execFileSync } from "node:child_process";
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  readdirSync,
+  existsSync,
+  lstatSync,
+  rmSync,
+  renameSync,
+  symlinkSync,
+  realpathSync,
+} from 'node:fs';
+import { dirname, join, resolve, basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { homedir, platform } from 'node:os';
+import { execFileSync } from 'node:child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "..");
+const ROOT = resolve(__dirname, '..');
 const HOME = homedir();
 
 // ---------- args ----------
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const m = a.match(/^--([^=]+)=(.*)$/);
-    return m ? [m[1], m[2]] : [a.replace(/^--/, ""), true];
-  })
+    return m ? [m[1], m[2]] : [a.replace(/^--/, ''), true];
+  }),
 );
 const TOOL = args.tool;
 const REPO = args.repo ? resolve(String(args.repo)) : null;
 const GLOBAL = !REPO;
-const DRY = !!args["dry-run"];
+const DRY = !!args['dry-run'];
 const FORCE = !!args.force;
 
-const SUPPORTED = ["claude", "copilot", "codex", "gemini", "cursor"];
+const SUPPORTED = ['claude', 'copilot', 'codex', 'gemini', 'cursor'];
 
-if (!TOOL || (TOOL !== "all" && !SUPPORTED.includes(TOOL))) {
+if (!TOOL || (TOOL !== 'all' && !SUPPORTED.includes(TOOL))) {
   console.error(
-    `Usage: node scripts/install.mjs --tool=<${SUPPORTED.join("|")}|all> [--repo=<path>] [--dry-run]`
+    `Usage: node scripts/install.mjs --tool=<${SUPPORTED.join('|')}|all> [--repo=<path>] [--dry-run]`,
   );
   process.exit(1);
 }
 
 // ---------- tiny logger ----------
-const C = { dim: "\x1b[2m", grn: "\x1b[32m", yel: "\x1b[33m", cyn: "\x1b[36m", rst: "\x1b[0m" };
-const log = (s = "") => console.log(s);
+const C = {
+  dim: '\x1b[2m',
+  grn: '\x1b[32m',
+  yel: '\x1b[33m',
+  cyn: '\x1b[36m',
+  rst: '\x1b[0m',
+};
+const log = (s = '') => console.log(s);
 const act = (verb, detail) =>
-  log(`  ${DRY ? C.yel + "would " + verb + C.rst : C.grn + verb + C.rst} ${detail}`);
+  log(
+    `  ${DRY ? C.yel + 'would ' + verb + C.rst : C.grn + verb + C.rst} ${detail}`,
+  );
 const note = (s) => log(`  ${C.dim}${s}${C.rst}`);
 
 // ---------- fs helpers ----------
-const expand = (p) => (p.startsWith("~") ? join(HOME, p.slice(1)) : p);
+const expand = (p) => (p.startsWith('~') ? join(HOME, p.slice(1)) : p);
 
 function ensureDir(d) {
   if (DRY) return;
@@ -91,18 +107,18 @@ function link(target, linkPath) {
       return;
     }
     if (FORCE) {
-      act("replace", tidy(linkPath));
+      act('replace', tidy(linkPath));
       if (!DRY) rmSync(linkPath, { recursive: true, force: true });
     } else {
-      const bak = linkPath + ".bak";
-      act("back up → " + tidy(bak) + " and link", tidy(linkPath));
+      const bak = linkPath + '.bak';
+      act('back up → ' + tidy(bak) + ' and link', tidy(linkPath));
       if (!DRY) {
         rmSync(bak, { recursive: true, force: true });
         renameSync(linkPath, bak);
       }
     }
   } else {
-    act("link", `${tidy(linkPath)} → ${tidy(target)}`);
+    act('link', `${tidy(linkPath)} → ${tidy(target)}`);
   }
   if (!DRY) {
     ensureDir(dirname(linkPath));
@@ -110,51 +126,116 @@ function link(target, linkPath) {
   }
 }
 
+// Link each entry inside `srcDir` into `destDir`, one symlink per child.
+// Unlike linking the directory itself, this preserves any pre-existing
+// entries already in `destDir` (e.g. the user's own skills/agents) — we only
+// touch the names we actually ship.
+function linkChildren(srcDir, destDir) {
+  if (!existsSync(srcDir)) {
+    if (DRY)
+      note(
+        `(no source yet) would link children of ${tidy(srcDir)} → ${tidy(destDir)}`,
+      );
+    return;
+  }
+  for (const name of readdirSync(srcDir))
+    link(join(srcDir, name), join(destDir, name));
+}
+
 // Write a (possibly transformed) file. Backs up an existing real file.
 function writeFile(path, content, label) {
   if (existsSync(path) && !isSymlink(path)) {
     try {
-      if (readFileSync(path, "utf8") === content) { note(`already current: ${tidy(path)}`); return; }
-    } catch { /* fall through to (re)write */ }
+      if (readFileSync(path, 'utf8') === content) {
+        note(`already current: ${tidy(path)}`);
+        return;
+      }
+    } catch {
+      /* fall through to (re)write */
+    }
   }
   if (existsSync(path) && !isSymlink(path) && !FORCE) {
-    const bak = path + ".bak";
-    act("back up → " + tidy(bak) + " and write", tidy(path));
-    if (!DRY) { rmSync(bak, { force: true }); renameSync(path, bak); }
+    const bak = path + '.bak';
+    act('back up → ' + tidy(bak) + ' and write', tidy(path));
+    if (!DRY) {
+      rmSync(bak, { force: true });
+      renameSync(path, bak);
+    }
   } else {
-    act("write", `${tidy(path)}${label ? "  " + C.dim + label + C.rst : ""}`);
+    act('write', `${tidy(path)}${label ? '  ' + C.dim + label + C.rst : ''}`);
   }
-  if (!DRY) { ensureDir(dirname(path)); writeFileSync(path, content); }
+  if (!DRY) {
+    ensureDir(dirname(path));
+    writeFileSync(path, content);
+  }
 }
 
-const isSymlink = (p) => { try { return lstatSync(p).isSymbolicLink(); } catch { return false; } };
-const realpathSafe = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
-const tidy = (p) => p.replace(HOME, "~").replace(ROOT, "<toolkit>");
+const isSymlink = (p) => {
+  try {
+    return lstatSync(p).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
+const realpathSafe = (p) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
+  }
+};
+const tidy = (p) => p.replace(HOME, '~').replace(ROOT, '<toolkit>');
 const filesIn = (d, ext) =>
-  existsSync(d) ? readdirSync(d).filter((f) => f.endsWith(ext)).map((f) => join(d, f)) : [];
+  existsSync(d)
+    ? readdirSync(d)
+        .filter((f) => f.endsWith(ext))
+        .map((f) => join(d, f))
+    : [];
 
 // ---------- VS Code user prompts dir (Copilot global slash commands) ----------
 function vscodeUserDir() {
-  if (args["vscode-prompts-dir"]) return expand(String(args["vscode-prompts-dir"]));
-  const appName = args.insiders ? "Code - Insiders" : "Code";
+  if (args['vscode-prompts-dir'])
+    return expand(String(args['vscode-prompts-dir']));
+  const appName = args.insiders ? 'Code - Insiders' : 'Code';
   const p = platform();
-  if (p === "darwin") return join(HOME, "Library", "Application Support", appName, "User", "prompts");
-  if (p === "win32") return join(process.env.APPDATA || join(HOME, "AppData", "Roaming"), appName, "User", "prompts");
-  return join(HOME, ".config", appName, "User", "prompts"); // linux
+  if (p === 'darwin')
+    return join(
+      HOME,
+      'Library',
+      'Application Support',
+      appName,
+      'User',
+      'prompts',
+    );
+  if (p === 'win32')
+    return join(
+      process.env.APPDATA || join(HOME, 'AppData', 'Roaming'),
+      appName,
+      'User',
+      'prompts',
+    );
+  return join(HOME, '.config', appName, 'User', 'prompts'); // linux
 }
 
 // ---------- build the adapter for one tool into the gitignored dist/ ----------
 function build(tool) {
-  const out = join(ROOT, "dist");
-  const toolkitPath = GLOBAL ? ROOT : ".adlc-toolkit";
-  const mode = GLOBAL ? "global" : "vendored";
-  log(`${C.cyn}▸ building ${tool} adapter${C.rst} ${C.dim}(${mode}, path=${tidy(toolkitPath)})${C.rst}`);
+  const out = join(ROOT, 'dist');
+  const toolkitPath = GLOBAL ? ROOT : '.adlc-toolkit';
+  const mode = GLOBAL ? 'global' : 'vendored';
+  log(
+    `${C.cyn}▸ building ${tool} adapter${C.rst} ${C.dim}(${mode}, path=${tidy(toolkitPath)})${C.rst}`,
+  );
   if (!DRY) {
     execFileSync(
-      "node",
-      [join(ROOT, "scripts", "build.mjs"), `--tool=${tool}`, `--mode=${mode}`,
-       `--toolkit-path=${toolkitPath}`, `--out=${out}`],
-      { stdio: "ignore" }
+      'node',
+      [
+        join(ROOT, 'scripts', 'build.mjs'),
+        `--tool=${tool}`,
+        `--mode=${mode}`,
+        `--toolkit-path=${toolkitPath}`,
+        `--out=${out}`,
+      ],
+      { stdio: 'ignore' },
     );
   }
   return join(out, tool);
@@ -163,28 +244,32 @@ function build(tool) {
 // ---------- per-tool global placement ----------
 function installGlobal(tool, src) {
   switch (tool) {
-    case "claude": {
-      link(join(src, "skills"), expand("~/.claude/skills"));
-      link(join(src, "agents"), expand("~/.claude/agents"));
-      link(join(src, "CLAUDE.md"), expand("~/.claude/CLAUDE.md"));
+    case 'claude': {
+      // Link each skill dir / agent file individually so the user's existing
+      // ~/.claude/skills and ~/.claude/agents entries stay put.
+      linkChildren(join(src, 'skills'), expand('~/.claude/skills'));
+      linkChildren(join(src, 'agents'), expand('~/.claude/agents'));
+      link(join(src, 'CLAUDE.md'), expand('~/.claude/CLAUDE.md'));
       break;
     }
-    case "copilot": {
+    case 'copilot': {
       // sub-agents → ~/.copilot/agents (VS Code user-level, all workspaces)
-      for (const f of filesIn(join(src, ".github", "agents"), ".agent.md"))
-        link(f, join(expand("~/.copilot/agents"), basename(f)));
+      for (const f of filesIn(join(src, '.github', 'agents'), '.agent.md'))
+        link(f, join(expand('~/.copilot/agents'), basename(f)));
       // slash commands → VS Code user prompts dir (available in every workspace)
       const promptsDir = vscodeUserDir();
-      for (const f of filesIn(join(src, ".github", "prompts"), ".prompt.md"))
+      for (const f of filesIn(join(src, '.github', 'prompts'), '.prompt.md'))
         link(f, join(promptsDir, basename(f)));
       // memory → ~/.copilot/instructions/*.instructions.md needs applyTo frontmatter
-      const memSrc = join(src, ".github", "copilot-instructions.md");
+      const memSrc = join(src, '.github', 'copilot-instructions.md');
       if (existsSync(memSrc) || DRY) {
-        const body = existsSync(memSrc) ? readFileSync(memSrc, "utf8") : "(generated at run time)";
+        const body = existsSync(memSrc)
+          ? readFileSync(memSrc, 'utf8')
+          : '(generated at run time)';
         writeFile(
-          expand("~/.copilot/instructions/adlc.instructions.md"),
+          expand('~/.copilot/instructions/adlc.instructions.md'),
           `---\napplyTo: '**'\n---\n\n${body}`,
-          "(applyTo:** so it loads in every repo)"
+          '(applyTo:** so it loads in every repo)',
         );
       }
       note(`VS Code prompts dir: ${tidy(promptsDir)}`);
@@ -192,29 +277,33 @@ function installGlobal(tool, src) {
       note(`  "chat.promptFilesLocations": { "${promptsDir}": true }`);
       break;
     }
-    case "codex": {
-      for (const f of filesIn(join(src, "prompts"), ".md"))
-        link(f, join(expand("~/.codex/prompts"), basename(f)));
-      for (const f of filesIn(join(src, "agents"), ".toml"))
-        link(f, join(expand("~/.codex/agents"), basename(f)));
-      link(join(src, "AGENTS.md"), expand("~/.codex/AGENTS.md"));
+    case 'codex': {
+      for (const f of filesIn(join(src, 'prompts'), '.md'))
+        link(f, join(expand('~/.codex/prompts'), basename(f)));
+      for (const f of filesIn(join(src, 'agents'), '.toml'))
+        link(f, join(expand('~/.codex/agents'), basename(f)));
+      link(join(src, 'AGENTS.md'), expand('~/.codex/AGENTS.md'));
       break;
     }
-    case "gemini": {
-      for (const f of filesIn(join(src, ".gemini", "commands"), ".toml"))
-        link(f, join(expand("~/.gemini/commands"), basename(f)));
-      for (const f of filesIn(join(src, ".gemini", "agents"), ".md"))
-        link(f, join(expand("~/.gemini/agents"), basename(f)));
-      link(join(src, "GEMINI.md"), expand("~/.gemini/GEMINI.md"));
+    case 'gemini': {
+      for (const f of filesIn(join(src, '.gemini', 'commands'), '.toml'))
+        link(f, join(expand('~/.gemini/commands'), basename(f)));
+      for (const f of filesIn(join(src, '.gemini', 'agents'), '.md'))
+        link(f, join(expand('~/.gemini/agents'), basename(f)));
+      link(join(src, 'GEMINI.md'), expand('~/.gemini/GEMINI.md'));
       break;
     }
-    case "cursor": {
+    case 'cursor': {
       // Cursor reads user-level slash commands from ~/.cursor/commands (all projects).
-      for (const f of filesIn(join(src, ".cursor", "commands"), ".md"))
-        link(f, join(expand("~/.cursor/commands"), basename(f)));
+      for (const f of filesIn(join(src, '.cursor', 'commands'), '.md'))
+        link(f, join(expand('~/.cursor/commands'), basename(f)));
       // Rules are project-scoped in Cursor — the memory rule can't be installed globally as a file.
-      note(`Cursor rules are project-scoped: paste ${tidy(join(src, ".cursor", "rules", "adlc.mdc"))}`);
-      note(`into Cursor → Settings → Rules (User Rules), or install per-repo with --repo=<path> to get .cursor/rules/adlc.mdc.`);
+      note(
+        `Cursor rules are project-scoped: paste ${tidy(join(src, '.cursor', 'rules', 'adlc.mdc'))}`,
+      );
+      note(
+        `into Cursor → Settings → Rules (User Rules), or install per-repo with --repo=<path> to get .cursor/rules/adlc.mdc.`,
+      );
       break;
     }
   }
@@ -224,54 +313,79 @@ function installGlobal(tool, src) {
 function installRepo(tool, src, repo) {
   const cp = (from, to) => {
     if (!existsSync(from)) return;
-    act("copy", `${tidy(from)} → ${to.replace(repo, "<repo>")}`);
+    act('copy', `${tidy(from)} → ${to.replace(repo, '<repo>')}`);
     if (!DRY) {
       ensureDir(dirname(to));
-      execFileSync("cp", ["-R", from, to]);
+      execFileSync('cp', ['-R', from, to]);
+    }
+  };
+  // Copy each entry of `fromDir` into an existing `toDir`, replacing only the
+  // names we ship. Avoids clobbering/nesting the user's existing .claude dir.
+  const cpChildren = (fromDir, toDir) => {
+    if (!existsSync(fromDir)) return;
+    for (const name of readdirSync(fromDir)) {
+      const to = join(toDir, name);
+      act(
+        'copy',
+        `${tidy(join(fromDir, name))} → ${to.replace(repo, '<repo>')}`,
+      );
+      if (!DRY) {
+        ensureDir(toDir);
+        rmSync(to, { recursive: true, force: true });
+        execFileSync('cp', ['-R', join(fromDir, name), to]);
+      }
     }
   };
   switch (tool) {
-    case "claude":
-      cp(join(src, "skills"), join(repo, ".claude", "skills"));
-      cp(join(src, "agents"), join(repo, ".claude", "agents"));
-      cp(join(src, "CLAUDE.md"), join(repo, "CLAUDE.md"));
+    case 'claude':
+      cpChildren(join(src, 'skills'), join(repo, '.claude', 'skills'));
+      cpChildren(join(src, 'agents'), join(repo, '.claude', 'agents'));
+      cp(join(src, 'CLAUDE.md'), join(repo, 'CLAUDE.md'));
       break;
-    case "copilot":
-      cp(join(src, ".github"), join(repo, ".github"));
+    case 'copilot':
+      cp(join(src, '.github'), join(repo, '.github'));
       break;
-    case "codex":
-      cp(join(src, "prompts"), join(repo, ".codex", "prompts"));
-      cp(join(src, "agents"), join(repo, ".codex", "agents"));
-      cp(join(src, "AGENTS.md"), join(repo, "AGENTS.md"));
+    case 'codex':
+      cp(join(src, 'prompts'), join(repo, '.codex', 'prompts'));
+      cp(join(src, 'agents'), join(repo, '.codex', 'agents'));
+      cp(join(src, 'AGENTS.md'), join(repo, 'AGENTS.md'));
       break;
-    case "gemini":
-      cp(join(src, ".gemini"), join(repo, ".gemini"));
-      cp(join(src, "GEMINI.md"), join(repo, "GEMINI.md"));
+    case 'gemini':
+      cp(join(src, '.gemini'), join(repo, '.gemini'));
+      cp(join(src, 'GEMINI.md'), join(repo, 'GEMINI.md'));
       break;
-    case "cursor":
-      cp(join(src, ".cursor"), join(repo, ".cursor"));
+    case 'cursor':
+      cp(join(src, '.cursor'), join(repo, '.cursor'));
       break;
   }
-  note(`project-local stubs reference '.adlc-toolkit/core/…' — vendor the toolkit there, or re-run with global.`);
+  note(
+    `project-local stubs reference '.adlc-toolkit/core/…' — vendor the toolkit there, or re-run with global.`,
+  );
 }
 
 // ---------- main ----------
-const tools = TOOL === "all" ? SUPPORTED : [TOOL];
+const tools = TOOL === 'all' ? SUPPORTED : [TOOL];
 
-log("");
-log(`${C.cyn}ADLC installer${C.rst}  ${C.dim}${GLOBAL ? "global (all repos)" : "project: " + REPO}${DRY ? "  ·  DRY RUN" : ""}${C.rst}`);
+log('');
+log(
+  `${C.cyn}ADLC installer${C.rst}  ${C.dim}${GLOBAL ? 'global (all repos)' : 'project: ' + REPO}${DRY ? '  ·  DRY RUN' : ''}${C.rst}`,
+);
 log(`${C.dim}toolkit: ${ROOT}${C.rst}`);
-log("");
+log('');
 
 for (const t of tools) {
   const src = build(t);
   if (GLOBAL) installGlobal(t, src);
   else installRepo(t, src, REPO);
-  log("");
+  log('');
 }
 
 log(`${C.grn}done.${C.rst}`);
 if (GLOBAL) {
-  log(`${C.dim}Keep the toolkit at ${ROOT} — the installed stubs read core/ from there at runtime.${C.rst}`);
-  log(`${C.dim}Update everything later with: git -C "${ROOT}" pull  (symlinks pick it up automatically).${C.rst}`);
+  log(
+    `${C.dim}Keep the toolkit at ${ROOT} — the installed stubs read core/ from there at runtime.${C.rst}`,
+  );
+  log(
+    `${C.dim}Update everything later with: git -C "${ROOT}" pull  (symlinks pick it up automatically).${C.rst}`,
+  );
 }
