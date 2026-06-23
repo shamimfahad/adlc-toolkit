@@ -1,5 +1,5 @@
 ---
-description: "Read-only overview of all active work — REQs in flight, current phases, gate states, blockers, recent activity from hot.md. Use to orient at session start or to triage when /sprint has multiple REQs in flight."
+description: "Show every active REQ and gate state."
 ---
 
 Toolkit root: .adlc-toolkit

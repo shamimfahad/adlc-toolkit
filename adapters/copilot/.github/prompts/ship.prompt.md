@@ -1,5 +1,5 @@
 ---
-description: "Autonomous end-to-end pipeline. Runs /spec → /architect → /implement → /review → /wrapup like /proceed, but instead of pausing at each gate it routes the decision through the decision-maker agent, commits its work as it goes, and ends in a single terminal human review backed by a full audit log. Opt-in; conservative by default; never merges to main or rewrites history."
+description: "Autonomous pipeline — runs all five phases, routing each gate through the decision-maker; ends in one terminal human review."
 ---
 
 Toolkit root: .adlc-toolkit

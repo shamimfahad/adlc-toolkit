@@ -1,6 +1,6 @@
 ---
 name: task-implementer
-description: "Implements a single task end-to-end — writes code, updates tests, verifies it runs. Reads the task spec, the surrounding code, and the vault. Drafts a commit message; does NOT commit. Dispatched by /implement."
+description: "Writes code for one task. No git operations."
 model: opus
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---

@@ -1,6 +1,6 @@
 ---
 name: implement
-description: "Execute the task DAG for a REQ. Phase 3 of /proceed. Dispatches task-implementer agents (tier-based parallel where possible), drafts commit messages to commits-draft.md, runs tests, then ends in the implement gate."
+description: "Execute the task DAG. Phase 3."
 ---
 
 Toolkit root: .adlc-toolkit

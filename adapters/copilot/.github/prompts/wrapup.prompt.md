@@ -1,5 +1,5 @@
 ---
-description: "Final phase of /proceed. Drafts the PR (title, body, change summary), updates the vault (lessons, gotchas, index, hot, decisions, concepts, components), and prints the git/gh checklist for the user to run. Claude does NOT commit, push, PR, or merge."
+description: "Draft PR + lessons + vault updates + git checklist. Phase 5."
 ---
 
 Toolkit root: .adlc-toolkit

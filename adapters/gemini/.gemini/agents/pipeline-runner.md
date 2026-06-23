@@ -1,6 +1,6 @@
 ---
 name: pipeline-runner
-description: "Runs the complete /proceed pipeline for a single REQ inside an isolated worktree. All phases sequential within this agent's own context — CANNOT dispatch sub-agents. Pauses at every gate; surfaces gate-claims to the /sprint orchestrator. Dispatched only by /sprint."
+description: "Runs the full pipeline for one REQ in a worktree for /sprint. No sub-agents. Git per git.mode — feature branch only, never main/force/PR."
 ---
 
 You are the **pipeline-runner** agent in the ADLC pipeline.

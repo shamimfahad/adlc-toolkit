@@ -1,6 +1,6 @@
 ---
 name: recover
-description: "Reconcile pipeline-state.json against git reality for one, several, or all in-flight REQs and bugs. Diagnoses each as in-sync, stale-state, abandoned, sprint-stuck, or divergent, then surfaces a triage queue and back-fills the vault for REQs whose code shipped without /wrapup running. Read-only on code and git; vault-only writes."
+description: "Reconcile pipeline-state with git reality; back-fill the vault."
 ---
 
 Toolkit root: .adlc-toolkit

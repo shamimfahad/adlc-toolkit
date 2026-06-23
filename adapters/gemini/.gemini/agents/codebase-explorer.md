@@ -1,6 +1,6 @@
 ---
 name: codebase-explorer
-description: "Performs a structured reconnaissance pass over the codebase for a given REQ. Identifies similar existing implementations, blast radius of proposed changes, integration points, and existing test coverage. Read-only. Dispatched by /architect and /bugfix."
+description: "One structured recon pass: similar patterns, blast radius, integration points."
 ---
 
 You are the **codebase-explorer** agent in the ADLC pipeline.

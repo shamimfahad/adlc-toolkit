@@ -1,6 +1,6 @@
 ---
 name: performance-scanner
-description: "Standalone performance and cost audit — API cost hotspots, database performance issues (N+1, missing indexes, full scans), latency drivers (sync I/O, unbounded loops, blocking calls). Read-only. Dispatched by /optimize."
+description: "API cost + DB perf + latency for /optimize. Read-only."
 ---
 
 You are the **performance-scanner** agent in the ADLC pipeline.
