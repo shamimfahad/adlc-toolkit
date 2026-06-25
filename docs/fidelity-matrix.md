@@ -36,7 +36,7 @@ All five assistants converged on the same three primitives — a memory/context 
 
 ## Choosing where to install
 
-`scripts/install.mjs` does either for you. Global is the default; pass `--repo=<path>` for project-local.
+`scripts/adlc.mjs sync` does either for you. Global is the default; pass `--repo=<path>` for project-local.
 
 - **Global / user-level** (default) — install once into `~/.claude`, `~/.copilot`, `~/.codex`, `~/.gemini`, `~/.cursor/commands`; the pipeline is then available in every repo you open. Best for solo work across many repos. All five tools support user-level slash commands and (except Cursor) user-level memory + sub-agents — modern VS Code Copilot reads `~/.copilot/agents`, user-level prompt files, and `~/.copilot/instructions`, so it is no longer project-bound.
 - **Project-local** (`--repo=<path>`) — writes the adapter into the repo (`.claude/`, `.github/`, `.cursor/`, etc.). Best for teams: the pipeline travels with the repo, everyone gets the same commands, and it's reviewable in PRs.
@@ -61,4 +61,4 @@ The honest line, as everywhere else in this matrix: sources are **strictly addit
 
 ## Notes on accuracy
 
-These tools ship changes frequently. The adapter formats here reflect each tool's documented mechanism at the time of writing; if a tool changes its frontmatter keys or command location, update the relevant emitter in `scripts/build.mjs` and regenerate — every adapter for that tool updates at once. The Codex agent TOML keys in particular are worth confirming against your installed Codex version.
+These tools ship changes frequently. The adapter formats here reflect each tool's documented mechanism at the time of writing; if a tool changes its frontmatter keys or command location, update the relevant emitter in `scripts/adlc.mjs build` and regenerate — every adapter for that tool updates at once. The Codex agent TOML keys in particular are worth confirming against your installed Codex version.

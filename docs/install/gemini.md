@@ -9,7 +9,7 @@ Adapter source: `adapters/gemini/` → `GEMINI.md`, `.gemini/commands/<name>.tom
 ## Install — one command (recommended)
 
 ```bash
-node scripts/install.mjs --tool=gemini          # add --dry-run to preview; --repo=<path> for one project
+node scripts/adlc.mjs sync --tool=gemini          # add --dry-run to preview; --repo=<path> for one project
 ```
 
 Global install symlinks commands into `~/.gemini/commands/`, agents into `~/.gemini/agents/`, and the memory file to `~/.gemini/GEMINI.md` — available in every repo. Symlinks track the toolkit, so `git -C <toolkit> pull` updates everything. The manual steps below are the equivalent, if you prefer to place files yourself.
@@ -24,7 +24,7 @@ Global install symlinks commands into `~/.gemini/commands/`, agents into `~/.gem
 **macOS / Linux**
 ```bash
 git clone <repo-url> .adlc-toolkit
-node .adlc-toolkit/scripts/build.mjs --tool=gemini --toolkit-path=.adlc-toolkit   # only if path differs
+node .adlc-toolkit/scripts/adlc.mjs build --tool=gemini --toolkit-path=.adlc-toolkit   # only if path differs
 cp -R .adlc-toolkit/adapters/gemini/.gemini ./.gemini
 cp    .adlc-toolkit/adapters/gemini/GEMINI.md ./GEMINI.md
 ```
@@ -32,7 +32,7 @@ cp    .adlc-toolkit/adapters/gemini/GEMINI.md ./GEMINI.md
 **Windows (PowerShell)**
 ```powershell
 git clone <repo-url> .adlc-toolkit
-node .adlc-toolkit\scripts\build.mjs --tool=gemini --toolkit-path=.adlc-toolkit
+node .adlc-toolkit\scripts\adlc.mjs build --tool=gemini --toolkit-path=.adlc-toolkit
 Copy-Item -Recurse -Force .adlc-toolkit\adapters\gemini\.gemini .\.gemini
 Copy-Item -Force .adlc-toolkit\adapters\gemini\GEMINI.md .\GEMINI.md
 ```
@@ -43,7 +43,7 @@ If the repo already has `.gemini/` or `GEMINI.md`, copy the contents / merge the
 
 ```bash
 git clone <repo-url> ~/code/adlc-toolkit
-node ~/code/adlc-toolkit/scripts/build.mjs --tool=gemini --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
+node ~/code/adlc-toolkit/scripts/adlc.mjs build --tool=gemini --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 mkdir -p ~/.gemini/commands ~/.gemini/agents
 cp ~/code/adlc-toolkit/adapters/gemini/.gemini/commands/*.toml ~/.gemini/commands/
 cp ~/code/adlc-toolkit/adapters/gemini/.gemini/agents/*.md     ~/.gemini/agents/

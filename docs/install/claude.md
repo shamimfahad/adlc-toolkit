@@ -7,7 +7,7 @@ Adapter source: `adapters/claude/` → `skills/<name>/SKILL.md`, `agents/<name>.
 ## Install — one command (recommended)
 
 ```bash
-node scripts/install.mjs --tool=claude          # add --dry-run to preview; --repo=<path> for one project
+node scripts/adlc.mjs sync --tool=claude          # add --dry-run to preview; --repo=<path> for one project
 ```
 
 Global install symlinks `~/.claude/skills`, `~/.claude/agents`, and `~/.claude/CLAUDE.md` to the toolkit, so every repo gets the pipeline and `git -C <toolkit> pull` updates all of them. The manual Options below are the equivalent, if you'd rather place files yourself.
@@ -15,7 +15,7 @@ Global install symlinks `~/.claude/skills`, `~/.claude/agents`, and `~/.claude/C
 ## Prerequisites
 
 - Claude Code installed (`claude --version`).
-- Node 18+ only if you need to regenerate adapters (`node scripts/build.mjs`).
+- Node 18+ only if you need to regenerate adapters (`node scripts/adlc.mjs build`).
 
 ## Manual — project-local (good for teams)
 
@@ -27,7 +27,7 @@ The pipeline travels with the repo. Run from your project root.
 git clone <repo-url> .adlc-toolkit
 
 # 2. (only if your path differs from the default) regenerate
-node .adlc-toolkit/scripts/build.mjs --tool=claude --toolkit-path=.adlc-toolkit
+node .adlc-toolkit/scripts/adlc.mjs build --tool=claude --toolkit-path=.adlc-toolkit
 
 # 3. Install the adapter into the project
 mkdir -p .claude
@@ -39,7 +39,7 @@ cp    .adlc-toolkit/adapters/claude/CLAUDE.md ./CLAUDE.md
 **Windows (PowerShell)**
 ```powershell
 git clone <repo-url> .adlc-toolkit
-node .adlc-toolkit\scripts\build.mjs --tool=claude --toolkit-path=.adlc-toolkit
+node .adlc-toolkit\scripts\adlc.mjs build --tool=claude --toolkit-path=.adlc-toolkit
 New-Item -ItemType Directory -Force .claude | Out-Null
 Copy-Item -Recurse -Force .adlc-toolkit\adapters\claude\skills .claude\skills
 Copy-Item -Recurse -Force .adlc-toolkit\adapters\claude\agents .claude\agents
@@ -54,7 +54,7 @@ What the one-command installer does, by hand: install once into `~/.claude`, ava
 ```bash
 git clone <repo-url> ~/code/adlc-toolkit
 cd ~/code/adlc-toolkit
-node scripts/build.mjs --tool=claude --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
+node scripts/adlc.mjs build --tool=claude --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 
 # back up anything existing, then symlink
 [ -e ~/.claude/skills ] && mv ~/.claude/skills ~/.claude/skills.bak
@@ -67,7 +67,7 @@ ln -s "$PWD/adapters/claude/agents" ~/.claude/agents
 ```powershell
 git clone <repo-url> $HOME\code\adlc-toolkit
 cd $HOME\code\adlc-toolkit
-node scripts\build.mjs --tool=claude --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
+node scripts\adlc.mjs build --tool=claude --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 cmd /c mklink /D "$HOME\.claude\skills" "$PWD\adapters\claude\skills"
 cmd /c mklink /D "$HOME\.claude\agents" "$PWD\adapters\claude\agents"
 ```

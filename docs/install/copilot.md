@@ -19,7 +19,7 @@ Modern VS Code Copilot supports all three primitives at the **user level**, so t
 From the toolkit folder:
 
 ```bash
-node scripts/install.mjs --tool=copilot           # add --dry-run first to preview
+node scripts/adlc.mjs sync --tool=copilot           # add --dry-run first to preview
 ```
 
 That installs into your user-level Copilot config, available across **all** workspaces:
@@ -37,7 +37,7 @@ If the slash commands don't show up, the installer prints a one-line `chat.promp
 ## Option B — Single project
 
 ```bash
-node scripts/install.mjs --tool=copilot --repo=/path/to/project
+node scripts/adlc.mjs sync --tool=copilot --repo=/path/to/project
 ```
 
 This writes `.github/prompts/`, `.github/agents/`, and `.github/copilot-instructions.md` into that repo (stubs reference `.adlc-toolkit/core/…`, so vendor the toolkit there too). If the repo already has a `.github/`, the installer copies into it; merge the ADLC block if `copilot-instructions.md` already exists.
@@ -66,4 +66,4 @@ Prompt files appear as `/`-commands. To run a review with isolated roles, switch
 - **Read-only reviewers** are enforced by each agent's tool set — the reviewer agents are not granted edit tools. Confirm tool grants in the agent picker if your org customizes them.
 - **`/sprint`** uses sequential handoffs rather than true parallelism — correct, not concurrent. `/proceed` works fully.
 - Prompt/agent files are pointer stubs that read `core/...` from the toolkit at runtime. A global install stamps the toolkit's **absolute** path, so keep the toolkit where you cloned it (don't move it after installing — just re-run the installer if you do).
-- Tool/agent frontmatter keys vary slightly across Copilot host IDEs; if an agent isn't picked up, check that IDE's custom-agent docs and adjust the emitter in `scripts/build.mjs`.
+- Tool/agent frontmatter keys vary slightly across Copilot host IDEs; if an agent isn't picked up, check that IDE's custom-agent docs and adjust the emitter in `scripts/adlc.mjs build`.

@@ -7,7 +7,7 @@ Adapter source: `adapters/cursor/.cursor/` → `commands/<name>.md`, `commands/a
 ## Install — one command (recommended)
 
 ```bash
-node scripts/install.mjs --tool=cursor          # add --dry-run to preview; --repo=<path> for one project
+node scripts/adlc.mjs sync --tool=cursor          # add --dry-run to preview; --repo=<path> for one project
 ```
 
 Cursor is the partial case: slash commands install globally (symlinked into `~/.cursor/commands/`, available in every project), but **rules are project-scoped** in Cursor — they can't be installed as a global file. The installer prints the path to `adlc.mdc`; paste it into **Settings → Rules (User Rules)** for an all-projects memory, or use `--repo=<path>` to drop `.cursor/rules/adlc.mdc` into a specific project. The manual steps below show the equivalent placement.
@@ -24,14 +24,14 @@ Cursor auto-discovers `.cursor/` in the open project. Just drop the folder in.
 **macOS / Linux**
 ```bash
 git clone <repo-url> .adlc-toolkit
-node .adlc-toolkit/scripts/build.mjs --tool=cursor --toolkit-path=.adlc-toolkit   # only if path differs
+node .adlc-toolkit/scripts/adlc.mjs build --tool=cursor --toolkit-path=.adlc-toolkit   # only if path differs
 cp -R .adlc-toolkit/adapters/cursor/.cursor ./.cursor
 ```
 
 **Windows (PowerShell)**
 ```powershell
 git clone <repo-url> .adlc-toolkit
-node .adlc-toolkit\scripts\build.mjs --tool=cursor --toolkit-path=.adlc-toolkit
+node .adlc-toolkit\scripts\adlc.mjs build --tool=cursor --toolkit-path=.adlc-toolkit
 Copy-Item -Recurse -Force .adlc-toolkit\adapters\cursor\.cursor .\.cursor
 ```
 
@@ -44,7 +44,7 @@ Put the commands in your user-level Cursor folder so they appear in every projec
 **macOS / Linux**
 ```bash
 git clone <repo-url> ~/code/adlc-toolkit
-node ~/code/adlc-toolkit/scripts/build.mjs --tool=cursor --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
+node ~/code/adlc-toolkit/scripts/adlc.mjs build --tool=cursor --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 mkdir -p ~/.cursor/commands
 cp ~/code/adlc-toolkit/adapters/cursor/.cursor/commands/*.md ~/.cursor/commands/
 ```
@@ -52,7 +52,7 @@ cp ~/code/adlc-toolkit/adapters/cursor/.cursor/commands/*.md ~/.cursor/commands/
 **Windows (PowerShell)**
 ```powershell
 git clone <repo-url> $HOME\code\adlc-toolkit
-node $HOME\code\adlc-toolkit\scripts\build.mjs --tool=cursor --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
+node $HOME\code\adlc-toolkit\scripts\adlc.mjs build --tool=cursor --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 New-Item -ItemType Directory -Force $HOME\.cursor\commands | Out-Null
 Copy-Item -Force $HOME\code\adlc-toolkit\adapters\cursor\.cursor\commands\*.md $HOME\.cursor\commands\
 ```

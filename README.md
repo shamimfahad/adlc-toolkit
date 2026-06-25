@@ -32,8 +32,9 @@ adlc-toolkit/
     manifest.json           # catalog the generator reads
   templates/                # vault + in-REQ templates (stack-agnostic)
   adapters/<tool>/          # generated stubs — clone-and-go for each assistant
-  scripts/install.mjs       # one-command install (global by default)
-  scripts/build.mjs         # regenerates adapters/
+  scripts/adlc.mjs          # one command: `sync` (install+update) · `build` (regenerate adapters/)
+  scripts/install.mjs       # alias → adlc.mjs sync   (kept for back-compat)
+  scripts/build.mjs         # alias → adlc.mjs build  (kept for back-compat)
   docs/                     # quickstart, fidelity matrix, per-tool install guides
 ETHOS.md                    # the 6 guiding principles
 ```
@@ -42,17 +43,29 @@ Per project, the `init` command creates a **`.adlc/` vault** — an Obsidian-com
 
 ## Install
 
-One command, **global by default** — the pipeline becomes available in every repo you open:
+**One command does install *and* update**, global by default — the pipeline becomes available in every repo you open:
 
 ```bash
 git clone <repo-url> ~/code/adlc-toolkit
 cd ~/code/adlc-toolkit
-node scripts/install.mjs --tool=copilot     # or claude · codex · gemini · cursor · all
+node scripts/adlc.mjs sync --tool=copilot     # or claude · codex · gemini · cursor · all
 ```
 
-The installer regenerates the adapter for your tool and symlinks it into that tool's user-level config (`~/.copilot/`, `~/.claude/`, `~/.codex/`, `~/.gemini/`, …). Add `--dry-run` to preview, or `--repo=/path/to/project` to install into a single project instead. See the [quickstart](docs/quickstart.md) and [per-tool guides](docs/install/).
+`sync` regenerates the adapter for your tool and symlinks it into that tool's user-level config (`~/.copilot/`, `~/.claude/`, `~/.codex/`, `~/.gemini/`, …). Add `--dry-run` to preview, or `--repo=/path/to/project` to install into a single project instead. See the [quickstart](docs/quickstart.md) and [per-tool guides](docs/install/).
 
-Under the hood it builds machine-specific stubs (absolute toolkit path) into the gitignored `dist/` and links from there, so the committed `adapters/` stays portable. Update every install later with `git -C ~/code/adlc-toolkit pull`.
+Under the hood it builds machine-specific stubs (absolute toolkit path) into the gitignored `dist/` and links from there, so the committed `adapters/` stays portable.
+
+> The old `node scripts/install.mjs …` command still works — it's now a thin alias for `adlc.mjs sync`.
+
+### Updating
+
+Run the **same command** again — `sync` is an idempotent reconciler, not a one-shot installer:
+
+```bash
+node scripts/adlc.mjs sync --tool=all --pull    # git pull the toolkit, then reconcile every install
+```
+
+Re-running reconciles your install against what the toolkit currently ships: **new skills/agents get linked, removed ones get pruned, and renamed ones are cleaned up** — while anything *you* added to `~/.claude/skills` (etc.) is left untouched. Content edits flow through automatically because every stub is a thin pointer into `core/`. There is no separate "update" step to remember and no orphaned commands left behind when the skill set changes.
 
 ### Or let your AI assistant install it
 
@@ -63,11 +76,12 @@ You are helping me install this repo (the ADLC toolkit) into my AI coding assist
 
 1. Identify which assistant you are and map it to one of: claude, copilot, codex, gemini, cursor.
 2. Read README.md and docs/install/<that-tool>.md in this repo so you know the exact locations and caveats.
-3. From the repo root, run:  node scripts/install.mjs --tool=<that-tool> --dry-run
+3. From the repo root, run:  node scripts/adlc.mjs sync --tool=<that-tool> --dry-run
    Show me the planned actions and confirm they look right.
 4. Then run it for real (drop --dry-run). It installs GLOBALLY (available in all my repos) by
-   default; only add --repo=<path> if I say I want a single project.
-5. Report any manual follow-up the installer printed (e.g. a VS Code settings line, or reloading
+   default; only add --repo=<path> if I say I want a single project. Re-running this same
+   command later is also how I update — it reconciles added/removed skills automatically.
+5. Report any manual follow-up it printed (e.g. a VS Code settings line, or reloading
    the window), then walk me through the "Verify" steps from docs/install/<that-tool>.md.
 
 Constraints: do not run any git write commands, and don't move or rename this toolkit folder
@@ -76,13 +90,15 @@ Constraints: do not run any git write commands, and don't move or rename this to
 
 ## Regenerating adapters
 
-You normally don't run this — `scripts/install.mjs` calls the generator for you (into the gitignored `dist/`). Run `build.mjs` directly only to refresh the committed, portable `adapters/` after editing `core/`, or to stamp a custom toolkit path by hand:
+You normally don't run this — `adlc.mjs sync` calls the generator for you (into the gitignored `dist/`). Run `build` directly only to refresh the committed, portable `adapters/` after editing `core/` (e.g. adding or removing a skill/agent), or to stamp a custom toolkit path by hand:
 
 ```bash
-node scripts/build.mjs --tool=all --toolkit-path=.adlc-toolkit              # vendored (default; what's committed)
-node scripts/build.mjs --tool=all --mode=global --toolkit-path=/abs/path    # absolute path
-node scripts/build.mjs --tool=cursor                                        # just one tool
+node scripts/adlc.mjs build --tool=all --toolkit-path=.adlc-toolkit              # vendored (default; what's committed)
+node scripts/adlc.mjs build --tool=all --mode=global --toolkit-path=/abs/path    # absolute path
+node scripts/adlc.mjs build --tool=cursor                                        # just one tool
 ```
+
+> `node scripts/build.mjs …` still works as a thin alias for `adlc.mjs build`.
 
 Every generated stub is a thin pointer that says "run the protocol defined at `<toolkit-path>/core/...`". So the **only** thing that varies between installs is that stamped path — that's what these flags control:
 
@@ -93,7 +109,7 @@ Every generated stub is a thin pointer that says "run the protocol defined at `<
 - `--mode=vendored|global` — only sets the *default* for `--toolkit-path` (relative vs. the toolkit's own absolute path). An explicit `--toolkit-path` always wins.
 - `--out=<dir>` — where to write the stubs. Defaults to `adapters/`; the installer overrides this to `dist/`.
 
-The committed `adapters/` are built vendored (relative `.adlc-toolkit`) so they stay portable across machines — **don't commit absolute paths.** For a global install, let `install.mjs` build into `dist/` instead. Change the protocol once in `core/`, regenerate, and every tool's adapter updates together.
+The committed `adapters/` are built vendored (relative `.adlc-toolkit`) so they stay portable across machines — **don't commit absolute paths.** For a global install, let `adlc.mjs sync` build into `dist/` instead. Change the protocol once in `core/`, regenerate, and every tool's adapter updates together.
 
 ## Skills
 
@@ -168,8 +184,9 @@ The six principles in [ETHOS.md](ETHOS.md), injected into every skill: **you dec
 
 ## Contributing / extending
 
-- **Change a command or agent:** edit `core/skills/<name>.md` or `core/agents/<name>.md`, then `node scripts/build.mjs`.
-- **Add a tool:** add an emitter to the `TOOLS` map in `scripts/build.mjs` and regenerate.
+- **Change a command or agent:** edit `core/skills/<name>.md` or `core/agents/<name>.md`, then `node scripts/adlc.mjs build` (and `sync` to update installs).
+- **Add or remove a skill/agent:** edit `core/` + `core/manifest.json`, then re-run `node scripts/adlc.mjs sync` — added stubs are linked and removed ones pruned automatically.
+- **Add a tool:** add an emitter to the `TOOLS` map in `scripts/adlc.mjs` and regenerate.
 - **Add a stack preset:** see `templates/config-template.yml`.
 
 Roadmap: an `npx adlc init` installer that asks your tool, OS, and team/solo preferences, then scaffolds the vault and the right adapters automatically.

@@ -17,8 +17,8 @@ adlc-toolkit/            ← the toolkit (shared across all your projects)
   core/                  ← protocol: skills/ + agents/ + manifest.json   (the one source of truth)
   templates/             ← vault + in-REQ templates
   adapters/<tool>/       ← generated stubs for each assistant
-  scripts/install.mjs    ← one-command install (global by default)
-  scripts/build.mjs      ← regenerates adapters/
+  scripts/adlc.mjs sync    ← one-command install (global by default)
+  scripts/adlc.mjs build      ← regenerates adapters/
 
 your-project/            ← any code repo you work in
   .adlc/                 ← the vault, created by `init`
@@ -40,7 +40,7 @@ Keep it wherever you like — just leave it there. The installed commands read t
 
 ```bash
 cd ~/code/adlc-toolkit
-node scripts/install.mjs --tool=copilot      # or claude · codex · gemini · cursor · all
+node scripts/adlc.mjs sync --tool=copilot      # or claude · codex · gemini · cursor · all
 ```
 
 This regenerates the adapter for your tool and links it into your assistant's **user-level** config, so the pipeline is available in **every repo you open** — no per-project setup. Add `--dry-run` first to preview every action; nothing is written until you run it for real.
@@ -48,7 +48,7 @@ This regenerates the adapter for your tool and links it into your assistant's **
 **Want it in just one project instead?** Point the installer at that repo:
 
 ```bash
-node scripts/install.mjs --tool=copilot --repo=/path/to/project
+node scripts/adlc.mjs sync --tool=copilot --repo=/path/to/project
 ```
 
 Per-tool detail (exact locations, verification, caveats) lives in each install guide:

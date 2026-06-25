@@ -7,7 +7,7 @@ Adapter source: `adapters/codex/` → `AGENTS.md`, `prompts/<name>.md`, `agents/
 ## Install — one command (recommended)
 
 ```bash
-node scripts/install.mjs --tool=codex          # add --dry-run to preview; --repo=<path> for one project
+node scripts/adlc.mjs sync --tool=codex          # add --dry-run to preview; --repo=<path> for one project
 ```
 
 Global install symlinks commands into `~/.codex/prompts/`, agents into `~/.codex/agents/`, and the memory file to `~/.codex/AGENTS.md` (Codex reads it for every session). Symlinks track the toolkit, so `git -C <toolkit> pull` updates everything. The manual steps below are the equivalent, if you prefer to place files yourself.
@@ -25,7 +25,7 @@ What the one-command installer does, by hand. Codex prompts and agents are **use
 ```bash
 # toolkit (vendored in the project, or global — your choice)
 git clone <repo-url> .adlc-toolkit
-node .adlc-toolkit/scripts/build.mjs --tool=codex --toolkit-path=.adlc-toolkit
+node .adlc-toolkit/scripts/adlc.mjs build --tool=codex --toolkit-path=.adlc-toolkit
 # (global toolkit instead: --mode=global --toolkit-path="$HOME/code/adlc-toolkit")
 
 # user-level commands + agents
@@ -40,7 +40,7 @@ cp .adlc-toolkit/adapters/codex/AGENTS.md ./AGENTS.md
 **Windows (PowerShell)**
 ```powershell
 git clone <repo-url> .adlc-toolkit
-node .adlc-toolkit\scripts\build.mjs --tool=codex --toolkit-path=.adlc-toolkit
+node .adlc-toolkit\scripts\adlc.mjs build --tool=codex --toolkit-path=.adlc-toolkit
 New-Item -ItemType Directory -Force $HOME\.codex\prompts, $HOME\.codex\agents | Out-Null
 Copy-Item -Force .adlc-toolkit\adapters\codex\prompts\*.md  $HOME\.codex\prompts\
 Copy-Item -Force .adlc-toolkit\adapters\codex\agents\*.toml $HOME\.codex\agents\
@@ -67,6 +67,6 @@ codex
 
 ## Notes
 
-- **Read-only reviewers** rely on the agent TOML `read_only = true` flag. Confirm your Codex version honors it; if the schema differs, adjust `scripts/build.mjs` (the `codex.agent` emitter) and regenerate. The generated TOMLs carry a header comment flagging this.
+- **Read-only reviewers** rely on the agent TOML `read_only = true` flag. Confirm your Codex version honors it; if the schema differs, adjust `scripts/adlc.mjs build` (the `codex.agent` emitter) and regenerate. The generated TOMLs carry a header comment flagging this.
 - **`/sprint`** uses Codex's parallel sub-agent support — works as designed.
 - Prompts and agent instructions are pointer stubs reading `.adlc-toolkit/core/...` at runtime — keep the toolkit present at the stamped path. If you installed commands globally but vendored the toolkit per-project, use `--mode=global` with an absolute `--toolkit-path` so the path resolves regardless of which repo is open.
