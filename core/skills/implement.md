@@ -34,7 +34,7 @@ If you find a circular dependency that wasn't caught at the architect gate, **st
 
 ### 2. Execute tier 0 in parallel
 
-For each task in tier 0, launch a `task-implementer` agent (Opus tier) with the following prompt:
+For each task in tier 0, launch a `task-implementer` agent (deep tier) with the following prompt:
 
 ```
 Task: TASK-NNN

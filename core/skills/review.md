@@ -118,11 +118,11 @@ This packet contains the diff with full file context, the REQ spec, the REQ arch
 
 In a single message, launch the four static reviewers — **plus the ui-reviewer when preflight step 6 said the change touches UI**:
 
-- **correctness-reviewer** (Sonnet)
-- **quality-reviewer** (Sonnet)
-- **architecture-reviewer** (Sonnet)
-- **reflector** (Sonnet)
-- **ui-reviewer** (Sonnet) — *only if the UI-surface condition held*
+- **correctness-reviewer** (balanced)
+- **quality-reviewer** (balanced)
+- **architecture-reviewer** (balanced)
+- **reflector** (balanced)
+- **ui-reviewer** (balanced) — *only if the UI-surface condition held*
 
 Each agent receives:
 

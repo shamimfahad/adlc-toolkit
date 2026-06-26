@@ -22,7 +22,7 @@ If during investigation the bug turns out to be larger than expected, **stop and
 
 1. **Read the toolkit ETHOS.**
 2. **Load vault basics.** `.adlc/CLAUDE.md`, `now.md`, `hot.md` (last 20), `config.yml`, `context/conventions.md`, `context/architecture.md`.
-3. **Assign a BUG ID.** Scan `.adlc/bugs/` for the highest `BUG-NNN-*` folder; increment, pad to 3 digits.
+3. **Assign the BUG ID.** Mint it per `config.yml` → `req.id_scheme` (default `sequential`), applied to the `BUG` namespace: `sequential` (`BUG-NNN`, scan `.adlc/bugs/` for max+1, pad to 3), `prefixed` (`BUG-<req.prefix>-NNN`), or `ticket` (the issue key when invoked with an issue ref + `sources.issues`, e.g. `BUG-842`; else fall back to prefixed/sequential, noting it). Throughout, `BUG-NNN` denotes the assigned ID in whatever form the scheme produced.
 4. **Create the bug folder:** `.adlc/bugs/BUG-NNN-<slug>/`.
 5. **Resolve a source reference (optional).** If invoked with an issue reference (e.g. `/bugfix #8`) or an issue URL, and `config.yml.sources.issues` is set (not `none`), resolve it with the same mechanism order as `/spec` (CLI such as `gh issue view <n> --json title,body,labels,comments,author,createdAt` first → MCP → URL fetch; default repo from `sources.repo`, a full URL overrides). This is the *same resolver* `/spec` uses. If a label indicates the issue is a feature rather than a defect, note it — the Phase 1 gate's `reframe` path will route it to `/spec`. If nothing resolves or no service is configured, print one line (`couldn't reach <service> for <ref> — drafting the report manually`) and continue; the seed is strictly additive.
 

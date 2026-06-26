@@ -28,7 +28,7 @@ The defining feature: `/task` is **self-triaging**. Small work runs here; work t
 
 1. **Read the toolkit ETHOS.**
 2. **Load vault basics.** `.adlc/CLAUDE.md`, `now.md`, `hot.md` (last 20), `config.yml`, `context/project-overview.md`, `context/conventions.md`.
-3. **Assign a REQ ID.** Scan `.adlc/specs/` for the highest `REQ-NNN-*`; increment, pad to 3 digits. `/task` uses the **same `REQ-NNN` namespace and `.adlc/specs/` location as `/spec`** — this is what makes escalation to `/proceed` a clean handoff rather than a migration.
+3. **Assign the REQ ID.** Mint it per `config.yml` → `req.id_scheme` (default `sequential`), exactly as `/spec` preflight does — `sequential` (`REQ-NNN`, max+1), `prefixed` (`REQ-<req.prefix>-NNN`), or `ticket` (the issue key when invoked with an issue ref + `sources.issues`; else fall back to prefixed/sequential, noting it). `/task` uses the **same ID namespace and `.adlc/specs/` location as `/spec`** — this is what makes escalation to `/proceed` a clean handoff rather than a migration. Throughout, `REQ-NNN` denotes the assigned ID in whatever form the scheme produced.
 4. **Determine the slug.** Short kebab-case, ≤40 chars.
 5. **Create the REQ folder:** `.adlc/specs/REQ-NNN-<slug>/`.
 6. **Resolve a source reference (optional).** Same resolver as `/spec` preflight step 6 (issue ref / URL via `gh` → MCP → fetch when `sources.issues` is set). Additive; never blocks.

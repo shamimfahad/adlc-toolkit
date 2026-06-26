@@ -1,5 +1,5 @@
 ---
-description: "Parallel multi-REQ orchestrator (gate-pause)."
+description: "Parallel multi-REQ orchestrator. Launches one pipeline-runner agent per REQ in an isolated worktree. Each runner pauses at its first gate; the orchestrator presents a unified queue of waiting gates across all REQs and lets the user triage them one at a time. Gate-pause model — preserves human-in-the-loop discipline while gaining cross-REQ parallelism."
 ---
 
 Toolkit root: .adlc-toolkit

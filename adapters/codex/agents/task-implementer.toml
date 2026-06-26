@@ -1,6 +1,6 @@
 # Codex custom agent. Verify key names against your Codex version's schema.
 name = "task-implementer"
-description = "Writes code for one task. No git operations."
+description = "Implements a single task end-to-end — writes code, updates tests, verifies it runs. Reads the task spec, the surrounding code, and the vault. Drafts a commit message; does NOT commit. Dispatched by /implement."
 model = "default"
 read_only = false
 instructions = """

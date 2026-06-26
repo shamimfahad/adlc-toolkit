@@ -30,7 +30,7 @@ That installs into your user-level Copilot config, available across **all** work
 | Sub-agents (`*.agent.md`) | `~/.copilot/agents/` | default user-level agent location |
 | Memory (instructions) | `~/.copilot/instructions/adlc.instructions.md` (`applyTo: '**'`) | user instructions apply to every repo |
 
-The files are symlinks back to the toolkit, so `git -C <toolkit> pull` updates every workspace at once. Existing files at any target are backed up to `*.bak` (or pass `--force`).
+The files are symlinks back to the toolkit, so a `git -C <toolkit> pull` refreshes content across every workspace at once; re-run `node scripts/adlc.mjs sync --tool=copilot` after a pull (or `--pull` to do both) to link any added prompts/agents and prune removed ones. Existing files at any target are backed up to `*.bak` (or pass `--force`).
 
 If the slash commands don't show up, the installer prints a one-line `chat.promptFilesLocations` setting you can add to your VS Code **user** `settings.json` as a fallback. Use `--insiders` to target VS Code Insiders, or `--vscode-prompts-dir=<path>` for a non-default profile.
 

@@ -6,6 +6,24 @@ Works with **Claude Code, Cursor, GitHub Copilot, OpenAI Codex, and Gemini CLI**
 
 Inspired by Brett Luelling's [adlc-toolkit](https://github.com/atelier-fashion/sdlc-toolkit) and Karpathy's [LLM wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) pattern, reshaped for **production work where the developer wants control at every decision step**.
 
+## This is a base model — make it yours
+
+Every team works differently: different stacks, review bars, ticketing, and house philosophy. **This repo is a starting point, not a framework to obey.** Fork it and shape it to how your team actually works.
+
+The repo is split into two layers so you can do that without ever fighting upstream:
+
+- **`core/` is the engine** — the upstream-maintained protocol. You don't edit it.
+- **`local/` is your overlay** — add your own skills/agents, override a core skill's prompt, or disable ones you don't use. The generator resolves `local/` **over** `core/`. See **[`local/README.md`](local/README.md)**.
+
+Because your customizations live only in `local/` (plus each project's `.adlc/config.yml`), pulling a new upstream release merges cleanly — there's nothing in `core/` for your changes to conflict with:
+
+```bash
+git pull upstream main                  # you never edited core/, so this just merges
+node scripts/adlc.mjs sync --tool=all   # reconcile: new skills linked, removed ones pruned
+```
+
+Team-shaped defaults are configurable, not baked in: REQ IDs can come from your tracker (`req.id_scheme: ticket`) so parallel work never collides, and the shared activity log is union-merged so teammates don't conflict on it. See [Team setup](#team-setup).
+
 ## Start here
 
 → **[Quickstart](docs/quickstart.md)** — zero to your first gated REQ in four steps.
@@ -26,10 +44,11 @@ The toolkit keeps the protocol in **one tool-agnostic place** (`core/`) and gene
 
 ```
 adlc-toolkit/
-  core/
-    skills/<name>.md       # the 15 command protocols (tool-agnostic)
-    agents/<name>.md        # the 10 agent role definitions
+  core/                     # THE ENGINE — upstream-owned protocol (you don't edit this)
+    skills/<name>.md        # the command protocols (tool-agnostic)
+    agents/<name>.md        # the agent role definitions
     manifest.json           # catalog the generator reads
+  local/                    # YOUR OVERLAY — add/override/disable; resolved over core/ (see local/README.md)
   templates/                # vault + in-REQ templates (stack-agnostic)
   adapters/<tool>/          # generated stubs — clone-and-go for each assistant
   scripts/adlc.mjs          # one command: `sync` (install+update) · `build` (regenerate adapters/)
@@ -125,28 +144,32 @@ The committed `adapters/` are built vendored (relative `.adlc-toolkit`) so they 
 | `ship` | Autonomous pipeline — routes each gate through the decision-maker; ends in one terminal human review | — |
 | `sprint` | Parallel multi-REQ orchestrator (gate-pause) | — |
 | `bugfix` | Slimmer pipeline for bugs | Yes |
+| `task` | Slim self-triaging pipeline for small changes; escalates to `proceed` when large | Yes |
 | `analyze` | Standalone codebase health audit | No |
 | `optimize` | Standalone performance/cost scan | No |
 | `status` | Show every active REQ and gate state | No |
 | `recover` | Reconcile pipeline-state with git reality; back-fill the vault | No |
 | `config` | View/change `.adlc/config.yml` settings (git mode, isolation, autonomy…) via guided options | No |
+| `toolkit-update` | Update the toolkit from upstream + reconcile adapters; flags `local/` overrides that shadow changed engine files | No |
 
 ## Agents
 
 | Agent | Tier | Role |
 |---|---|---|
-| codebase-explorer | Haiku | One structured recon pass: similar patterns, blast radius, integration points |
-| task-implementer | Opus | Writes code for one task. No git operations. |
-| correctness-reviewer | Sonnet | Logic, race conditions, security. Read-only. |
-| quality-reviewer | Sonnet | Conventions, naming, duplication, test coverage. Read-only. |
-| architecture-reviewer | Sonnet | Layering, separation of concerns, API contracts. Read-only. |
-| reflector | Sonnet | Self-review against captured lessons. Read-only. |
-| health-auditor | Sonnet | Codebase health audit for `analyze`. Read-only. |
-| performance-scanner | Sonnet | API cost + DB perf + latency for `optimize`. Read-only. |
-| pipeline-runner | Opus | Runs the full pipeline for one REQ in a worktree for `sprint`. No sub-agents. Git per `git.mode` (feature branch only). |
-| decision-maker | Opus | Adjudicates one pipeline gate during an autonomous `ship` run — APPROVE / REWORK / HALT with cited evidence. Read-only. |
+| codebase-explorer | fast | One structured recon pass: similar patterns, blast radius, integration points |
+| task-implementer | deep | Writes code for one task. No git operations. |
+| correctness-reviewer | balanced | Logic, race conditions, security. Read-only. |
+| quality-reviewer | balanced | Conventions, naming, duplication, test coverage. Read-only. |
+| architecture-reviewer | balanced | Layering, separation of concerns, API contracts. Read-only. |
+| architecture-adversary | balanced | Adversarial pre-gate attack on the design + task plan; surfaces only self-refuted findings. Read-only. |
+| reflector | balanced | Self-review against captured lessons. Read-only. |
+| ui-reviewer | balanced | Runtime UI/UX review — drives a browser to verify render, flows, and design match. Read-only re: source. |
+| health-auditor | balanced | Codebase health audit for `analyze`. Read-only. |
+| performance-scanner | balanced | API cost + DB perf + latency for `optimize`. Read-only. |
+| pipeline-runner | deep | Runs the full pipeline for one REQ in a worktree for `sprint`. No sub-agents. Git per `git.mode` (feature branch only). |
+| decision-maker | deep | Adjudicates one pipeline gate during an autonomous `ship` run — APPROVE / REWORK / HALT with cited evidence. Read-only. |
 
-Model tiers map to each tool's models via `core/manifest.json` → `tierToModel`, overridable per project in `.adlc/config.yml`. Read-only enforcement strength varies by tool — see the [fidelity matrix](docs/fidelity-matrix.md).
+Agents are assigned a capability **tier** — `fast`, `balanced`, or `deep` — not a vendor model name. Tiers map to each tool's actual models via `core/manifest.json` → `tierToModel` (e.g. on Claude: fast→haiku, balanced→sonnet, deep→opus), overridable per project in `.adlc/config.yml`. Read-only enforcement strength varies by tool — see the [fidelity matrix](docs/fidelity-matrix.md).
 
 ## Workflow
 
@@ -166,6 +189,22 @@ The `.adlc/` directory is an Obsidian-compatible vault — open it in Obsidian f
 - `STATUS: needs verification` flags provisional content
 - Field tables at the top of every spec/concept/ADR; "Related" / "Backlinks" at the bottom
 
+## Team setup
+
+The toolkit is solo-friendly out of the box; two settings make it team-safe.
+
+**REQ IDs that don't collide.** The default `req.id_scheme: sequential` numbers REQs by scanning the vault (`REQ-001`, `REQ-002`, …), so two people branching at once can both mint `REQ-042` and clash at merge. For teams, set the scheme in `.adlc/config.yml`:
+
+| `req.id_scheme` | ID looks like | When |
+|---|---|---|
+| `ticket` *(recommended for teams)* | `REQ-842` / `PROJ-842` | You wire up `sources.issues`; `/spec #842` derives the ID from the tracker issue. Globally unique by construction. |
+| `prefixed` | `REQ-sf-007` | No shared tracker. `req.prefix` (your initials) gives each person a private number space. Works offline. |
+| `sequential` *(default)* | `REQ-007` | Solo. |
+
+The same scheme governs `BUG-*` IDs in `/bugfix`.
+
+**A shared history that never conflicts.** The activity log (`.adlc/hot.md`, plus `decisions.md` and `glossary.md`) is **committed** and carries `merge=union` via the vault's `.gitattributes`, so parallel branches' appends combine instead of conflicting — the team shares one history with zero merge pain. The mutable active-focus view (`now.md`) and per-developer pipeline state stay gitignored and are regenerated from each REQ's `pipeline-state.json` by `/status`. `/init` proposes the right `.gitignore` split automatically.
+
 ## Git policy
 
 How much git the assistant runs is **your choice per project**, set at `init` and stored in `.adlc/config.yml` → `git.mode`:
@@ -184,9 +223,10 @@ The six principles in [ETHOS.md](ETHOS.md), injected into every skill: **you dec
 
 ## Contributing / extending
 
-- **Change a command or agent:** edit `core/skills/<name>.md` or `core/agents/<name>.md`, then `node scripts/adlc.mjs build` (and `sync` to update installs).
-- **Add or remove a skill/agent:** edit `core/` + `core/manifest.json`, then re-run `node scripts/adlc.mjs sync` — added stubs are linked and removed ones pruned automatically.
+- **Customize for your team (don't touch `core/`):** put overrides and additions in `local/` — a same-named file shadows a core skill, a new file adds one, and a `local/manifest.json` entry with `"disabled": true` drops one. Then `node scripts/adlc.mjs sync`. See [`local/README.md`](local/README.md). This is the path that keeps `git pull upstream` conflict-free.
+- **Improve the engine (upstream):** edit `core/skills/<name>.md` / `core/agents/<name>.md` (or add/remove in `core/` + `core/manifest.json`), then `node scripts/adlc.mjs sync` — added stubs are linked and removed ones pruned automatically. Open a PR upstream for fixes that aren't team-specific.
 - **Add a tool:** add an emitter to the `TOOLS` map in `scripts/adlc.mjs` and regenerate.
 - **Add a stack preset:** see `templates/config-template.yml`.
+- **Keep `adapters/` in sync automatically:** run `node scripts/adlc.mjs hooks` once. It activates a version-controlled pre-commit hook (`scripts/hooks/pre-commit`, via `core.hooksPath`) that rebuilds `adapters/` and stages it whenever a commit touches `core/`, `local/`, or the generator — so the committed snapshot never drifts from the protocol source. Bypass a single commit with `git commit --no-verify`; disable with `git config --unset core.hooksPath`.
 
 Roadmap: an `npx adlc init` installer that asks your tool, OS, and team/solo preferences, then scaffolds the vault and the right adapters automatically.

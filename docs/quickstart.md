@@ -8,17 +8,17 @@ This page gets you from zero to your first gated REQ in four steps. For tool-spe
 
 Three pieces:
 
-1. **The toolkit** — this repository. Holds the tool-agnostic protocol (`core/`), the vault templates (`templates/`), and generated per-tool adapters (`adapters/`).
+1. **The toolkit** — this repository. Holds the tool-agnostic protocol engine (`core/`), your team's overlay (`local/` — customizations resolved over `core/`), the vault templates (`templates/`), and generated per-tool adapters (`adapters/`). It's a base model: fork it and shape `local/` to your team. See [`local/README.md`](../local/README.md).
 2. **Adapters** — thin "pointer" files that wire your assistant's slash commands and sub-agents to the protocol in `core/`. One per tool, already generated in `adapters/<tool>/`. They contain no copied logic — they route your assistant at the single source of truth, so there is nothing to keep in sync.
 3. **The `.adlc/` vault** — created per code-repo by the `init` command. Holds that project's specs, architecture, conventions, decisions, and compounding knowledge. Plain markdown; Obsidian-compatible.
 
 ```
 adlc-toolkit/            ← the toolkit (shared across all your projects)
-  core/                  ← protocol: skills/ + agents/ + manifest.json   (the one source of truth)
+  core/                  ← the engine: skills/ + agents/ + manifest.json   (upstream-owned)
+  local/                 ← your overlay: add/override/disable, resolved over core/ (see local/README.md)
   templates/             ← vault + in-REQ templates
   adapters/<tool>/       ← generated stubs for each assistant
-  scripts/adlc.mjs sync    ← one-command install (global by default)
-  scripts/adlc.mjs build      ← regenerates adapters/
+  scripts/adlc.mjs       ← one command: `sync` (install + update) · `build` (regenerate adapters/)
 
 your-project/            ← any code repo you work in
   .adlc/                 ← the vault, created by `init`
@@ -61,7 +61,9 @@ Per-tool detail (exact locations, verification, caveats) lives in each install g
 | Gemini CLI | [install/gemini.md](install/gemini.md) | `~/.gemini/` |
 | Cursor | [install/cursor.md](install/cursor.md) | per-repo (`--repo`); global rules are manual |
 
-> The installer builds machine-specific stubs (with an absolute path to the toolkit) into the gitignored `dist/` folder and symlinks from there, so the committed `adapters/` stays portable and your `git status` stays clean. Update every install later with `git -C ~/code/adlc-toolkit pull` — the symlinks pick it up automatically.
+> The installer builds machine-specific stubs (with an absolute path to the toolkit) into the gitignored `dist/` folder and symlinks from there, so the committed `adapters/` stays portable and your `git status` stays clean.
+>
+> **Updating is the same command.** Re-run `node scripts/adlc.mjs sync --tool=all --pull` to git-pull the toolkit and reconcile — added skills are linked, removed ones pruned, content changes flow through automatically. Or, from inside your assistant, run **`/toolkit-update`** for a guided pull that also flags any `local/` override shadowing a changed engine file.
 
 ### 3. Initialize a project
 
@@ -79,7 +81,7 @@ It creates `.adlc/`, scans existing docs (README, ARCHITECTURE, CONTRIBUTING, li
 /spec      → approve → /architect → approve → /implement → approve → /review → approve → /wrapup → approve
 ```
 
-Or run the whole thing with `/proceed`. Each gate pauses for your approval. For bugs, use `/bugfix`.
+Or run the whole thing with `/proceed`. Each gate pauses for your approval. For bugs, use `/bugfix`; for a small change, `/task` runs a slim two-gate pipeline that still records a REQ (and escalates to `/proceed` if it turns out large).
 
 ## Changing settings
 

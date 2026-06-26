@@ -12,7 +12,7 @@ Adapter source: `adapters/gemini/` → `GEMINI.md`, `.gemini/commands/<name>.tom
 node scripts/adlc.mjs sync --tool=gemini          # add --dry-run to preview; --repo=<path> for one project
 ```
 
-Global install symlinks commands into `~/.gemini/commands/`, agents into `~/.gemini/agents/`, and the memory file to `~/.gemini/GEMINI.md` — available in every repo. Symlinks track the toolkit, so `git -C <toolkit> pull` updates everything. The manual steps below are the equivalent, if you prefer to place files yourself.
+Global install symlinks commands into `~/.gemini/commands/`, agents into `~/.gemini/agents/`, and the memory file to `~/.gemini/GEMINI.md` — available in every repo. Symlinks track the toolkit, so a `git -C <toolkit> pull` refreshes skill content automatically; re-run `node scripts/adlc.mjs sync --tool=gemini` after a pull (or `--pull` to do both) to link any added skills and prune removed ones. The manual steps below are the equivalent, if you prefer to place files yourself.
 
 ## Prerequisites
 

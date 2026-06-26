@@ -1,6 +1,6 @@
 ---
 name: bugfix
-description: "Slimmer pipeline for bugs."
+description: "Streamlined pipeline for bug fixes. Slimmer than /proceed — bug report → investigate → fix → verify → ship, with gates between each. Use for defects, not for new features. Larger or scope-creeping bugs should be re-framed as a REQ via /spec."
 ---
 
 Toolkit root: .adlc-toolkit

@@ -6,6 +6,23 @@ project:
   name: <project-name>
   description: <one-line description>
 
+# How REQ (and BUG) IDs are minted. Matters most for teams: the default
+# `sequential` scheme picks the next number by scanning the vault, so two people
+# branching at the same time can both mint REQ-042 and collide at merge.
+#
+#   sequential  — (default) REQ-NNN, max existing +1. Fine solo; collides on teams.
+#   prefixed    — REQ-<prefix>-NNN, numbered within your own prefix. Per-person
+#                 namespace — no coordination, works offline. Set `prefix`.
+#   ticket      — derive the ID from the tracker issue the REQ implements:
+#                 `/spec #842` (or an issue URL) with `sources.issues` set yields
+#                 REQ-842 (or the native key like PROJ-842 for Jira/Linear).
+#                 Globally unique by construction — recommended for teams. With no
+#                 issue ref it falls back to `prefixed` (if `prefix` set) else
+#                 `sequential`. The same scheme applies to BUG IDs in /bugfix.
+req:
+  id_scheme: sequential
+  # prefix: <your-initials>   # used by `prefixed` (and as the ticket fallback)
+
 # Git policy — how much git the assistant may run. The WHOLE pipeline respects
 # this; /ship's autonomy.git (below) may lower it but never exceed it. Set by /init.
 #

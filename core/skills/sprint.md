@@ -51,7 +51,7 @@ If conflicts exist, surface and stop. The user must resolve.
 
 ### 2. Launch pipeline-runners
 
-For each REQ, dispatch a `pipeline-runner` agent (Opus) with:
+For each REQ, dispatch a `pipeline-runner` agent (deep tier) with:
 
 ```
 REQ ID: REQ-NNN-<slug>

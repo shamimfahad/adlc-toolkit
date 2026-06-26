@@ -10,7 +10,7 @@ Adapter source: `adapters/codex/` → `AGENTS.md`, `prompts/<name>.md`, `agents/
 node scripts/adlc.mjs sync --tool=codex          # add --dry-run to preview; --repo=<path> for one project
 ```
 
-Global install symlinks commands into `~/.codex/prompts/`, agents into `~/.codex/agents/`, and the memory file to `~/.codex/AGENTS.md` (Codex reads it for every session). Symlinks track the toolkit, so `git -C <toolkit> pull` updates everything. The manual steps below are the equivalent, if you prefer to place files yourself.
+Global install symlinks commands into `~/.codex/prompts/`, agents into `~/.codex/agents/`, and the memory file to `~/.codex/AGENTS.md` (Codex reads it for every session). Symlinks track the toolkit, so a `git -C <toolkit> pull` refreshes skill content automatically; re-run `node scripts/adlc.mjs sync --tool=codex` after a pull (or `--pull` to do both) to link any added skills and prune removed ones. The manual steps below are the equivalent, if you prefer to place files yourself.
 
 ## Prerequisites
 

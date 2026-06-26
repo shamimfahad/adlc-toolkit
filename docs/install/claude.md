@@ -10,7 +10,7 @@ Adapter source: `adapters/claude/` → `skills/<name>/SKILL.md`, `agents/<name>.
 node scripts/adlc.mjs sync --tool=claude          # add --dry-run to preview; --repo=<path> for one project
 ```
 
-Global install symlinks `~/.claude/skills`, `~/.claude/agents`, and `~/.claude/CLAUDE.md` to the toolkit, so every repo gets the pipeline and `git -C <toolkit> pull` updates all of them. The manual Options below are the equivalent, if you'd rather place files yourself.
+Global install symlinks `~/.claude/skills`, `~/.claude/agents`, and `~/.claude/CLAUDE.md` to the toolkit, so every repo gets the pipeline. To update, re-run the install — `node scripts/adlc.mjs sync --tool=claude --pull` pulls the toolkit and reconciles in one step (content flows through the symlinks automatically; added skills get linked, removed ones pruned). Or run `/toolkit-update` from inside Claude Code. The manual Options below are the equivalent, if you'd rather place files yourself.
 
 ## Prerequisites
 
@@ -48,7 +48,7 @@ Copy-Item -Force .adlc-toolkit\adapters\claude\CLAUDE.md .\CLAUDE.md
 
 ## Manual — global (all repos)
 
-What the one-command installer does, by hand: install once into `~/.claude`, available in every project. Symlink so `git pull` on the toolkit updates everything.
+What the one-command installer does, by hand: install once into `~/.claude`, available in every project. Symlinks mean a `git pull` on the toolkit updates skill *content* automatically; re-run `sync` after a pull to also link any newly added skills and prune removed ones.
 
 **macOS / Linux**
 ```bash

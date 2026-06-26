@@ -168,6 +168,7 @@ Use `mkdir -p` (or platform equivalent). Don't fail if a directory already exist
 Copy from `$TOOLKIT_PATH/templates/vault/` to `.adlc/`:
 
 - `README.md` → `.adlc/README.md`
+- `.gitattributes` → `.adlc/.gitattributes`  (union-merge for append-only logs — see step 12)
 - `CLAUDE.md` → `.adlc/CLAUDE.md`
 - `glossary.md` → `.adlc/glossary.md`
 - `now.md` → `.adlc/now.md`
@@ -329,14 +330,14 @@ Fill these with starting content:
 
 ### 12. Create a `.gitignore` entry (optional)
 
-The `.adlc/` vault contains both **durable knowledge** (specs, ADRs, lessons, gotchas, glossary, concepts, components, cancelled tombstones, revert plans) and **ephemeral runtime state** (pipeline heartbeats, gate markers, draft commit/PR/checklist files, the rolling activity log, the active-focus marker, sprint registries, resume timestamps). The durable side is institutional memory and should be committed. The ephemeral side churns on every pipeline run and would pollute git history.
+The `.adlc/` vault contains three tiers: **durable knowledge** (specs, ADRs, lessons, gotchas, glossary, concepts, components, cancelled tombstones, revert plans), **shared append-only logs** (the activity log `hot.md`, `decisions.md`, `glossary.md`), and **per-developer ephemeral state** (pipeline heartbeats, gate markers, draft commit/PR/checklist files, the active-focus view `now.md`, sprint registries, resume timestamps). The durable side and the append-only logs are institutional memory and should be **committed** — the shipped `.adlc/.gitattributes` gives the logs `merge=union` so parallel branches never conflict on them (see the activity-log note below). Only the per-developer ephemeral state is gitignored: it churns on every run, is regenerable, and would otherwise pollute history and cause merge conflicts.
 
-If `.gitignore` exists at the repo root, **propose** (don't auto-write) appending the block below. Show the user the block, briefly explain the durable-vs-ephemeral split above, and ask whether to add it. Accept three responses: `add`, `add except <pattern>`, `skip`.
+If `.gitignore` exists at the repo root, **propose** (don't auto-write) appending the block below. Show the user the block, briefly explain the three-tier split above, and ask whether to add it. Accept three responses: `add`, `add except <pattern>`, `skip`.
 
 ```
-# ADLC — ephemeral runtime state; the rest of .adlc/ is committed
+# ADLC — per-developer ephemeral state; durable knowledge and the union-merged
+# append-only logs (hot.md, decisions.md, glossary.md) stay committed.
 .adlc/now.md
-.adlc/hot.md
 .adlc/specs/*/pipeline-state.json
 .adlc/specs/*/.awaiting-approval
 .adlc/specs/*/commits-draft.md
@@ -357,8 +358,9 @@ If `.gitignore` exists at the repo root, **propose** (don't auto-write) appendin
 Notes on edge cases:
 - `requirement.md`, `architecture.md`, `exploration.md`, `verification.md`, `cancelled.md`, `revert-plan.md`, and `code-revert-plan.md` inside each REQ folder are **committed** — they're the why-trail and the audit record.
 - `tasks/` is committed; task plans serve as the "planned vs. shipped" trail.
-- `now.md` and `hot.md` are working surfaces for the human + Claude. Their long-term distillate lives in `knowledge/lessons/`, `knowledge/gotchas.md`, `decisions.md`, and per-REQ files — all of which are committed.
-- For teams that want shared visibility on `now.md` / `hot.md`, drop those two lines from the block. Solo developers should keep them ignored.
+- `hot.md` is the shared activity log. It's **committed** and carries `merge=union` from `.adlc/.gitattributes`, so concurrent appends on different branches combine instead of conflicting — teams get a single shared history with no merge pain. (Newest-first ordering may interleave across a union merge, but every entry is dated, so the log stays readable.) `decisions.md` and `glossary.md` work the same way.
+- `now.md` is the **active-focus view** — small, mutable, edited in place, and therefore conflict-prone. It's gitignored and per-developer; `/status` and `/recover` regenerate the active-REQ picture from each REQ's `pipeline-state.json`, which is the real source of truth. Don't commit it.
+- Solo developers can additionally ignore `hot.md` if they don't want it in history; on a team, keep it committed for shared visibility — the union driver makes that safe.
 
 If the user replies `add`, append the block. If `add except <pattern>`, append the block minus the named lines. If `skip`, leave `.gitignore` untouched and surface a one-line reminder that pipeline-state files will appear as unstaged churn until they decide.
 

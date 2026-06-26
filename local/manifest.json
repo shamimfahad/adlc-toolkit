@@ -1,0 +1,5 @@
+{
+  "$comment": "Your team's overlay manifest — a PARTIAL manifest deep-merged over core/manifest.json. Entries match core by `name`: your fields override, new names are added, and {\"name\":\"x\",\"disabled\":true} drops a core skill/agent. Empty by default; see local/README.md.",
+  "skills": [],
+  "agents": []
+}

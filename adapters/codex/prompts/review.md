@@ -6,6 +6,6 @@ Read that file in full and follow **every step literally**. It is a protocol, no
 
 **Gate:** this skill ends in an approval gate. Stop and wait for the user's explicit approval before anything proceeds past it. Do not auto-fix-and-continue on a gate failure — surface what failed and wait.
 
-This skill dispatches sub-agents (correctness-reviewer, quality-reviewer, architecture-reviewer, reflector). Run them as subagents and consolidate their reports.
+This skill dispatches sub-agents (correctness-reviewer, quality-reviewer, architecture-reviewer, reflector, ui-reviewer). Run them as subagents and consolidate their reports.
 
 **Git policy:** follow `git.mode` in `.adlc/config.yml` (default `manual`). `manual` — never run git writes; read git state and draft commit/PR artifacts for the user. `commit` / `commit+push` — you may commit (and push, fast-forward only) the REQ's own feature branch once that phase's gate is approved. Never a protected branch, force-push, history rewrite, branch delete, `gh pr create`/`gh pr merge`, or `--no-verify` — in any mode.

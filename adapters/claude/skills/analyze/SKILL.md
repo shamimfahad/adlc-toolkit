@@ -1,6 +1,6 @@
 ---
 name: analyze
-description: "Standalone codebase health audit."
+description: "Standalone codebase health audit. Dispatches the health-auditor agent and produces a dated report in .adlc/audits/. No pipeline state, no gates — read-only audit that you run periodically or on demand."
 ---
 
 Toolkit root: .adlc-toolkit

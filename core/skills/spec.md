@@ -20,9 +20,13 @@ You are running Phase 1 of the ADLC pipeline: drafting and validating a requirem
 
 1. **Read the toolkit ETHOS.** Load `$TOOLKIT_PATH/ETHOS.md` into context (`$TOOLKIT_PATH` is the toolkit install dir, stamped into your command/adapter as a "Toolkit root:" line).
 2. **Read the vault basics.** Load `.adlc/CLAUDE.md`, `.adlc/now.md`, `.adlc/hot.md` (last 20 entries), `.adlc/config.yml`, `.adlc/context/project-overview.md`, `.adlc/context/conventions.md`.
-3. **Determine REQ ID.**
-   - If the user provided one, use it. Verify it doesn't collide with an existing REQ folder.
-   - Otherwise, scan `.adlc/specs/` for existing `REQ-NNN-*` folders, take the max, increment. Pad to 3 digits.
+3. **Determine the REQ ID.** Read `config.yml` → `req.id_scheme` (default `sequential` if absent) and `req.prefix`.
+   - If the user passed an explicit ID, use it; verify it doesn't collide with an existing folder in `.adlc/specs/`.
+   - Otherwise mint one per the scheme:
+     - **`sequential`** — scan `.adlc/specs/` for the highest `REQ-NNN-*`, increment, pad to 3 digits → `REQ-NNN`. (Solo default; numbers can collide across people's branches.)
+     - **`prefixed`** — `REQ-<prefix>-NNN`, where `<prefix>` is `req.prefix` (e.g. your initials) and `NNN` is max+1 **within that prefix's** folders. Per-person namespace — safe for teams without a shared tracker, works offline.
+     - **`ticket`** — derive from the tracker issue this REQ implements: invoked as `/spec #842` (or an issue URL) with `sources.issues` set → the ID is the issue's key (`REQ-842` for a bare number; the native key like `PROJ-842` for Jira/Linear). Globally unique by construction — the recommended team default. If the scheme is `ticket` but no issue ref was given, fall back to `prefixed` (if `req.prefix` set) else `sequential`, and say so in one line.
+   - **Throughout the rest of this protocol, `REQ-NNN` denotes whatever ID the scheme produced** (e.g. `REQ-842`, `REQ-sf-007`) — substitute accordingly.
 4. **Determine the slug.** Short kebab-case description from the user's input (e.g., `firestore-composite-indexes`). Keep ≤40 chars.
 5. **Create the REQ folder:** `.adlc/specs/REQ-NNN-<slug>/`.
 6. **Resolve a source reference (optional).** If the user invoked with an issue reference (e.g. `/spec #8`) or pasted an issue URL, and `config.yml.sources.issues` is set (not `none`):

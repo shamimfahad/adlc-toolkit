@@ -1,6 +1,6 @@
 {
   "$comment": "Tool-agnostic catalog of the ADLC toolkit. The build script (scripts/build.mjs) reads this plus the frontmatter of each core/skills/*.md and core/agents/*.md file, then emits per-tool adapter stubs. Only metadata NOT present in the source frontmatter lives here.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "vaultDir": ".adlc",
   "skills": [
     { "name": "init",      "category": "setup",        "gate": false, "agents": [],                                                                          "summary": "Bootstrap the .adlc/ vault in a new repo." },
@@ -18,29 +18,30 @@
     { "name": "optimize",  "category": "standalone",   "gate": false, "agents": ["performance-scanner"],                                                     "summary": "Standalone performance/cost scan." },
     { "name": "status",    "category": "utility",      "gate": false, "agents": [],                                                                          "summary": "Show every active REQ and gate state." },
     { "name": "recover",   "category": "utility",      "gate": false, "agents": [],                                                                          "summary": "Reconcile pipeline-state with git reality; back-fill the vault." },
-    { "name": "config",    "category": "utility",      "gate": false, "agents": [],                                                                          "summary": "View/change .adlc/config.yml settings via guided options; re-sync derived files." }
+    { "name": "config",    "category": "utility",      "gate": false, "agents": [],                                                                          "summary": "View/change .adlc/config.yml settings via guided options; re-sync derived files." },
+    { "name": "toolkit-update", "category": "utility",  "gate": false, "agents": [],                                                                          "summary": "Update the toolkit itself from upstream and reconcile adapters; flags local/ overrides that shadow changed engine files." }
   ],
   "agents": [
-    { "name": "codebase-explorer",   "tier": "haiku",  "readonly": true,  "dispatchable": true,  "role": "One structured recon pass: similar patterns, blast radius, integration points." },
-    { "name": "task-implementer",    "tier": "opus",   "readonly": false, "dispatchable": true,  "role": "Writes code for one task. No git operations." },
-    { "name": "correctness-reviewer","tier": "sonnet", "readonly": true,  "dispatchable": true,  "role": "Logic, race conditions, security. Read-only." },
-    { "name": "quality-reviewer",    "tier": "sonnet", "readonly": true,  "dispatchable": true,  "role": "Conventions, naming, duplication, test coverage. Read-only." },
-    { "name": "architecture-reviewer","tier": "sonnet","readonly": true,  "dispatchable": true,  "role": "Layering, separation of concerns, API contracts. Read-only." },
-    { "name": "architecture-adversary","tier": "sonnet","readonly": true, "dispatchable": true,  "role": "Adversarial pre-gate attack on the design + task plan; hunts omissions, surfaces only self-refuted findings. Read-only." },
-    { "name": "reflector",           "tier": "sonnet", "readonly": true,  "dispatchable": true,  "role": "Self-review against captured lessons. Read-only." },
-    { "name": "ui-reviewer",         "tier": "sonnet", "readonly": true,  "dispatchable": true,  "role": "Runtime UI/UX review — runs the app in a browser to verify render, flows, and design match. Browser mechanism auto-resolves and degrades. Read-only re: source." },
-    { "name": "health-auditor",      "tier": "sonnet", "readonly": true,  "dispatchable": true,  "role": "Codebase health audit for /analyze. Read-only." },
-    { "name": "performance-scanner", "tier": "sonnet", "readonly": true,  "dispatchable": true,  "role": "API cost + DB perf + latency for /optimize. Read-only." },
-    { "name": "pipeline-runner",     "tier": "opus",   "readonly": false, "dispatchable": true,  "role": "Runs the full pipeline for one REQ in a worktree for /sprint. No sub-agents. Git per git.mode — feature branch only, never main/force/PR." },
-    { "name": "decision-maker",      "tier": "opus",   "readonly": true,  "dispatchable": true,  "role": "Adjudicates one pipeline gate during an autonomous /ship run — APPROVE / REWORK / HALT with confidence + cited evidence. Conservative by default; escalates on doubt." }
+    { "name": "codebase-explorer",   "tier": "fast",     "readonly": true,  "dispatchable": true,  "role": "One structured recon pass: similar patterns, blast radius, integration points." },
+    { "name": "task-implementer",    "tier": "deep",     "readonly": false, "dispatchable": true,  "role": "Writes code for one task. No git operations." },
+    { "name": "correctness-reviewer","tier": "balanced", "readonly": true,  "dispatchable": true,  "role": "Logic, race conditions, security. Read-only." },
+    { "name": "quality-reviewer",    "tier": "balanced", "readonly": true,  "dispatchable": true,  "role": "Conventions, naming, duplication, test coverage. Read-only." },
+    { "name": "architecture-reviewer","tier": "balanced","readonly": true,  "dispatchable": true,  "role": "Layering, separation of concerns, API contracts. Read-only." },
+    { "name": "architecture-adversary","tier": "balanced","readonly": true, "dispatchable": true,  "role": "Adversarial pre-gate attack on the design + task plan; hunts omissions, surfaces only self-refuted findings. Read-only." },
+    { "name": "reflector",           "tier": "balanced", "readonly": true,  "dispatchable": true,  "role": "Self-review against captured lessons. Read-only." },
+    { "name": "ui-reviewer",         "tier": "balanced", "readonly": true,  "dispatchable": true,  "role": "Runtime UI/UX review — runs the app in a browser to verify render, flows, and design match. Browser mechanism auto-resolves and degrades. Read-only re: source." },
+    { "name": "health-auditor",      "tier": "balanced", "readonly": true,  "dispatchable": true,  "role": "Codebase health audit for /analyze. Read-only." },
+    { "name": "performance-scanner", "tier": "balanced", "readonly": true,  "dispatchable": true,  "role": "API cost + DB perf + latency for /optimize. Read-only." },
+    { "name": "pipeline-runner",     "tier": "deep",     "readonly": false, "dispatchable": true,  "role": "Runs the full pipeline for one REQ in a worktree for /sprint. No sub-agents. Git per git.mode — feature branch only, never main/force/PR." },
+    { "name": "decision-maker",      "tier": "deep",     "readonly": true,  "dispatchable": true,  "role": "Adjudicates one pipeline gate during an autonomous /ship run — APPROVE / REWORK / HALT with confidence + cited evidence. Conservative by default; escalates on doubt." }
   ],
   "tierToModel": {
-    "$comment": "Default model mapping per assistant. Override via .adlc/config.yml. Strings are best-effort current model IDs; tools that don't accept a model field ignore these.",
-    "claude": { "haiku": "haiku", "sonnet": "sonnet", "opus": "opus" },
-    "cursor": { "haiku": "default", "sonnet": "default", "opus": "default" },
-    "copilot": { "haiku": "default", "sonnet": "default", "opus": "default" },
-    "codex": { "haiku": "default-fast", "sonnet": "default", "opus": "default" },
-    "gemini": { "haiku": "default-fast", "sonnet": "default", "opus": "default" }
+    "$comment": "Maps capability TIERS (fast | balanced | deep — not model names) to each assistant's actual model. Tiers keep the protocol tool-neutral; this table is the only place vendor model IDs live. Override via .adlc/config.yml. Strings are best-effort current IDs; tools that don't accept a model field ignore these.",
+    "claude": { "fast": "haiku", "balanced": "sonnet", "deep": "opus" },
+    "cursor": { "fast": "default", "balanced": "default", "deep": "default" },
+    "copilot": { "fast": "default", "balanced": "default", "deep": "default" },
+    "codex": { "fast": "default-fast", "balanced": "default", "deep": "default" },
+    "gemini": { "fast": "default-fast", "balanced": "default", "deep": "default" }
   },
   "sources": {
     "$comment": "External systems a project can SEED artifacts from. Declared per project in .adlc/config.yml -> sources; this catalog tells /init what to offer and tells skills which phases may use each service, with what read/write capability, via which mechanisms (auto-resolved at runtime, first that works wins). Reads are default-on for a declared service; writes require the service in config sources.write and are always gated.",

@@ -1,6 +1,6 @@
 ---
 name: correctness-reviewer
-description: "Logic, race conditions, security. Read-only."
+description: "Reviews code changes for logic errors, race conditions, error handling gaps, and security vulnerabilities. Read-only — reports findings without modifying code. Dispatched by /review during Phase 4."
 model: sonnet
 tools: Read, Grep, Glob, Bash
 ---

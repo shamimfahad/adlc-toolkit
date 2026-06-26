@@ -1,6 +1,6 @@
 ---
 name: spec
-description: "Draft + validate a requirement. Phase 1."
+description: "Draft and validate a requirement spec for a new REQ. Phase 1 of the /proceed pipeline. Ends in the spec gate — user must approve before /architect can run. Writes specs/REQ-xxx/requirement.md and pauses for review."
 ---
 
 Toolkit root: .adlc-toolkit

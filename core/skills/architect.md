@@ -37,7 +37,7 @@ You are running Phase 2 of the ADLC pipeline: designing the architecture and bre
 
 ### 1. Dispatch codebase-explorer
 
-Launch the `codebase-explorer` agent (Haiku tier) with the following prompt:
+Launch the `codebase-explorer` agent (fast tier) with the following prompt:
 
 ```
 REQ: REQ-NNN-<slug>

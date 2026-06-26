@@ -1,7 +1,7 @@
 ---
 name: ui-reviewer
 description: Runtime UI/UX review of a change. Starts the app's dev server and drives a browser to confirm the changed UI renders, the flows work, the interaction states are correct (disabled/loading/error/empty, not just the happy view), and the result matches the design and UI acceptance criteria — the things static review cannot see. Also catches indirect breakage when a back-end API the frontend consumes changed. Browser mechanism auto-resolves (Claude in Chrome → headless → static + manual checklist) and never blocks. Read-only with respect to source. Dispatched by /review when a frontend is declared and the change touches UI directly or via a consumed API contract.
-model: sonnet
+tier: balanced
 tools: Read, Grep, Glob, Bash
 ---
 

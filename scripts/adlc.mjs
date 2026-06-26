@@ -40,10 +40,24 @@ import {
   existsSync,
   lstatSync,
   rmSync,
+  unlinkSync,
   renameSync,
   symlinkSync,
   realpathSync,
+  chmodSync,
 } from 'node:fs';
+
+// Remove a symlink itself (never follow it into its target). Portable across
+// platforms — unlike rmSync, which on macOS throws EISDIR for a symlink that
+// points at a directory. Use this everywhere we delete one of our own links.
+function removeLink(p) {
+  if (DRY) return;
+  try {
+    unlinkSync(p);
+  } catch {
+    rmSync(p, { force: true, recursive: true });
+  }
+}
 import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
@@ -120,6 +134,11 @@ const filesIn = (d, ext) =>
 // This is the guard that prevents the self-referential symlink corruption:
 // linking dist/* onto a destination that is itself a symlink back into dist/.
 function assertOutsideToolkit(destDir, ctx) {
+  // A symlinked dest dir is handled by healDirSymlinks (it removes legacy
+  // dir-symlinks that point back into the toolkit). Only a REAL directory that
+  // resolves inside the toolkit is a genuine misconfiguration (e.g. HOME set
+  // inside the toolkit) — that's what we refuse here.
+  if (isSymlink(destDir)) return;
   const real = realpathSafe(destDir);
   if (real === ROOT_REAL || real.startsWith(ROOT_REAL + '/')) {
     throw new Error(
@@ -130,10 +149,59 @@ function assertOutsideToolkit(destDir, ctx) {
   }
 }
 
+// Heal legacy directory-symlinks. An older install (or the historical corruption)
+// may have symlinked a whole tool-config dir — e.g. ~/.claude/skills → the
+// toolkit's dist/. We install per-child links, so that parent must be a REAL
+// directory. If it's a symlink resolving back into the toolkit, remove it; the
+// child links we then create restore the same content, loop-free. A symlink
+// pointing OUTSIDE the toolkit is the user's own choice and is left alone.
+function healDirSymlinks(ops) {
+  const seen = new Set();
+  for (const op of ops) {
+    if (op.kind !== 'link') continue;
+    const parent = dirname(op.dest);
+    if (seen.has(parent)) continue;
+    seen.add(parent);
+    if (!isSymlink(parent)) continue;
+    const real = realpathSafe(parent);
+    if (real === ROOT_REAL || real.startsWith(ROOT_REAL + '/')) {
+      act('heal: replace legacy dir-symlink with a real directory', `${tidy(parent)} → ${tidy(real)}`);
+      removeLink(parent);
+      if (!DRY) mkdirSync(parent, { recursive: true });
+    }
+  }
+}
+
 // ======================================================================
 // generation (ported from the original build.mjs — single source of truth)
 // ======================================================================
-const manifest = JSON.parse(readFileSync(join(ROOT, 'core/manifest.json'), 'utf8'));
+// ---- Engine/Overlay: core/ is upstream-owned; local/ is the team's overlay. ----
+// A team customizes WITHOUT editing core/ — add a skill (local/skills/<name>.md +
+// a local/manifest.json entry), override a core skill (same filename in local/),
+// or drop one (manifest entry with "disabled": true). Because customizations live
+// only in local/, pulling upstream never conflicts with core/.
+const LOCAL = join(ROOT, 'local');
+const hasLocal = (rel) => existsSync(join(LOCAL, rel));
+
+function mergeByName(coreArr = [], localArr = []) {
+  const map = new Map(coreArr.map((x) => [x.name, x]));
+  for (const l of localArr || []) map.set(l.name, { ...(map.get(l.name) || {}), ...l });
+  return [...map.values()].filter((x) => !x.disabled);
+}
+function mergeManifest(core, local) {
+  if (!local) return core;
+  const out = { ...core, ...local };
+  out.skills = mergeByName(core.skills, local.skills);
+  out.agents = mergeByName(core.agents, local.agents);
+  out.tierToModel = { ...(core.tierToModel || {}), ...(local.tierToModel || {}) };
+  out.sources = local.sources ? { ...(core.sources || {}), ...local.sources } : core.sources;
+  return out;
+}
+const coreManifest = JSON.parse(readFileSync(join(ROOT, 'core/manifest.json'), 'utf8'));
+const localManifest = hasLocal('manifest.json')
+  ? JSON.parse(readFileSync(join(LOCAL, 'manifest.json'), 'utf8'))
+  : null;
+const manifest = mergeManifest(coreManifest, localManifest);
 
 function parseFrontmatter(text) {
   const m = text.match(/^---\n([\s\S]*?)\n---/);
@@ -146,18 +214,24 @@ function parseFrontmatter(text) {
   }
   return fm;
 }
-function loadDir(dir) {
+// Load frontmatter for a kind ("skills" | "agents"), local overriding core by name.
+function loadDir(kind) {
   const out = {};
-  for (const f of readdirSync(join(ROOT, dir)).filter((f) => f.endsWith('.md'))) {
-    out[f.replace(/\.md$/, '')] = parseFrontmatter(readFileSync(join(ROOT, dir, f), 'utf8'));
-  }
+  const read = (root) => {
+    const dir = join(root, kind);
+    if (!existsSync(dir)) return;
+    for (const f of readdirSync(dir).filter((f) => f.endsWith('.md')))
+      out[f.replace(/\.md$/, '')] = parseFrontmatter(readFileSync(join(dir, f), 'utf8'));
+  };
+  read(join(ROOT, 'core'));
+  read(LOCAL); // local wins
   return out;
 }
 
 function buildModel(toolkitPath) {
   const tp = toolkitPath.replace(/\/+$/, '');
-  const skillFm = loadDir('core/skills');
-  const agentFm = loadDir('core/agents');
+  const skillFm = loadDir('skills');
+  const agentFm = loadDir('agents');
   const skills = manifest.skills.map((s) => ({
     ...s,
     description: (skillFm[s.name] && skillFm[s.name].description) || s.summary,
@@ -167,8 +241,9 @@ function buildModel(toolkitPath) {
     description: (agentFm[a.name] && agentFm[a.name].description) || a.role,
   }));
 
-  const skillRef = (n) => `${tp}/core/skills/${n}.md`;
-  const agentRef = (n) => `${tp}/core/agents/${n}.md`;
+  // Point each stub at the resolved source: local/ override if present, else core/.
+  const skillRef = (n) => `${tp}/${hasLocal(`skills/${n}.md`) ? 'local' : 'core'}/skills/${n}.md`;
+  const agentRef = (n) => `${tp}/${hasLocal(`agents/${n}.md`) ? 'local' : 'core'}/agents/${n}.md`;
   const yamlStr = (s) => `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   const tomlStr = (s) => JSON.stringify(String(s));
 
@@ -482,7 +557,7 @@ function applyLink(target, dest, FORCE) {
       return;
     }
     act('relink', tidy(dest));
-    if (!DRY) rmSync(dest, { recursive: true, force: true });
+    removeLink(dest);
   } else if (existsSync(dest)) {
     // A real file/dir (possibly an old flat-file skill) sits where our link goes.
     if (FORCE) {
@@ -551,7 +626,7 @@ function removeOrphan(entry) {
   if (kind === 'link') {
     if (isSymlink(dest)) {
       act('unlink (removed from toolkit)', tidy(dest));
-      if (!DRY) rmSync(dest, { force: true });
+      removeLink(dest);
     }
   } else if (existsSync(dest)) {
     act('remove (removed from toolkit)', tidy(dest));
@@ -597,7 +672,10 @@ function cmdSync() {
     const { base } = generate(t, { toolkitPath, outRoot }); // clean regenerate
     const { ops, notes } = plan(t, base, scope, repo, FORCE);
 
-    // Loop guard: never let a destination resolve back inside the toolkit.
+    // Repair any legacy dir-symlink (e.g. ~/.claude/skills → dist/) before linking.
+    healDirSymlinks(ops);
+
+    // Loop guard: a REAL dest dir resolving into the toolkit is still refused.
     for (const op of ops) {
       try {
         assertOutsideToolkit(dirname(op.dest), `${t} config`);
@@ -637,12 +715,37 @@ function cmdSync() {
 }
 
 // ======================================================================
+// hooks subcommand — activate the version-controlled git hooks
+// ======================================================================
+function cmdHooks() {
+  DRY = !!args['dry-run'];
+  const hooksRel = 'scripts/hooks';
+  const hook = join(ROOT, hooksRel, 'pre-commit');
+  log('');
+  log(`${C.cyn}ADLC hooks${C.rst}`);
+  if (!existsSync(hook)) {
+    console.error(`  no hook found at ${tidy(hook)}`);
+    process.exit(1);
+  }
+  // Make the hook executable (git won't run a non-executable hook).
+  act('chmod +x', tidy(hook));
+  if (!DRY) chmodSync(hook, 0o755);
+  // Point git at the tracked hooks dir.
+  act('git config', `core.hooksPath = ${hooksRel}`);
+  if (!DRY) execFileSync('git', ['-C', ROOT, 'config', 'core.hooksPath', hooksRel], { stdio: 'ignore' });
+  log(`${C.grn}done.${C.rst} pre-commit now rebuilds adapters/ from core/ on every commit that touches the source.`);
+  log(`${C.dim}Disable with: git -C "${ROOT}" config --unset core.hooksPath  ·  bypass once with: git commit --no-verify${C.rst}`);
+  log('');
+}
+
+// ======================================================================
 // dispatch
 // ======================================================================
 function usage() {
   log(`ADLC toolkit\n`);
   log(`  node scripts/adlc.mjs sync  --tool=<${SUPPORTED.join('|')}|all> [--repo=<path>] [--pull] [--dry-run]`);
   log(`  node scripts/adlc.mjs build --tool=<...|all> [--mode=vendored|global] [--toolkit-path=<p>] [--out=<dir>]`);
+  log(`  node scripts/adlc.mjs hooks    (activate the pre-commit adapters/ rebuild)`);
 }
 
 switch (SUB) {
@@ -651,6 +754,9 @@ switch (SUB) {
     break;
   case 'build':
     cmdBuild();
+    break;
+  case 'hooks':
+    cmdHooks();
     break;
   default:
     usage();

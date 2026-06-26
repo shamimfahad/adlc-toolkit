@@ -1,5 +1,5 @@
 ---
-description: "Design + task breakdown + validate. Phase 2."
+description: "Design the architecture and task breakdown for a REQ. Phase 2 of /proceed. Dispatches codebase-explorer to inform the design, then drafts architecture.md and tasks/TASK-*.md. On high-stakes REQs, dispatches the architecture-adversary to attack the design before the gate so the user reviews a stress-tested plan. Ends in the architecture gate — user must approve before /implement."
 ---
 
 Toolkit root: .adlc-toolkit
@@ -10,6 +10,6 @@ Read that file in full and follow **every step literally**. It is a protocol, no
 
 **Gate:** this skill ends in an approval gate. Stop and wait for the user's explicit approval before anything proceeds past it. Do not auto-fix-and-continue on a gate failure — surface what failed and wait.
 
-This skill relies on the agents (codebase-explorer). Cursor has no isolated read-only subagents — run each role sequentially in your own context, and honor a read-only agent's constraint by NOT editing files during its pass.
+This skill relies on the agents (codebase-explorer, architecture-adversary). Cursor has no isolated read-only subagents — run each role sequentially in your own context, and honor a read-only agent's constraint by NOT editing files during its pass.
 
 **Git policy:** follow `git.mode` in `.adlc/config.yml` (default `manual`). `manual` — never run git writes; read git state and draft commit/PR artifacts for the user. `commit` / `commit+push` — you may commit (and push, fast-forward only) the REQ's own feature branch once that phase's gate is approved. Never a protected branch, force-push, history rewrite, branch delete, `gh pr create`/`gh pr merge`, or `--no-verify` — in any mode.

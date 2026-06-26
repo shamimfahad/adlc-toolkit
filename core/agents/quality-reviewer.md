@@ -1,7 +1,7 @@
 ---
 name: quality-reviewer
 description: Reviews code changes for convention compliance, naming, duplication, and test coverage. Read-only — reports findings without modifying code. Dispatched by /review during Phase 4.
-model: sonnet
+tier: balanced
 tools: Read, Grep, Glob, Bash
 ---
 

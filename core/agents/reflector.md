@@ -1,7 +1,7 @@
 ---
 name: reflector
 description: Self-review against the captured knowledge vault. Checks whether the new code repeats any known mistake (lessons), respects any codebase quirk (gotchas), and conflicts with any accepted decision (ADRs), and sweeps user-facing repo docs for staleness against the change. Read-only — reports findings. Dispatched by /review during Phase 4.
-model: sonnet
+tier: balanced
 tools: Read, Grep, Glob, Bash
 ---
 

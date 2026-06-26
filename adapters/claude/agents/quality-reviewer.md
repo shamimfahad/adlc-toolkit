@@ -1,6 +1,6 @@
 ---
 name: quality-reviewer
-description: "Conventions, naming, duplication, test coverage. Read-only."
+description: "Reviews code changes for convention compliance, naming, duplication, and test coverage. Read-only — reports findings without modifying code. Dispatched by /review during Phase 4."
 model: sonnet
 tools: Read, Grep, Glob, Bash
 ---

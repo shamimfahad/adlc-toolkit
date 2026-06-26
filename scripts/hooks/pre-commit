@@ -1,0 +1,37 @@
+#!/bin/sh
+# ADLC pre-commit hook — keeps the committed adapters/ snapshot in lockstep with
+# the protocol source. When a commit touches anything that affects generation
+# (core/, local/, or the generator itself), it rebuilds adapters/ and stages the
+# result, so adapters/ can never drift from core/.
+#
+# Activate once (version-controlled, no npm/husky):
+#     node scripts/adlc.mjs hooks
+#   which runs:  git config core.hooksPath scripts/hooks
+# Disable with:  git config --unset core.hooksPath
+#
+# Bypass for a single commit (e.g. a WIP):  git commit --no-verify
+
+set -e
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+# Only rebuild when generation-affecting files are staged — docs-only or vault
+# commits skip it. (build is idempotent, so this is purely to avoid noise.)
+if git diff --cached --name-only \
+  | grep -qE '^(core/|local/|scripts/adlc\.mjs|scripts/build\.mjs)'; then
+
+  if ! command -v node >/dev/null 2>&1; then
+    echo "ADLC pre-commit: node not found on PATH — cannot rebuild adapters/." >&2
+    echo "  Install Node 18+, or bypass once with: git commit --no-verify" >&2
+    exit 1
+  fi
+
+  echo "ADLC pre-commit: rebuilding adapters/ from core/…"
+  node scripts/adlc.mjs build --tool=all   # vendored snapshot → adapters/ (default)
+  git add adapters
+
+  echo "ADLC pre-commit: adapters/ regenerated and staged."
+fi
+
+exit 0

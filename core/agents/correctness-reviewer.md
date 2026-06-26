@@ -1,7 +1,7 @@
 ---
 name: correctness-reviewer
 description: Reviews code changes for logic errors, race conditions, error handling gaps, and security vulnerabilities. Read-only — reports findings without modifying code. Dispatched by /review during Phase 4.
-model: sonnet
+tier: balanced
 tools: Read, Grep, Glob, Bash
 ---
 

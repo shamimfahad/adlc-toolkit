@@ -1,6 +1,6 @@
 ---
 name: codebase-explorer
-description: "One structured recon pass: similar patterns, blast radius, integration points."
+description: "Performs a structured reconnaissance pass over the codebase for a given REQ. Identifies similar existing implementations, blast radius of proposed changes, integration points, and existing test coverage. Read-only. Dispatched by /architect and /bugfix."
 model: haiku
 tools: Read, Grep, Glob, Bash
 ---

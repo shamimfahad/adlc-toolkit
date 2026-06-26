@@ -1,5 +1,5 @@
 ---
-description: "Standalone performance/cost scan."
+description: "Standalone performance and cost audit. Dispatches the performance-scanner agent and produces a dated report in .adlc/audits/. Identifies LLM/API cost hotspots, DB performance issues, latency drivers, caching opportunities. No gates — read-only."
 ---
 
 Toolkit root: .adlc-toolkit
