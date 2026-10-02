@@ -183,6 +183,8 @@ Process one entry at a time as the user replies.
 
    Summary section drawn from `requirement.md`'s Goal (rewritten in past tense). Changes section listing the touched files from `git diff <base>..<branch> --stat`.
 
+3b. **Write the record** `.adlc/<REQ_PATH>.md` from `templates/record-template.md` as `/wrapup` step 3b would have — header from git (`Status: merged`, commits, lines), Goal from `requirement.md`, criteria marked `⚠ recovered — not verified at a gate`, What-changed from the `--stat`, Verification `recovered — /review did not run`, Knowledge = whatever step 4 captures. Add one line under `## Later`: `- <date> — back-filled by /recover; shipped outside the pipeline`. A recovered item that already has a record (the user ran `/wrapup` and only the state drifted) keeps it untouched.
+
 4. **Capture user-provided knowledge.** For each lesson the user named, create `.adlc/knowledge/lessons/LESSON-<REQ_ID>-<n>-<slug>.md` from `templates/lesson-template.md` — the ID is namespaced under the recovered REQ, scan per `core/VAULT-LAYOUT.md` → `mint(lesson)` (never a vault-wide count; legacy `LESSON-NNN` files are frozen). Add a banner: `> **STATUS: needs verification** — captured during recover of REQ-NNN; expand from memory when you have time.` For each gotcha, append to `.adlc/knowledge/gotchas.md` with the next sequential `^g##` anchor, same banner style.
 
 5. **Update navigation files:**
@@ -193,7 +195,7 @@ Process one entry at a time as the user replies.
 
    Plus one entry per captured artifact: `## [YYYY-MM-DD] lesson | L-REQ-NNN-n — <title> (recovered)` and `## [YYYY-MM-DD] gotcha | G-NN — <title> (recovered)`.
 
-   Rebuild `knowledge/lesson-ledger.md` if a lesson was captured (as `/wrapup` step 4 — a full rewrite from the lesson files' header lines). Update `now.md` to remove the REQ from active focus if present.
+   Run the generators — `node $TOOLKIT_PATH/scripts/adlc.mjs lessons --vault .adlc` if a lesson was captured, `node $TOOLKIT_PATH/scripts/adlc.mjs index --vault .adlc` always (the record is a new row). Update `now.md` to remove the REQ from active focus if present.
 
 6. **Update `pipeline-state.json`:**
 
@@ -302,7 +304,7 @@ Per recovered REQ:
 - Updated `.adlc/<REQ_PATH>/pipeline-state.json` with `recoveredAt`, `recoveryNotes`, terminal/merged state
 - `.adlc/<REQ_PATH>/verification.md` (placeholder, if missing)
 - `.adlc/<REQ_PATH>/pr-draft.md` (historical record, if missing)
-- User-captured `.adlc/knowledge/lessons/LESSON-<REQ_ID>-<n>-<slug>.md` files, and a rebuilt `knowledge/lesson-ledger.md`
+- The back-filled record `.adlc/<REQ_PATH>.md`; user-captured `.adlc/knowledge/lessons/LESSON-<REQ_ID>-<n>-<slug>.md` stubs; the regenerated `knowledge/lessons.md` and `index.md`
 - User-captured entries appended to `.adlc/knowledge/gotchas.md`
 - Updates to `.adlc/hot.md`, `.adlc/index.md`, `.adlc/now.md`, `.adlc/decisions.md`
 

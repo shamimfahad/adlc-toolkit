@@ -19,16 +19,20 @@ This is pinned because the two conventions are indistinguishable at a glance and
 
 The same value is called `<BUG_PATH>` under `bugs/`. Same rules.
 
+**Two things live at `<REQ_PATH>` (1.9.0):** the **record** `<REQ_PATH>.md` — one committed file, written once at wrap-up, the item's permanent history — and the **working set** `<REQ_PATH>/` — every artifact the pipeline produced, local and gitignored, deleted on `merged` when the user says so. Skills write pipeline artifacts into the folder and the record beside it; nothing links *into* the folder from outside it, because on a teammate's clone the folder does not exist.
+
 ## The shapes
 
 A vault holds all of these at once, forever. Which one a *new* folder gets is set by `config.yml` → `layout.partition`; which ones a vault *contains* is whatever its history left behind.
 
 | Depth | Path | When |
 |---|---|---|
-| 1 | `specs/REQ-042-slug/` | `partition: none` (the default), or pre-migration |
-| 3 | `specs/2026-08/sf/REQ-042-slug/` | `partition: month-author` |
-| 2 | `specs/_archive/REQ-042-slug/` | archived, from a flat vault |
-| 4 | `specs/_archive/2026-08/sf/REQ-042-slug/` | archived, from a partitioned vault |
+| 1 | `specs/REQ-042-slug/` + `specs/REQ-042-slug.md` | `partition: none` (the default), or pre-migration |
+| 3 | `specs/2026-08/sf/REQ-042-slug/` + `…/REQ-042-slug.md` | `partition: month-author` |
+| 2 | `specs/_archive/REQ-042-slug/` | a **kept** working set, archived from a flat vault (the record stays at depth 1) |
+| 4 | `specs/_archive/2026-08/sf/REQ-042-slug/` | a kept working set, archived from a partitioned vault (the record stays at depth 3) |
+
+The record and the folder share a basename and sit side by side — Obsidian's folder-note convention. A record never moves; only a kept folder does. Vaults from before 1.9.0 have folders with no record beside them; `/config migrate` offers to write one per merged folder from its `requirement.md` / `verification.md`, or leaves it (both shapes stay readable).
 
 `bugs/` takes the same four shapes. `bugs/_archive/` does not exist yet — `/bugfix` has no `merged` terminal state to hang it on.
 
@@ -92,17 +96,29 @@ Cost does not grow with the vault: `find` returns one path, where `ls .adlc/spec
 
 There is no index file, no pointer file, and no symlink. The filesystem is the index. Anything else is a second source of truth that will drift.
 
+## `record(ID)` → `<REQ_PATH>.md`
+
+The record path is `resolve(ID)` with `.md` appended. When the folder has been deleted after merge, only the record exists; find it the same way, as a file:
+
+```sh
+find .adlc/specs -maxdepth 4 -type f -name 'REQ-042-*.md'
+```
+
+Strip `.adlc/` and `.md` and you have `<REQ_PATH>` again — so a skill that needs the item's history after the working set is gone (`/bugfix` appending to `## Later`, `/spec` looking for prior art, `/status` listing merged work) resolves exactly as before, minus the folder. **Zero folders and one record** means *merged and cleaned* — a terminal state, never something to recover or re-create. **One folder and one record** means merged, working set kept. **One folder, no record** means in flight (or pre-1.9.0 history).
+
+A record is written once by the wrap-up step that produced it and never edited afterwards, except its `## Later` section, which is append-only. Everything else about the item lives in `knowledge/` and is linked from the record by ID or anchor.
+
 ## `mint(scheme)` → new ID
 
 | Scheme | Scan |
 |---|---|
-| `sequential` | `find .adlc/specs -maxdepth 4 -type d -name 'REQ-*' \| sed 's#.*/##'` → highest number + 1, pad to 3 |
+| `sequential` | `find .adlc/specs -maxdepth 4 \( -type d -o -type f \) -name 'REQ-*' \| sed 's#.*/##; s/\.md$//'` → highest number + 1, pad to 3 |
 | `prefixed` | same, with `-name 'REQ-<prefix>-*'` → highest + 1 within that prefix |
 | `ticket` | unchanged — the tracker owns the number |
 
-`maxdepth 4` means the scan covers every month, every author folder, **and** `_archive/`. All three matter:
+`maxdepth 4` means the scan covers every month, every author folder, **and** `_archive/`; `-o -type f` makes it cover **records** too, since a merged-and-cleaned item exists only as `REQ-042-slug.md`. All of these matter:
 
-- Skipping the archive re-mints retired numbers (the bug 1.4.3 had to fix).
+- Skipping the archive re-mints retired numbers (the bug 1.4.3 had to fix). Skipping records does the same for every item whose working set was deleted — which, once a vault has run for a while, is most of them.
 - Skipping other author folders re-mints live IDs whenever `<author>` resolved to `_` on some machine, or when the vault is flat — which is every vault that hasn't migrated.
 
 So **`prefixed` scans all author folders too.** Scoping it to `specs/*/<author>/` looks like a free optimization and is a correctness bug.
@@ -137,15 +153,18 @@ ls .adlc/knowledge/lessons/ | sed -n 's/^LESSON-<WORK_ID>-\([0-9][0-9]*\)-.*/\1/
 
 **Legacy IDs.** Vaults created before this grammar hold `LESSON-NNN-<slug>.md` files with `^LNN` anchors. They are frozen as-is — never renumbered, never renamed, and the sequence is never continued. The first lesson promoted after the toolkit update uses the new grammar. The two forms cannot collide (`LESSON-042` vs `LESSON-REQ-042-1`), and both resolve the same way: by filename stem. Same rule as `layout.partition` — both shapes stay readable forever, so there is no migration and no sweep.
 
-**The ledger.** `knowledge/lesson-ledger.md` is a generated one-row-per-lesson table (ID · Title · Tags · Severity · REQ) rebuilt from the lesson files' header lines by every skill that writes a lesson (`/wrapup`, `/task`, `/bugfix`, `/recover`) and by `/config migrate`. It is never hand-edited and carries `merge=union` in `.gitattributes`: a union merge may leave a duplicated row, and the next rebuild removes it. It is the index; `index.md` only links to it. Lesson grammar is **not** in `core/manifest.json → layout` — that block describes the work-record trees, and nothing in `scripts/adlc.mjs` parses lesson IDs. Keep it that way.
+**The read side.** `knowledge/lessons.md` (1.9.0; it replaced `lesson-ledger.md`) is generated — one line per lesson carrying the whole minimal lesson: `- **L-REQ-042-1** · <severity> · \`<tags>\` · <the sentence> — \`<path:line>\` · REQ-042 [· enforced: <what>] [· ↗] ^L-REQ-042-1`. It is rebuilt whole from the lesson files' header tables by `node $TOOLKIT_PATH/scripts/adlc.mjs lessons --vault .adlc`, called by every skill that writes a lesson (`/wrapup`, `/task`, `/bugfix`, `/recover`) and by `/config migrate|lessons`. Never hand-edited (the Claude adapter refuses the write); carries `merge=union` — a union merge may leave a duplicated line, and the next rebuild removes it. **Every reader reads this file and never the folder**: the implementer and the architect grep it by path and tag, the reflector reads it whole, the Claude knowledge hook injects matching lines at edit time. The lesson files are the write side only, and a file grows sections beyond its table only when the lesson recurs (the generator marks such a line `↗`). `index.md` and `decisions.md` are generated the same way (`adlc.mjs index`), from the records, the ADR headers and the knowledge pages' first lines. Lesson grammar is **not** in `core/manifest.json → layout` — that block describes the work-record trees, and nothing in `scripts/adlc.mjs` parses lesson IDs. Keep it that way.
 
 ## `enumerate(active | archived)` → `<REQ_PATH>` list
 
-`find` to depth 4, `-type d`, **matching on the folder's own basename** — `REQ-*` or `BUG-*`. Skip anything under `_archive/` unless `archived` was asked for.
+`find` to depth 4, **matching on the entry's own basename** — `REQ-*` or `BUG-*`. Folders are work in flight (or kept history); records are finished work. Skip anything under `_archive/` unless `archived` was asked for.
 
 ```sh
-find .adlc/specs -maxdepth 4 -type d -name 'REQ-*' -not -path '*/_archive/*'
+find .adlc/specs -maxdepth 4 -type d -name 'REQ-*' -not -path '*/_archive/*'      # active: in-flight folders (and kept, un-archived ones)
+find .adlc/specs -maxdepth 4 -type f -name 'REQ-*.md'                              # done: records — the dashboard's merged column on any clone
 ```
+
+A folder whose record also exists is merged with its working set kept — list it under done, not active. `/status` and `/recover` take the active list from the first command and the done list from the second; `index` (the generator) does the same.
 
 **The sentinel is the name, not a file inside the folder.** Both obvious alternatives are broken:
 
@@ -162,6 +181,9 @@ Per-developer scratch state is ignored; durable knowledge and shared logs are co
 
 ```
 .adlc/now.md
+.claude/settings.local.json
+.adlc/specs/**/REQ-*/
+.adlc/bugs/**/BUG-*/
 .adlc/specs/**/pipeline-state.json
 .adlc/specs/**/.awaiting-approval
 .adlc/specs/**/commits-draft.md
@@ -181,9 +203,11 @@ Per-developer scratch state is ignored; durable knowledge and shared logs are co
 .adlc/ui-auth.env
 ```
 
+The first two patterns are 1.9.0: the **whole working set** is local, and the record beside it (`REQ-042-slug.md`, a file — the trailing `/` keeps the pattern off it; verified on a scratch repo for both depths) is what gets committed. The per-file lines after them are now redundant under the folder pattern but harmless; `/config migrate` appends the missing lines to an existing `.gitignore` and removes none, so a pre-1.9.0 vault keeps working with its old set until the user accepts the new block.
+
 Single-`*` versions of these silently stop matching the moment a vault partitions, and the symptom is per-developer heartbeat files appearing in everyone's diffs with no error anywhere. If you are editing this list, keep the `**`.
 
-`.adlc/now.md` and `.adlc/ui-auth.env` are not globs and are easy to lose when the block is swapped wholesale. Keep them.
+`.adlc/now.md`, `.adlc/ui-auth.env` and `.claude/settings.local.json` (the developer's per-repo Claude Code settings, where the extras' hooks are wired — never shared, never global) are not globs and are easy to lose when the block is swapped wholesale. Keep them.
 
 ## Links in artifacts — split by lifetime
 
@@ -200,8 +224,9 @@ Single-`*` versions of these silently stop matching the moment a vault partition
 
 Ask one question: *does this outlive the REQ folder?*
 
-- **No** → it goes inside `<REQ_PATH>/`, and it goes in the gitignore list above if it's per-developer scratch.
-- **Yes** → it goes in `knowledge/`, `architecture/`, or `context/`, it is never partitioned, and it refers back by **ID**.
+- **No** → it goes inside `<REQ_PATH>/` (the working set, local by default since 1.9.0 — nothing to add to the gitignore).
+- **Yes, and it is about this one item** → it is a section of the record `<REQ_PATH>.md`, ≤6KB in total, IDs and links only.
+- **Yes, and it is about the codebase** → it goes in `knowledge/`, `architecture/`, or `context/`, it is never partitioned, and it refers back by **ID**.
 
 ## When you change this file
 

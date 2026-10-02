@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | proposed — armed on a trigger, not a date |
+| Status | **accepted — implemented in 1.9.0**, differently from §Decision below: the ledger became `knowledge/lessons.md` carrying the whole minimal lesson (one line each), the reflector reads that file whole and opens a lesson file only for `↗` lines it needs, the architect and implementer grep it by blast-radius path and tag, `critical` is the always-read flag, and `enforced:` lines leave the read set. The trigger (60KB / 30 lessons) had been crossed ten-fold on the measured vault when this landed |
 | Created | 2026-07-22 |
 | Trigger | `knowledge/` exceeds **60KB** or **30 lesson files**, whichever first (reported by `/analyze`'s vault-health footprint) |
 | Decides | whether the reflector and architect keep reading the whole knowledge layer per REQ, or switch to a ledger-first tiered read |

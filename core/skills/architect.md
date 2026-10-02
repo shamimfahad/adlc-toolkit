@@ -63,7 +63,14 @@ Copy `.adlc/templates/architecture-template.md` to `.adlc/<REQ_PATH>/architectur
 - The exploration report (`exploration.md`)
 - Project conventions (`context/conventions.md`)
 - Existing ADRs (`architecture/adr-*.md` with status `accepted`)
-- Relevant lessons, gotchas, and concepts from the vault
+- Knowledge that matches the change — found, not remembered. Take every directory in the blast radius and every component name and grep for them:
+
+  ```sh
+  grep -n -i -e '<dir1>' -e '<dir2>' -e '<component>' .adlc/knowledge/lessons.md .adlc/knowledge/gotchas.md
+  grep -n ' · critical · ' .adlc/knowledge/lessons.md          # always-read, whatever the match
+  ```
+
+  List the hits under architecture.md **Related**, one line each (`L-REQ-042-1 — why it applies here`); skip lines marked `enforced:` (a sensor owns them). Open a lesson's file only if its line ends `↗` and you need the grown detail. Zero hits is a valid answer — write `Related: none matched (<N> lessons, <M> gotchas searched)` so the gate can see the search happened. The reflector does the semantic pass at review; this is the cheap deterministic one. Concept pages (`knowledge/concepts/`) by name as before.
 - The resolved design reference, if any (preflight step 5) — for UI structure, component boundaries, and UI-facing acceptance criteria. Treat it as draft input the gate still reviews, not a binding contract.
 
 Sections to fill:

@@ -30,7 +30,7 @@ You will receive:
 4. `.adlc/knowledge/concepts/` — patterns the codebase has codified
 5. `.adlc/knowledge/components/` — pages for the modules being touched
 
-Quality-reviewer covers `context/conventions.md` as its source-of-truth — consult specific sections on demand only when a finding cites a layering or API rule that lives there rather than in `context/architecture.md` or an ADR.
+Quality-reviewer covers `context/conventions.md` as its source-of-truth — consult specific sections on demand only when a finding cites a layering or API rule that lives there rather than in `context/architecture.md` or an ADR. The packet's **Rules in scope** (sections of `context/conventions-paths.md` whose globs match the diff) are yours as much as quality-reviewer's when they state a layering or dependency rule — read those sections; they do not auto-load for a packet reader. The packet's **Deterministic findings** are facts: cite them, never re-derive them.
 
 ## Scope
 

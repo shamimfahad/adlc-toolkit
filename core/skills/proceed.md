@@ -135,7 +135,7 @@ Use when state is in sync but you've decided the most recent phase(s) need to be
    | 2 — Architect | `architecture.md`, `tasks/`, any `exploration.md` content authored by /architect | — |
    | 3 — Implement | per-task implementation notes in `tasks/`; reset task completion flags in pipeline-state | — |
    | 4 — Review    | `verification.md` + `review-log.md` | — |
-   | 5 — Wrap up   | `pr-draft.md`, `merge-checklist.md` | `knowledge/lessons/LESSON-<REQ_ID>-*` files this REQ added (and the rebuilt `lesson-ledger.md`); `knowledge/gotchas.md` `^g##` anchors this REQ added; `architecture/adr-*` files this REQ added |
+   | 5 — Wrap up   | `pr-draft.md`, `merge-checklist.md` | the record `<REQ_PATH>.md`; `knowledge/lessons/LESSON-<REQ_ID>-*` stubs this REQ added (and the regenerated `knowledge/lessons.md` / `index.md`); `knowledge/gotchas.md` `^g##` anchors this REQ added; `architecture/adr-*` files this REQ added |
 
    Knowledge-layer entries authored by /wrapup are **tombstoned, not deleted** — they remain in the vault with a banner: `> **STATUS: retracted on YYYY-MM-DD via /proceed --revert from REQ-NNN-<slug>** — kept for historical reference.` Institutional memory is lossy on the way out, never silently wiped.
 

@@ -29,7 +29,9 @@ Load `$TOOLKIT_PATH/core/VAULT-LAYOUT.md`. This skill walks `specs/` and `bugs/`
 
 List them with VAULT-LAYOUT's `enumerate(active)` rule — `find .adlc/specs -maxdepth 4 -type d -name 'REQ-*' -not -path '*/_archive/*'` — one pass that catches flat and bucketed folders alike and skips the archive (archived REQs are done by definition). The match is on the folder's **own name**. Don't test for `pipeline-state.json` instead: it's gitignored, so on a teammate's fresh clone every folder looks empty and the dashboard comes back blank. Take the display ID from that same folder name — in a bucketed vault the child of `specs/` is a month like `2026-08`, not an ID.
 
-For each REQ found:
+Then list the **done** column from the records — `find .adlc/specs -maxdepth 4 -type f -name 'REQ-*.md'` (VAULT-LAYOUT `enumerate(done)`): a record exists for every item that wrapped up, including the ones whose working set was deleted, so the merged list is complete on any clone. A folder that also has a record is merged with its working set kept — show it under done with `(working set kept, N MB)`, not under active.
+
+For each active REQ found:
 
 - Read `pipeline-state.json` if it exists — on a fresh clone it won't; list the REQ with its state unknown rather than dropping it
 - Skip REQs where `prState == "merged"` and `mergedAt` is more than 7 days old (they're done)

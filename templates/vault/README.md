@@ -14,14 +14,14 @@ This directory is the project's knowledge vault and ADLC workspace. It's an Obsi
 | Path | What lives here |
 |---|---|
 | `context/` | Project-wide architecture, conventions, overview |
-| `knowledge/lessons/` | One file per lesson, named `LESSON-<REQ_ID>-<n>-<slug>.md` with a `^L-<REQ_ID>-<n>` anchor — the ID carries the REQ that produced it, so two people can't mint the same one (not a mirror of your source tree) |
-| `knowledge/lesson-ledger.md` | Generated one-row-per-lesson index; rebuilt by every skill that writes a lesson, never hand-edited |
+| `knowledge/lessons/` | **Write side only.** One 9-row stub per lesson, named `LESSON-<REQ_ID>-<n>-<slug>.md` with a `^L-<REQ_ID>-<n>` anchor — the ID carries the REQ that produced it, so two people can't mint the same one. Nothing reads this folder; a lesson grows sections here only when it recurs |
+| `knowledge/lessons.md` | **Read side.** Generated, one line per lesson carrying the whole minimal lesson (severity · tags · the sentence · where it was seen · what enforces it); rebuilt by every skill that writes a lesson, never hand-edited. Agents, the architect's relevance grep and the Claude knowledge hook read this and only this |
 | `knowledge/gotchas.md` | Consolidated codebase quirks with `^g##` anchors |
 | `knowledge/concepts/` | Patterns, invariants, domain models |
 | `knowledge/components/` | One page per major module |
 | `architecture/` | High-level architecture + ADRs |
-| `specs/` | One folder per requirement, holding all its artifacts — `specs/REQ-042-slug/`, or `specs/2026-08/sf/REQ-042-slug/` when bucketed (below) |
-| `specs/_archive/` | Merged REQs, moved here whole at wrap-up (offered at `merged`; IDs stay reserved). The move keeps whatever bucket the REQ had |
+| `specs/` | Per requirement: a **record** `specs/REQ-042-slug.md` (one committed file, written once at wrap-up, ≤6KB — goal, criteria, what changed, decisions, verdict, knowledge IDs, follow-ups) beside its **working set** `specs/REQ-042-slug/` (everything the pipeline produced; local, gitignored, deleted on `merged` when you say so). Bucketed vaults keep the same tail: `specs/2026-08/sf/REQ-042-slug.md` + `/` |
+| `specs/_archive/` | Working sets you chose to **keep** after merge, moved here whole (offered at `merged` only when the folder was kept). Records never move — they are the history |
 | `templates/` | Per-project copies of toolkit templates |
 | `config.yml` | Stack config — deploy targets, repo layout |
 
@@ -45,7 +45,7 @@ Don't type these paths, and don't assume a shape. Refer to a REQ by its ID and l
 - **`STATUS: needs verification`** flags provisional content — never silently assume it's confirmed
 - **Field table at the top** of every spec, ADR, concept, and component page
 - **"Related" and "Backlinks" sections** at the bottom of substantive pages
-- **Obsidian tip:** add `specs/_archive` to Settings → Files & Links → *Excluded files* so search and graph stay focused on active work (the files remain openable)
+- **Obsidian tip:** add `specs/_archive` and `knowledge/lessons` (the write-side stubs — `lessons.md` carries every lesson) to Settings → Files & Links → *Excluded files* so search and graph stay focused (the files remain openable)
 
 ## Size budgets
 
@@ -60,7 +60,8 @@ The hot-path files are loaded at every phase entry — their size is a recurring
 | each REQ's `verification.md` | 8KB (verdict only — narrative goes in `review-log.md`) |
 | each REQ's `review-packet.md` | 120KB target, 250KB ceiling (read in full by every reviewer; `config.yml → review.packet.exclude` keeps generated code out) |
 | each reviewer section of `review-log.md` | 12KB |
-| `knowledge/` total | 60KB / 30 lessons — soft trigger for the toolkit's tiered-vault-loading ADR (a team reaches it in months, not years — keep `Tags` filled) |
+| each REQ's / BUG's record (`<REQ_PATH>.md`) | 6KB (IDs and links, not copies — the knowledge lives in `knowledge/`) |
+| `knowledge/lessons.md` | no byte budget — one line per lesson; the reflector reads it whole, everything else greps it. `/analyze` reports lessons cited twice without `Enforced by` as the promotion queue |
 
 ## How the pipeline writes here
 
@@ -70,6 +71,6 @@ Each phase of `/proceed` creates or updates artifacts in this vault. `<REQ>` bel
 2. `/architect` → `<REQ>/architecture.md`, `<REQ>/tasks/TASK-*.md`
 3. `/implement` → code changes (in your repo, not the vault) + `commits-draft.md`
 4. `/review` → `<REQ>/verification.md` (compact verdict) + `review-log.md` (full narratives)
-5. `/wrapup` → `pr-draft.md`, updates to `lessons/`, `gotchas.md`, `concepts/`, `index.md`, `hot.md`
+5. `/wrapup` → `pr-draft.md`, the REQ's record `<REQ>.md`, updates to `lessons/` (+ `lessons.md` rebuilt), `gotchas.md`, `concepts/`, `index.md` (rebuilt), `hot.md`
 
 By default you commit everything yourself (`git.mode: manual`). You can let the assistant commit or push on the feature branch — see `config.yml` → Git policy.

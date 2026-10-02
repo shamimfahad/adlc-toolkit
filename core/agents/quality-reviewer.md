@@ -29,8 +29,9 @@ You review only the changes made for this REQ. If you were given a `review-packe
 ## Required reading before reviewing
 
 1. The REQ spec and architecture
-2. **`.adlc/context/conventions.md`** — the source of truth for what "quality" means in this project. Every finding traces back to a documented rule.
-3. `.adlc/knowledge/lessons/` — lessons tagged with quality, conventions, or the affected component
+2. **`.adlc/context/conventions.md`** — the source of truth for what "quality" means in this project. Every finding traces back to a documented rule. **Plus** every section the packet lists under **Rules in scope** — those are the path-scoped conventions (`context/conventions-paths.md`) whose globs match this diff; a rule there has the same standing as the rulebook, and it never auto-loads for you because you read a packet, not the files.
+2b. **The packet's Deterministic findings are facts.** Lint, format and sensor output the pipeline already ran: cite a line there when it supports a finding of yours; never re-derive it, never restate it as your own, never spend a finding on something a listed sensor already reports. Your work starts where the tools stop — naming, duplication, structure, the convention no regex can check.
+3. `.adlc/knowledge/lessons.md` — grep for `quality`, `conventions`, and the affected component (one line per lesson; never the folder)
 
 ## What to find
 
@@ -111,7 +112,7 @@ Each finding:
 
 **Recommendation:** Specific fix.
 
-**References:** [[knowledge/lessons/LESSON-REQ-…-n]] if a relevant lesson exists
+**References:** [[knowledge/lessons#^L-REQ-…-n|L-REQ-…-n]] if a relevant lesson exists
 ```
 
 ### Severity guidelines
