@@ -65,7 +65,7 @@ If the user's description is too thin to fill any section, **ask follow-up quest
 
 Before locking the spec, scan the vault for relevant prior work:
 
-- Grep `.adlc/knowledge/lessons/` for lessons tagged with the affected domain or component
+- Grep `.adlc/knowledge/lessons.md` for the affected domain or component (one line per lesson — never the folder), and the records `.adlc/specs/**/REQ-*.md` for prior work on the same area — a record's Goal and Follow-ups are the cheapest prior art there is
 - Grep `.adlc/knowledge/gotchas.md` for gotchas in the area
 - Check `.adlc/architecture/adr-*.md` for accepted ADRs that constrain the design space
 - Check `.adlc/knowledge/concepts/` for relevant patterns

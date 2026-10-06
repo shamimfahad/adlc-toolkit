@@ -27,6 +27,8 @@ Four angles, in this order. Don't skip any. If a category is genuinely empty, sa
 
 ### 1. Similar existing implementations
 
+**Flag legacy before recommending it.** When a neighbouring implementation contradicts `.adlc/context/architecture.md`, `conventions.md`, or a section of `conventions-paths.md` whose paths cover it, report it as `legacy — <what the doc says instead>`, not as the pattern to copy. Production code is history, not guidance; the implementer follows the doc, and the point of naming the neighbour is so nobody copies it because it is nearby.
+
 Patterns in the codebase that already do something close to what this REQ proposes. Use grep + targeted file reads.
 
 - File paths
@@ -67,7 +69,7 @@ When the blast radius or integration points are more legible as a picture than a
 
 Before reporting, check the vault for relevant prior work:
 
-- `.adlc/knowledge/lessons/` — grep for lessons tagged with the affected component or domain
+- `.adlc/knowledge/lessons.md` — grep for the affected directories, component names and tags (one line per lesson — never read the folder); report hits by anchor (`L-REQ-031-1`)
 - `.adlc/knowledge/gotchas.md` — scan for gotchas in the files you're about to flag in the blast radius
 - `.adlc/knowledge/concepts/` — find any concept pages that codify patterns you're about to recommend
 - `.adlc/knowledge/components/` — find any component page for the modules you're touching
@@ -117,7 +119,7 @@ Pages from the knowledge vault relevant to this REQ:
 
 - [[knowledge/gotchas#^g05|G05]] — short note on why this matters here
 - [[concepts/foo]] — short note
-- [[knowledge/lessons/LESSON-REQ-031-1]] — short note
+- [[knowledge/lessons#^L-REQ-031-1|L-REQ-031-1]] — short note
 
 ## Open questions
 

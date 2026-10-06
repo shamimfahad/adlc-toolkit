@@ -737,6 +737,15 @@ function cmdSync() {
     writeReceipt(t, scope, ops.map((o) => ({ kind: o.kind, dest: o.dest })));
 
     for (const n of notes) note(n);
+
+    // Claude Code extras (budget / knowledge / notify hooks, statusline) are NOT
+    // wired by sync in either scope. Installing the toolkit is a machine-level
+    // act; turning hooks on is a per-repo, per-developer decision that belongs
+    // with the vault — /init (step 12c) and /config migrate (step 9b) offer it,
+    // writing <repo>/.claude/settings.local.json. sync only says where.
+    if (t === 'claude') {
+      note(`extras (hooks, statusline) are not wired here — /init or /config migrate offers it per repo (writes <repo>/.claude/settings.local.json)`);
+    }
     log('');
   }
 
@@ -781,6 +790,11 @@ function usage() {
   log(`  node scripts/adlc.mjs sync  --tool=<${SUPPORTED.join('|')}|all> [--repo=<path>] [--pull] [--dry-run]`);
   log(`  node scripts/adlc.mjs build --tool=<...|all> [--mode=vendored|global] [--toolkit-path=<p>] [--out=<dir>]`);
   log(`  node scripts/adlc.mjs hooks    (activate the pre-commit adapters/ rebuild)`);
+  log(`  node scripts/adlc.mjs lessons [--vault <dir>] [--check]   rebuild <vault>/knowledge/lessons.md from the lesson files`);
+  log(`  node scripts/adlc.mjs index   [--vault <dir>] [--check]   rebuild <vault>/index.md + decisions.md from records, ADRs, knowledge pages`);
+  log(`  node scripts/adlc.mjs rules   [--vault <dir>] [--check]   generate <repo>/.claude/rules/adlc-*.md from <vault>/context/conventions-paths.md`);
+  log(`  node scripts/adlc.mjs settings --repo <path> [--dry-run] [--no-statusline]   wire the Claude extras (hooks, statusline) into <repo>/.claude/settings.local.json — this repo, this developer only`);
+  log(`  node scripts/adlc.mjs settings --global                                     the same into ~/.claude/settings.json — every session on this machine (opt-in)`);
 }
 
 switch (SUB) {
@@ -793,6 +807,26 @@ switch (SUB) {
   case 'hooks':
     cmdHooks();
     break;
+  case 'settings': {
+    try {
+      execFileSync(process.execPath, [join(__dirname, 'claude-settings.mjs'), ...process.argv.slice(3)], { stdio: 'inherit' });
+    } catch (e) {
+      process.exit(e.status ?? 1);
+    }
+    break;
+  }
+  case 'lessons':
+  case 'index':
+  case 'rules':
+  case 'vault-gen': {
+    // Vault generators live in their own module so a vault (not the toolkit) is the cwd that matters.
+    try {
+      execFileSync(process.execPath, [join(__dirname, 'vault-gen.mjs'), SUB, ...process.argv.slice(3)], { stdio: 'inherit' });
+    } catch (e) {
+      process.exit(e.status ?? 1); // --check reports STALE with exit 1; pass it through without a stack trace
+    }
+    break;
+  }
   default:
     usage();
     process.exit(SUB ? 1 : 0);

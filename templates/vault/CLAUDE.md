@@ -23,7 +23,7 @@ The user is **{{USER_NAME}}** ({{USER_EMAIL}}). They make every decision. You do
 | `config.yml` | Stack, paths, git/autonomy dials |
 | `context/*` | Project-wide architecture, conventions, overview |
 | `architecture/adr-*.md` (status: accepted) | Decisions in effect |
-| `knowledge/*` | Lessons (index: `lesson-ledger.md`), gotchas, concepts, components |
+| `knowledge/*` | Lessons — read `lessons.md` (one line each), never the `lessons/` folder — gotchas, concepts, components |
 | The REQ's own folder (status: validated and later) | The contract for that REQ |
 
 When two sources disagree, **stop and surface the contradiction**. Never silently pick one. Anything marked `STATUS: needs verification` is provisional — don't build on it without asking. ADRs with status `proposed` or `superseded` are not in effect.
@@ -57,7 +57,7 @@ Each phase writes into the REQ's own folder — flat under `specs/`, or bucketed
 
 ## When to write to the vault
 
-Code quirk → gotcha (`^g##`). Worth remembering across REQs → lesson. Reusable pattern → concept page. First touch of a major module → component page. Significant decision → ADR (proposed → user reviews → accepted). Unverified bet → assumption, `STATUS: needs verification`. Every wrapped REQ → `hot.md` entry + `index.md` rows. In doubt? Ask — don't over-capture.
+Code quirk → gotcha (`^g##`). Worth remembering across REQs → lesson. Reusable pattern → concept page. First touch of a major module → component page. Significant decision → ADR (proposed → user reviews → accepted). Unverified bet → assumption, `STATUS: needs verification`. Every wrapped REQ → its record (`<REQ_PATH>.md`, written once) + `hot.md` entry; `index.md`, `decisions.md` and `knowledge/lessons.md` are generated (`node $TOOLKIT_PATH/scripts/adlc.mjs index` / `lessons`), never edited. In doubt? Ask — don't over-capture.
 
 ## When in doubt
 

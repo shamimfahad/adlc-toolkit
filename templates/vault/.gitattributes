@@ -14,10 +14,13 @@ decisions.md          merge=union
 glossary.md           merge=union
 knowledge/gotchas.md  merge=union
 
-# knowledge/lesson-ledger.md is GENERATED (one row per lesson file), never hand-edited.
-# union can leave a duplicated row after a parallel merge; the next rebuild clears it,
-# so it is safe here. index.md is deliberately NOT listed: it is hand-maintained, and
-# union silently keeps BOTH versions when two branches rewrite the same row — a real
-# conflict marker is the better outcome there. (/config migrate appends missing lines
-# from this file to an existing vault's .adlc/.gitattributes; it never removes any.)
+# knowledge/lessons.md is GENERATED (one line per lesson file — the whole minimal lesson,
+# since 1.9.0; it replaced lesson-ledger.md), never hand-edited. union can leave a
+# duplicated line after a parallel merge; the next rebuild clears it, so it is safe here.
+# index.md and decisions.md are generated too (1.9.0) and deliberately NOT listed: they
+# are rebuilt whole by the next skill that runs, so a real conflict marker costs nothing,
+# whereas union would silently keep both versions of a rewritten row. (/config migrate
+# appends missing lines from this file to an existing vault's .adlc/.gitattributes; it
+# never removes any — the lesson-ledger.md line stays harmless on a migrated vault.)
+knowledge/lessons.md        merge=union
 knowledge/lesson-ledger.md  merge=union

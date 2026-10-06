@@ -44,6 +44,8 @@ Every implementation must leave the vault smarter. Lessons, gotchas, concepts, c
 
 The vault is the system's memory. Treat it that way: index things, link them, mark provisional content with `STATUS: needs verification`, and write the second-best version *now* rather than waiting for the perfect version *later*.
 
+Memory that only grows stops being memory. Knowledge a machine can check becomes a check — a sensor, a rule, a lint — and leaves the prose; prose keeps only what needs judgment. A lesson cited twice with nothing enforcing it is a check waiting to be written, and `/analyze` says so. Finished work leaves one record, not a folder.
+
 **Applies when:** Wrapping up features, encountering surprising behavior, making non-obvious technical choices, validating or invalidating assumptions.
 
 ---

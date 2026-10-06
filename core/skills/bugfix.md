@@ -102,7 +102,7 @@ Focus: <function or module suggested by repro>
 Find:
 1. The code path the bug runs through
 2. Existing tests covering the area
-3. Similar past bugs (search hot.md, gotchas.md, lessons/)
+3. Similar past bugs (grep `hot.md`, `gotchas.md`, `knowledge/lessons.md`, and the records `specs/**/REQ-*.md` / `bugs/**/BUG-*.md` for the symptom's component — a record's `## Later` says which bugs already traced to it)
 4. Any gotcha or lesson that applies to the affected file
 
 Write to: .adlc/<BUG_PATH>/investigation.md
@@ -201,7 +201,7 @@ Decision →  approve · revise <what> · abort
 
 ## Phase 4 — Review (gate)
 
-Slimmer than `/review`. Dispatch **only** `correctness-reviewer` and `reflector` (the two most likely to find issues in a bug fix). Skip quality and architecture unless the fix touched layering or introduced significant new code.
+Slimmer than `/review`, but it starts the same way: run `/review` **step 0** — the `verify:` commands from `config.yml`, the regression test included. A `halt_on` failure stops here and goes back to Phase 3; anything else becomes **Deterministic findings** the reviewers receive as facts. Then dispatch **only** `correctness-reviewer` and `reflector` (the two most likely to find issues in a bug fix). Skip quality and architecture unless the fix touched layering or introduced significant new code.
 
 The user commits before this runs — same as `/proceed`'s Phase 4 protocol.
 
@@ -244,7 +244,9 @@ Mirrors `/wrapup`'s "Process candidates" step, but bound to the bugfix folder:
 3. **For each candidate, verdict one of**: `promote` → new lesson, `demote-to-gotcha` → new gotcha entry, `discard` with one-line reason.
 4. **Append a `## Candidate verdicts` table** to the bottom of the candidates file with the verdicts and target/reason for each.
 5. **Mandatory minimum for bugfix:** at least one non-discard verdict (promote OR demote-to-gotcha). A bug fix that produced zero non-discard verdicts is a missed knowledge opportunity — push back on yourself before issuing the gate prompt; if you genuinely conclude there's nothing to keep, surface that explicitly in the gate prompt for the user's call.
-6. Write the resulting lessons (minimum-required fields only per the lesson template) to `knowledge/lessons/` as `LESSON-<BUG_ID>-<n>-<slug>.md` — the ID is namespaced under this bug, scan per `core/VAULT-LAYOUT.md` → `mint(lesson)` with `<WORK_ID>` = the BUG ID — and append gotchas to `knowledge/gotchas.md`. Then rebuild `knowledge/lesson-ledger.md` as `/wrapup` step 4 does.
+6. Write the resulting lessons (the stub's table only, per the lesson template; `Detectable` column in the verdict table as `/wrapup` step 3) to `knowledge/lessons/` as `LESSON-<BUG_ID>-<n>-<slug>.md` — the ID is namespaced under this bug, scan per `core/VAULT-LAYOUT.md` → `mint(lesson)` with `<WORK_ID>` = the BUG ID — and append gotchas to `knowledge/gotchas.md`.
+7. **Write the bug's record** `.adlc/<BUG_PATH>.md` from `templates/record-template.md` exactly as `/wrapup` step 3b (`Path kind: /bugfix`; Goal = the symptom and the root cause in two sentences; Verification = the regression test). If the bug traced back to a REQ, append `- <date> — <BUG_ID> traced to this REQ (<one line>)` under that REQ's record `## Later` — resolve it with `VAULT-LAYOUT.md` → `record(ID)`; that section is the only part of a record anything appends to.
+8. Run the generators: `node $TOOLKIT_PATH/scripts/adlc.mjs lessons --vault .adlc` and `node $TOOLKIT_PATH/scripts/adlc.mjs index --vault .adlc`.
 
 ### Repo-doc sweep
 
@@ -312,4 +314,4 @@ Per `BUG-NNN-<slug>`:
 - `lesson-candidates.md` (created or appended to across phases 2-4; verdicts appended at Phase 5; persists as decision history)
 - `source-writeback.md` (only when `sources.write` is configured and a write-back was drafted at Phase 5)
 - `pipeline-state.json`
-- Vault updates: gotchas, lessons, lesson-ledger.md (rebuilt), hot.md, index.md
+- The bug's record `.adlc/<BUG_PATH>.md` (+ a `## Later` line on the originating REQ's record, if any); vault updates: gotchas, lesson stubs, hot.md, and the generated `knowledge/lessons.md` / `index.md`

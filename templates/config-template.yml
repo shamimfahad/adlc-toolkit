@@ -67,6 +67,43 @@ stack:
   backends: [<node|dotnet|django|cloud-run|lambda|...>]   # optional
   databases: [<postgres|firestore|sqlserver|...>]   # optional
 
+# Verification commands — the project's own gates, as commands the pipeline RUNS and
+# QUOTES rather than rules it describes. Consumers: /implement (task-implementer's done
+# report quotes each command's last line), /review step 0 (runs them before any reviewer
+# is dispatched; a `halt_on` failure stops the phase — first failure escalates; passing
+# output enters the packet as "Deterministic findings" so reviewers cite facts instead of
+# re-deriving them), /analyze (reports what is configured and when it last ran green).
+# Every key is optional. Omit the block and the pipeline falls back to what it infers
+# from `stack:` (package.json scripts, *.sln, Makefile) and says so in the gate card.
+# `scope` says what a command really checks: a per-file lint that does not type-check
+# the project is `changed`; a full build is `project`. The implementer may claim
+# "types pass" only from a `project`-scoped command. /init seeds this from `stack:`
+# and marks every guess `# STATUS: needs verification`.
+# verify:
+#   format:
+#     run: dotnet format --verify-no-changes
+#     scope: project
+#   lint:
+#     run: npm run lint -- --max-warnings=0
+#     scope: changed
+#   typecheck:
+#     run: dotnet build --no-restore -warnaserror
+#     scope: project
+#   test:
+#     run: dotnet test --no-build
+#     scope: project
+#     run_changed: dotnet test --no-build --filter "FullyQualifiedName~{{area}}"   # optional narrower form for /implement
+#   # Project-owned sensors — anything that prints findings and exits non-zero on failure.
+#   # A lesson whose `Detectable` row is grep|lint|test graduates here; its file then says
+#   # `Enforced by: verify.sensors: <name>` and it leaves the reflector's and the knowledge
+#   # hook's read sets. The pipeline never installs anything to run one.
+#   sensors:
+#     - name: check-firestore-indexes
+#       run: node scripts/sensors/check-firestore-indexes.mjs
+#       enforces: [L-REQ-042-2]        # lesson / gotcha IDs this sensor owns (cross-checked by /analyze)
+#   digest_lines: 20                   # lines per command kept in the review packet digest
+#   halt_on: [typecheck, test]         # a failure here stops /review before dispatch; others become findings
+
 # Review packet — what /review bundles for its reviewers. Every dispatched
 # reviewer reads the packet in full, so each file you exclude is saved four or
 # five times over. Excluded files never enter the packet; the manifest lists

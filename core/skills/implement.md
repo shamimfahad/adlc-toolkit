@@ -83,7 +83,7 @@ For each subsequent tier:
 After all tiers complete:
 
 - Verify `commits-draft.md` has an entry for every task.
-- Run the project's test suite once more end-to-end (from `.adlc/context/conventions.md` or `config.yml`). All tests must pass.
+- Run every command in `config.yml → verify:` once more end-to-end (`format`, `lint`, `typecheck`, `test`, and each `sensors[]` entry; fall back to what `conventions.md` names when the block is absent and say so). All must pass; quote each command's last line in the gate card's CHECKS line — the same `verify:` line the implementers reported per task, now for the whole REQ. A `scope: changed` command does not prove the project type-checks; only a `scope: project` one does.
 - Check for forbidden artifacts: `console.log`, `dbg!`, `TODO:` without a tracking link, `.skip()` on tests, commented-out code blocks larger than 2 lines.
   - Forbidden findings are flagged but do not block the gate — they go into the gate prompt for the user to triage.
 - Verify no `--no-verify` flags were attempted. If task-implementer reports it tried to use one, escalate (this is a protocol violation).

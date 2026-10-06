@@ -73,7 +73,7 @@ Update state: `currentPhase: 1, completedPhases: [0, 1]`. **Gate.** Write the ga
 When the user clears the spec gate, proceed.
 
 - Do the codebase-explorer's recon yourself: similar implementations, blast radius, integration points, test coverage. Write to `exploration.md`.
-- Check `.adlc/knowledge/lessons/` for applicable lessons.
+- Grep `.adlc/knowledge/lessons.md` and `gotchas.md` for the blast-radius directories and component names (one line per lesson — never read the folder); list hits under architecture.md **Related**.
 - Check `.adlc/knowledge/gotchas.md` for any gotcha that touches your blast radius.
 - Draft `architecture.md` from the template.
 - Break the work into tasks with a dependency DAG. Write each task to `tasks/TASK-NN.md`.
@@ -106,6 +106,8 @@ After all tasks: update state. **Gate.** Emit terminal claim `gate-blocked:imple
 
 When the user clears the implement gate, proceed.
 
+First the deterministic gate, exactly `/review` step 0: run every `config.yml → verify:` command and sensor from the worktree, raw output to `verify-output.md`; a `halt_on` failure (`typecheck`, `test` by default) means `gate-blocked:review` with that command's last 20 lines and no checklist run — first failure escalates; anything else goes into `review-log.md` as **Deterministic findings** that your checklists cite rather than re-derive. Then the **Rules in scope**: the `context/conventions-paths.md` sections whose globs match the diff — read those before the quality and architecture checklists.
+
 Run the **review checklists inline** (you cannot dispatch reviewer agents). Use the checklists in the "Inline review checklists" section below. Always run correctness, quality, architecture, and reflection. **Also run the UI checklist** when `config.yml` → `stack.frontends` is set and **either** this REQ's diff touches a UI surface (components/pages/views/styles/templates) **or** it changes an API the frontend consumes (grep the frontend for the changed endpoints/fields/types — a changed contract can break a screen with no UI file touched). Skip it only for changes with no frontend or no frontend consumer.
 
 Write your full per-checklist findings to `review-log.md` (per lens: summary ≤5 lines, each finding ≤8 lines after its field table, ≤12KB — the reviewer agents' write budget applies to you too), then distill `verification.md` — the compact verdict file later phases load (target ≤8KB): digest table, findings consolidated by severity (Critical / Major / Minor / Trivial), summary, acceptance-criteria check. Deduplicate where checklists overlap.
@@ -125,7 +127,7 @@ When the user clears the verify gate, proceed.
 - Draft `pr-draft.md` from the changes and the spec.
 - Draft `merge-checklist.md` with the git/gh commands the user runs.
 - Process the candidates file: read `lesson-candidates.md`, check each candidate against existing lessons on this branch and on `origin/<base-branch>` (`git -C <workPath> ls-tree --name-only origin/<base-branch>:<vaultDir>/knowledge/lessons/` — always with `-C <workPath>`; skip and say so if the ref is missing), issue exactly one verdict per candidate (`promote` → write lesson, `demote-to-gotcha` → write gotcha entry, `discard` with one-line reason), and append verdicts to a `## Candidate verdicts` table at the bottom of the candidates file. Mirrors `/wrapup`'s "Process candidates" step.
-- Update vault: write lessons as `LESSON-<REQ_ID>-<n>-<slug>.md` (minimum-required fields only per the lesson template; ID scan per `core/VAULT-LAYOUT.md` → `mint(lesson)`, never a vault-wide count), append gotchas, append to `hot.md`, rebuild `knowledge/lesson-ledger.md` from the lesson files' header lines, update `index.md`, update or create concept/component pages.
+- Update vault: write lesson stubs as `LESSON-<REQ_ID>-<n>-<slug>.md` (the table only, per the lesson template; `Detectable` column in the verdict table; ID scan per `core/VAULT-LAYOUT.md` → `mint(lesson)`, never a vault-wide count), append gotchas, append to `hot.md`, update or create concept/component pages, **write the record** `.adlc/<REQ_PATH>.md` as `/wrapup` step 3b, then run `node $TOOLKIT_PATH/scripts/adlc.mjs lessons --vault .adlc` and `… index --vault .adlc` — never edit `lessons.md` or `index.md` by hand.
 - Update state: mark phase complete.
 
 **Gate.** Emit terminal claim `gate-blocked:ship`.
@@ -181,7 +183,7 @@ Since you cannot dispatch reviewer agents, run these yourself in Phase 4.
 
 Check the captured vault knowledge:
 
-- Does this change repeat any mistake captured in `knowledge/lessons/`?
+- Does this change repeat any mistake captured in `knowledge/lessons.md` (skip lines marked `enforced:` — a sensor owns those)?
 - Does it touch any file referenced in `knowledge/gotchas.md`? If so, does it respect the gotcha?
 - Does it conflict with any accepted ADR in `architecture/`?
 - Did exploration miss a similar implementation in the codebase that this code duplicates?
