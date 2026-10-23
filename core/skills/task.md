@@ -120,6 +120,8 @@ MY READ  approve — clean small change; nothing forces escalation
 Decision →  approve · escalate · revise <what> · abort
 ```
 
+Record the answer first — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` (GATE-PROTOCOL → *The trail*); the same at the wrap-up gate.
+
 On `approve`: delete any marker, set `gateState: "cleared"`, append `## [DATE] task-plan-cleared | REQ-NNN-<slug>` to `hot.md`, continue to Phase 2.
 On `escalate`: follow **Escalation handoff**.
 

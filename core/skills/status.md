@@ -55,6 +55,10 @@ Same as REQs, with the same rule pointed at `.adlc/bugs` and `-name 'BUG-*'`. Ke
 
 For `.adlc/audits/`, find audits from the last 30 days. Note any unaddressed Critical findings.
 
+### 4b. Gate evidence (1.11)
+
+Run `node $TOOLKIT_PATH/scripts/adlc.mjs trail stats --vault .adlc` and paste its lines verbatim under `Gate evidence` — it is deterministic, so never restate it. What it measures, across in-flight folders and committed records: how much of the changed tree was viewed when implement/review gates were answered (and approvals under 50%), how many architect gates asked the predict-first question and how many ship gates the review summary, findings whose `Where` is not a location, and specs carrying `## Behaviour`. These are the numbers that say whether the evidence pages changed behaviour; a vault that predates 1.10 prints zeros, which is itself the answer. `--all` adds one row per item when the user asks for it.
+
 ### 5. Compile and emit
 
 Output a structured status report in chat:
@@ -85,6 +89,14 @@ Recent audits:
   YYYY-MM-DD health  — <count> findings (C<N>/M<N>/m<N>)
   YYYY-MM-DD perf    — <count> findings (C<N>/M<N>/m<N>)
   Unaddressed criticals: <list of finding IDs across audits>
+
+Gate evidence (trail stats, verbatim):
+  GATE EVIDENCE · 12 items (7 in flight, 5 records)
+  viewed      23 answers at implement/review · 17 carry a count · mean 71% · 2 approved under 50%: REQ-096 (2/7), REQ-098 (1/4)
+  predict     6 of 8 architect gates asked · 5 answered
+  summary     3 of 4 ship gates asked · 3 answered
+  pointers    findings with no location: 2 (REQ-094 m3, REQ-096 M2)
+  behaviour   5 of 7 in-flight specs carry ## Behaviour
 
 Suggested next actions:
   - Gate to clear: <REQ at awaiting> → /proceed REQ-NNN-<slug>

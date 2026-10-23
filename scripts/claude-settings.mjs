@@ -19,8 +19,9 @@
  *   hooks.PostToolUse         adlc-budget.mjs ("Write|Edit|MultiEdit") · adlc-knowledge.mjs ("Bash")
  *   hooks.PostToolUseFailure  adlc-knowledge.mjs ("Bash")
  *   hooks.SubagentStart       adlc-knowledge.mjs ("task-implementer|pipeline-runner")
- *   hooks.SubagentStop        adlc-budget.mjs (any)
+ *   hooks.SubagentStop        adlc-budget.mjs (any) · adlc-trail.mjs (any)
  *   hooks.Notification        adlc-notify.mjs (any)
+ *   hooks.SessionStart / SubagentStart / Stop   adlc-trail.mjs (any) — the per-phase trail in pipeline-state.json (1.10)
  *   statusLine                adlc-statusline.mjs — only when no statusLine is set (yours wins)
  *
  * Rules: an entry whose command names one of our scripts is OURS — its path is updated
@@ -72,7 +73,7 @@ else {
 const fwd = (p) => p.replace(/\\/g, '/');
 const HOOKS_DIR = fwd(join(TOOLKIT, 'core', 'extras', 'claude', 'hooks'));
 const STATUS = fwd(join(TOOLKIT, 'core', 'extras', 'claude', 'statusline', 'adlc-statusline.mjs'));
-const OUR_SCRIPTS = /adlc-(budget|knowledge|notify)\.mjs/;
+const OUR_SCRIPTS = /adlc-(budget|knowledge|notify|trail)\.mjs/;
 const cmd = (script) => `node ${HOOKS_DIR}/${script}`;
 
 // matcher: null = no matcher key (fires for every event of that kind)
@@ -87,6 +88,10 @@ const WANT = [
   ['SubagentStart', 'task-implementer|pipeline-runner', 'adlc-knowledge.mjs'],
   ['SubagentStop', null, 'adlc-budget.mjs'],
   ['Notification', null, 'adlc-notify.mjs'],
+  ['SessionStart', null, 'adlc-trail.mjs'],
+  ['SubagentStart', null, 'adlc-trail.mjs'],
+  ['SubagentStop', null, 'adlc-trail.mjs'],
+  ['Stop', null, 'adlc-trail.mjs'],
 ];
 
 function mergeSettings(settings, { toolkit = TOOLKIT, statusline = !NO_STATUS } = {}) {

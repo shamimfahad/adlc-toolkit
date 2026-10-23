@@ -262,7 +262,8 @@ For each finding across all reviewer sections (including UI/UX findings when the
 - Lead with a one-row-per-finding digest table (below) so the user can triage at a glance before reading any detail
 - Under the digest, one roster line — `Reviewed by: correctness (balanced) · quality (balanced) · architecture (balanced) · reflector (balanced)` (+ ui when it ran) — taken from each report's `Written by` line; flag any report that arrived without one
 - Give each finding a short ID (C1, M1, m1 by severity) — the gate card and `fix <ids>` replies use these
-- Deduplicate: if two reviewers flagged the same file + line + concern, merge into one entry citing both
+- Deduplicate: if two reviewers flagged the same file + line + concern, merge into one entry citing both — and when they disagreed on severity, keep the higher one and write the other in the `Disagreement` column (`quality: minor`). That column also carries `reflector unsure` when the reflector hedged, and `needs-decision` for the dispositions below; it is empty otherwise. The cockpit lists these rows first, above the verdict, because a disagreement is where the reviewers' fallibility shows and where the user's judgment is actually needed
+- `Where` is a pointer the user can follow (`path:line`; `path` alone only when the finding is about the file as a whole). A finding with no `Where` is not a finding yet — go back to the log and locate it
 - Sort by severity (Critical > Major > Minor > Trivial)
 - Tag with originating reviewer(s)
 - Mark each finding's disposition: **actionable** (a code change a task-implementer can apply) or **needs-decision** — a reflector `vault-stale` (the vault should change, not the code), an `adr-conflict`, a proposed new ADR, or an open design question. `fix all` acts on the actionable set only; needs-decision findings are the user's by definition — an implementer "fixing" one would be making the decision for them.
@@ -271,11 +272,11 @@ For each finding across all reviewer sections (including UI/UX findings when the
 ```markdown
 ## Findings at a glance
 
-| ID | Severity | Finding (one line) | Where | Effort | Fix |
-|----|----------|--------------------|-------|--------|-----|
-| C1 | critical | double-charge path on retry | src/pay/retry.ts:88 | small | yes |
-| M1 | major | duplicated retry helper; extract it | src/pay/retry.ts | small | yes |
-| m1 | minor | ADR-009 conflict: retry lives outside gateway | src/pay/retry.ts | — | your call |
+| ID | Severity | Finding (one line) | Where | Effort | Fix | Disagreement |
+|----|----------|--------------------|-------|--------|-----|--------------|
+| C1 | critical | double-charge path on retry | src/pay/retry.ts:88 | small | yes | |
+| M1 | major | duplicated retry helper; extract it | src/pay/retry.ts | small | yes | quality: minor |
+| m1 | minor | ADR-009 conflict: retry lives outside gateway | src/pay/retry.ts | — | your call | reflector unsure |
 
 ## Consolidated by severity
 
@@ -358,7 +359,7 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A review gate **leads w
 - **Verdict** — e.g. "`<total>` findings — `<k>` need a call", or "clean — no findings, recommend approve".
 - **FINDINGS** — the consolidated list, one line each, prefixed by severity `crit / maj / min` (drop trivial to a count) and the originating reviewer; group the Critical + Major at the top. Suffix needs-decision findings with `— your call`, so the scope of `fix all` is visible on the card. This block *is* the `NEEDS YOU` for this gate.
 - **READY** (brief) — `<4 or 5>` reviewers ran; `<total>` possible lessons noted (you decide what to keep at `/wrapup`); how the UI was checked + counts (or "UI check skipped — nothing visual changed"; omit entirely when the project has no frontend); when any doc is now out of date, name it ("docs now stale: docs/auth.md — update it in this branch before merging").
-- **CHECKS** — the step-0 `verify:` line first, then the acceptance-criteria check as one compact `✓ / ⚠` line; call out any special item (a reflector `vault-stale` finding, an `adr-conflict`, an architecture "new ADR needed") on its own line since those need deliberate handling.
+- **CHECKS** — the step-0 `verify:` line first, then the acceptance-criteria check as one compact `✓ / ⚠` line; call out any special item (a reflector `vault-stale` finding, an `adr-conflict`, an architecture "new ADR needed") on its own line since those need deliberate handling. Every pass names where it was seen (invariant 8): `✓ tests 41/41 — verify-output.md:14`, `✓ AC 5/5 — verification.md § Acceptance criteria check`.
 - **MY READ** — recommendation + one-line why. **Never recommend approve while a Critical is unaddressed** — that's a `fix` or `revise`.
 - **Decision** — on Claude, an `AskUserQuestion`: **approve** (accept findings as-is → `/wrapup`), **fix all** (every actionable finding gets fixed, affected reviewers re-run, gate comes back — needs-decision findings return named), **fix** (`<ids>` or `all-major` — same loop, scoped), **revise** (other changes to the review), **abort** (escalate; halt). `fix all` is always offered whenever at least one actionable finding exists. Mark the recommended one per `MY READ`.
 
@@ -389,6 +390,8 @@ Decision →  approve (accept as-is) · fix all (every actionable
 
 ## Gate clearance
 
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words.
+
 If `approve` (no fixes needed):
 
 1. Delete `.awaiting-approval`.
@@ -398,7 +401,7 @@ If `approve` (no fixes needed):
 
 If `fix: <ids>`, `fix: all-major`, or `fix: all`:
 
-1. **Resolve the set.** `<ids>` — as listed. `all-major` — every critical and major. `all` — every **actionable** finding, all severities. Needs-decision findings (`vault-stale`, `adr-conflict`, a proposed ADR, an open question) are never in the set, whatever was asked — they're decisions, not patches. If the resolved set excluded any, the re-emitted card must name them: `fixed 6 of 8 — 2 need your call: m1, m3`.
+1. **Resolve the set.** `<ids>` — as listed. `all-major` — every critical and major. `all` — every **actionable** finding, all severities. Then record the verdict per finding, one array for the whole digest: `node $TOOLKIT_PATH/scripts/adlc.mjs trail findings --vault .adlc --req <REQ_PATH> --json '[{"id":"CORR-001","severity":"major","decision":"fix"},{"id":"QUAL-003","severity":"minor","decision":"accept","reason":"<why>"}]'` — `fix`, `accept` or `defer`, every finding in the digest, re-run after each round so the last word stands. On `approve` with no fixes, record every finding as `accept`. Needs-decision findings (`vault-stale`, `adr-conflict`, a proposed ADR, an open question) are never in the set, whatever was asked — they're decisions, not patches. If the resolved set excluded any, the re-emitted card must name them: `fixed 6 of 8 — 2 need your call: m1, m3`.
 2. For each finding in the set, dispatch a `task-implementer` agent scoped to that fix:
    ```
    Fix: <finding-id>

@@ -145,6 +145,7 @@ Copy `.adlc/templates/record-template.md` (toolkit fallback `$TOOLKIT_PATH/templ
 | Acceptance criteria | `requirement.md`, ticked from `verification.md`'s cross-check |
 | What changed | `architecture.md` blast-radius table, paths only; two to four sentences of approach |
 | Decisions | ADRs touched this REQ; gate decisions from `pipeline-state.notes` |
+| Trail | `pipeline-state.phases` (1.10): one line per phase — `3 implement · 2 rounds (revise → approve · viewed 4/7) · 6 agents · 14m` — then the findings decisions as a short table (`id · severity · decision · reason`). Rounds and agents counted from the block; a round's `viewed` rides after its decision; a `predict` or `summary` round is quoted in full, like a note. Durations from `startedAt` to the last round. No paths, no session ids. Absent block → `Trail: not recorded (pre-1.10)`. |
 | Verification | `verification.md` verdict line, tests added, the `verify:` runs it quotes, the ui line |
 | Knowledge | IDs from step 3's verdict table and the gotcha/concept/component pages you touched |
 | Follow-ups | `verification.md` follow-ups + anything deferred at a gate |
@@ -230,6 +231,10 @@ Files:
   - New / updated vault files (see below)
 ```
 
+### 7b. Ask for the review summary
+
+Unless `config.yml.autonomy.review_summary` is `false`, or this run is driven by `/autopilot` or a `pipeline-runner` under `/sprint`: before the card, one `AskUserQuestion` whose only listed option is **skip** (the answer goes through the dialog's *Other*, as free text) — *"In your words: what does this change do, and what did you check? Two to four lines."* Record it at once — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision summary --note "<the answer, verbatim>" --phase 5` — then compare it with the diff: the changed files whose name (or stem) the summary never mentions, and any claim in it that the tree contradicts. A summary that names no file is handed back once — *"name the files you looked at"* — and then taken as given. Append to `pr-draft.md`, after `### Summary`, a block `### Reviewed by <git user.name>` holding the lines verbatim; the user keeps or cuts it when opening the PR. The commits stay as drafted in step 1, in the repo's convention — this is the reviewer's account, not the author's message.
+
 ### 8. Emit the gate card
 
 Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A wrap-up gate's body is the **PR + vault capture + merge checklist**, and it carries an extra `merged` option (used after the user runs the merge). Map:
@@ -239,6 +244,7 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A wrap-up gate's body i
 - **READY** — PR title + `pr-draft.md` (files changed, +/-); `merge-checklist.md`; the record (`<REQ_PATH>.md`, size); vault capture in one compact line (candidates considered `<N>`; promoted `<L-REQ-NNN-n>`; gotchas `<^gNN>`; ADRs/concepts/components/glossary/hot as applicable), then the dedup basis: `dedup vs origin/<base> as of <age>` or `cross-branch dedup skipped: origin/<base> not found`. The age is the honest signal — a week-old fetch makes the check weaker, and the card shows it rather than hiding it.
 - **NEEDS YOU** — only genuine calls: the repo-doc list from step 1 (`docs: <file> — <claim> → <fact>`, applied on approve); **Promotion candidates** from step 3 (`L-REQ-NNN-n — detectable by <grep|lint|test>: <the check>` — pick a home for the check, or `later`); a drafted issue-tracker write-back awaiting your OK (never auto-sent); a "no knowledge captured — is that right?" confirmation; any unresolved final-sanity item. Omit if none.
 - **CHECKS** — final diff sanity as one compact `✓ / ⚠` line: blast radius matches architecture · user-facing docs swept (`N` stale claims listed / none / skipped) · no debug artifacts · no `--no-verify` · commit drafts all in git log.
+- **YOUR SUMMARY** — when a `summary` round was recorded (step 7b): `names 5 of 7 changed files · not mentioned: Startup.cs, docs/retries.md` and any contradiction in one line. Omit when the ask was skipped. The cockpit draws the summary beside the diffstat.
 - **MY READ** — recommendation + one-line why.
 - **Decision** — on Claude, an `AskUserQuestion`: **approve** (gate cleared — run the merge checklist), **revise** (adjust PR draft or vault updates), **merged** (after you merge — finalize state, log to `hot.md`), **abort** (halt without merging). Mark approve *(Recommended)* per `MY READ`.
 
@@ -264,6 +270,8 @@ Decision →  approve · revise <what> · merged · abort
 ```
 
 ## Gate clearance
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words.
 
 If `approve`:
 

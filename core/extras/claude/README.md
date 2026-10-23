@@ -37,6 +37,15 @@ silent when there is nothing to say.
   twice unchanged gets the four Windows/bash rules instead of a third try.
   Entries carrying `enforced:` are skipped — a sensor owns them.
 
+- **Trail** (`adlc-trail.mjs`, 1.10) — who flew and what was decided, per phase,
+  written into the REQ's own `pipeline-state.json` (`phases`): sessions, each
+  subagent with the first line of its last message and its transcript path,
+  each gate round with the option chosen and the user's words (the skills close
+  the round via `adlc.mjs trail gate`), and `/review`'s per-finding verdicts.
+  Bounded (20 agents per phase, 160-character lines) and read by nothing on the
+  hot path — the cockpit mod (`mods/adlc-flightdeck`) draws it and `/wrapup`
+  folds it into the record's `## Trail`.
+
 ## Setup
 
 **The short version — per repo, per developer:**

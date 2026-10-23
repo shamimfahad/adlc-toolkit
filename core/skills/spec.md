@@ -52,6 +52,7 @@ Fill the content sections based on the user's description:
 
 - **Problem** — what hurts today, who feels it. Pull this from the user's words; don't editorialize.
 - **Goal** — the state of the world after this ships. Concrete.
+- **Behaviour** — two short lists, *Today* and *After*: what a user (or a caller) sees now, and what they will see. Three lines each at most, observable things only — no components, no sequencing. When nothing user-visible changes, say so in one line (`no user-visible change — <why the REQ exists>`). The cockpit draws the two side by side; it is the fastest way for a reader to tell what the REQ is for.
 - **Non-goals** — adjacent things this explicitly does not cover.
 - **Acceptance criteria** — testable statements. Each one should be answerable yes/no after implementation.
 - **Assumptions** — anything you're treating as true. Mark provisional ones with `STATUS: needs verification`.
@@ -147,6 +148,8 @@ Decision →  approve · revise <what> · abort
 ```
 
 ## Gate clearance
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words.
 
 If the user replies `approve`:
 

@@ -405,7 +405,7 @@ If step 9 put per-area rules into `context/conventions-paths.md` (anything whose
 
 ### 12c. Offer to wire the Claude Code extras — this repo, this developer (Claude Code only)
 
-On Claude Code, offer one yes/no: *"Wire the ADLC extras for this repo? Budget enforcement, knowledge injection, gate toast and statusline go into `.claude/settings.local.json` — your own file, gitignored, active only in this repo; your global settings are not touched."* On yes, run `node $TOOLKIT_PATH/scripts/adlc.mjs settings --repo <repo-root>` and quote its summary line; hooks load in the next session, so say that. On no, name the command so they can do it later. Never offer `--global` here — that is a per-machine decision the developer makes outside any one project. On other assistants skip this step silently; the fidelity matrix says why.
+On Claude Code, offer one yes/no: *"Wire the ADLC extras for this repo? Budget enforcement, knowledge injection, gate toast, the trail and statusline go into `.claude/settings.local.json` — your own file, gitignored, active only in this repo; your global settings are not touched."* On yes, run `node $TOOLKIT_PATH/scripts/adlc.mjs settings --repo <repo-root>` and quote its summary line; hooks load in the next session, so say that. On no, name the command so they can do it later. Never offer `--global` here — that is a per-machine decision the developer makes outside any one project. On other assistants skip this step silently; the fidelity matrix says why.
 
 ### 13. Report
 

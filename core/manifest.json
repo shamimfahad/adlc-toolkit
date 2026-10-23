@@ -1,6 +1,6 @@
 {
   "$comment": "Tool-agnostic catalog of the ADLC toolkit. The build script (scripts/build.mjs) reads this plus the frontmatter of each core/skills/*.md and core/agents/*.md file, then emits per-tool adapter stubs. Only metadata NOT present in the source frontmatter lives here.",
-  "version": "1.9.1",
+  "version": "1.11.0",
   "vaultDir": ".adlc",
   "$layoutComment": "On-disk shape of the work-record trees. The prose contract — resolve/mint/enumerate, the four depths, the gitignore set — lives in core/VAULT-LAYOUT.md. Change both together.",
   "layout": {

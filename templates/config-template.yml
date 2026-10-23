@@ -262,6 +262,9 @@ workflow:
 #                            #   never exceed it (empty sources.write ⇒ read-only).
 #                            #   External writes always stop for your explicit OK (see below).
 #   escalation: balanced     # cautious | balanced | aggressive  (decision-maker bias)
+#   predict_first: true      # /architect asks what you expect before it shows the design (1.11)
+#   review_summary: true     # /wrapup asks for the change in your words before the ship gate (1.11)
+#                            #   both are skipped under /autopilot and /sprint, whatever they say
 #   rework_cap_per_gate: 2   # max REWORK loops at one gate before forced HALT
 #   rework_budget_total: 5   # max REWORK loops across the whole run
 #   confidence_floor: 0.6    # any verdict below this confidence becomes HALT

@@ -66,6 +66,19 @@ Open items that outlive the REQ. Each names an owner or "unassigned".
 - Admin override for stuck retries — unassigned, needs a spec
 - `needs-decision` finding from architecture-reviewer on the queue abstraction — deferred, see hot.md {{DATE}}
 
+## Trail
+
+What the pipeline recorded while it ran (`pipeline-state.phases`, 1.10). One line per phase; then the findings decisions. A `predict` round (what you expected before the design) and a `summary` round (your own account at ship) are quoted in full. Nothing here links into the working set.
+
+- 1 spec · 1 round (approve) · 1 agent · 6m
+- 3 implement · 2 rounds (revise → approve · viewed 4/7) · 6 agents · 14m — "keep the 3-retry default but make it config"
+- 4 review · 1 round (fix-all) · 4 agents · 22m
+
+| ID | Severity | Decision | Reason |
+|---|---|---|---|
+| CORR-001 | major | fix | — |
+| QUAL-003 | minor | accept | matches the existing pattern |
+
 ## Later
 
 _Append-only. `/bugfix` adds a line when a bug traces back here; `/analyze` may add a line when a follow-up closes. Nothing else writes here._

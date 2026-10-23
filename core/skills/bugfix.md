@@ -78,6 +78,8 @@ MY READ  approve — repro is clean and reproduces the symptom
 Decision →  approve · revise <what> · reframe · abort
 ```
 
+Every gate answer in this skill is recorded before it is acted on: `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <BUG_PATH> --decision <option> --note "<the user's own words, if any>"` (GATE-PROTOCOL → *The trail*).
+
 On `approve`: clear gate, advance.
 On `reframe`: archive `bug.md`, call `/spec` with the bug content as input, exit this skill.
 

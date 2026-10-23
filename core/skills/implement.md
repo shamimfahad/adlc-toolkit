@@ -142,7 +142,7 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. Map this phase's conten
 - **Verdict** — e.g. "all tasks done, tests pass — `<k>` items to clean before committing", or "clean — recommend approve".
 - **READY** — `<N>` tasks in `<T>` stages; tests `<X>` passed / `<Y>` added; `<count>` commits drafted (`commits-draft.md`); `<count>` possible lessons noted (you decide what to keep at `/wrapup`). Include a one-line `git diff --stat` roll-up (full stat lives in the diff, not the card).
 - **NEEDS YOU** — flagged artifacts to clean before committing (debug prints, TODO without link, `.skip()`/commented tests) and any surfaced deviation and whether it's handled or unresolved. Omit if nothing flagged.
-- **CHECKS** — one compact line: no debug prints · no untracked TODO · no skipped/commented tests · all tests pass.
+- **CHECKS** — one compact line: no debug prints · no untracked TODO · no skipped/commented tests · all tests pass. Every count names its evidence (GATE-PROTOCOL invariant 8): `✓ tests 41/41 — verify-output.md:14`, `✓ no debug — grep in review-log.md:3`.
 - **MY READ** — recommendation + one-line why (don't recommend approve while a deviation is unresolved or tests fail).
 - **Decision** — on Claude, an `AskUserQuestion`: **approve** (gate cleared — run the commits from `commits-draft.md`, then `/review`), **revise** (what to change first), **abort** (discard implementation; worktree cleanup required). Mark approve *(Recommended)* per `MY READ`.
 
@@ -164,6 +164,8 @@ Decision →  approve · revise <what> · abort
 ```
 
 ## Gate clearance
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words.
 
 If `approve`:
 

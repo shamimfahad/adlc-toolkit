@@ -18,6 +18,18 @@ What hurts today, who feels it, and how often. One paragraph. No solutions yet.
 
 The state of the world after this REQ ships. One paragraph. Specific enough that a reviewer can tell whether you achieved it.
 
+## Behaviour
+
+What changes for a user or a caller. Observable things only; three lines each at most. Delete the lists and write one line when nothing user-visible changes.
+
+### Today
+
+- …
+
+### After
+
+- …
+
 ## Non-goals
 
 What this REQ explicitly does **not** cover. Two or three bullets. Saves arguments later when the design is drawn up.
