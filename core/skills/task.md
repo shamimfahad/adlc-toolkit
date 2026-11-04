@@ -105,7 +105,9 @@ Emit per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A task plan gate folds spec + ar
 - **NEEDS YOU** — only if triage leans escalate (name the signal — sensitive surface / blast radius / ADR needed). Omit when it's cleanly a task.
 - **CHECKS** — acceptance testable · scope bounded, no sensitive surface · approach concrete (files named).
 - **MY READ** — recommendation + why (risk forces escalate regardless of size).
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (clear the gate; implement), **escalate** (hand to `/proceed`), **revise** (adjust goal/scope/approach), **abort** (discard the REQ).
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: plan`, `Gate: 1/2`): **approve** (clear the gate; implement), **escalate** (hands this REQ to `/proceed` at architect), **revise** (adjust goal/scope/approach), **abort** (discard the REQ). Mark the one `MY READ` names `(recommended)`. Then end your turn.
+
+**Both gates in this skill** write `.adlc/<REQ_PATH>/.awaiting-approval` before their card, per GATE-PROTOCOL → *The marker* — `Phase:` and `Gate:` as the **Decision** bullet names them, `Ask:`, the card's options with their consequences under `Options:`, `Recommended:`, and the files the card names under `Files:` — set `gateState: "awaiting"` and `currentPhaseGate` to the same phase, emit the card, and end the turn.
 
 ```
 GATE 1/2 · Plan · REQ-NNN-<slug>  (task)
@@ -120,10 +122,12 @@ MY READ  approve — clean small change; nothing forces escalation
 Decision →  approve · escalate · revise <what> · abort
 ```
 
-Record the answer first — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` (GATE-PROTOCOL → *The trail*); the same at the wrap-up gate.
+The answer is the user's next message: read its first words for the option and treat the rest as their note; a reply that names no option gets an answer and the `Decision →` line again, and the marker stays. Record the answer first — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the reply, verbatim>"` (GATE-PROTOCOL → *The trail*); the same at the wrap-up gate.
 
-On `approve`: delete any marker, set `gateState: "cleared"`, append `## [DATE] task-plan-cleared | REQ-NNN-<slug>` to `hot.md`, continue to Phase 2.
-On `escalate`: follow **Escalation handoff**.
+On `approve`: delete the marker, set `gateState: "cleared"`, append `## [DATE] task-plan-cleared | REQ-NNN-<slug>` to `hot.md`, continue to Phase 2.
+On `escalate`: delete the marker, then follow **Escalation handoff**.
+On `revise`: apply it, rewrite the marker, re-emit the card, and end the turn.
+On `abort`: ask once, plainly, and end the turn — act only on a yes in the next reply.
 
 ## Phase 2 — Implement (no gate)
 
@@ -182,7 +186,7 @@ Emit per the gate protocol — one consolidated review + ship gate:
 - **READY** — reviewers run (correctness, reflector, +ui if UI touched) with UI tier/counts or "n/a — no UI surface"; files changed `<N>` +a/-b, tests added/updated; commit drafted; knowledge (promoted `L-REQ-NNN-n` / gotcha `^gNN` / "nothing to keep — confirmed"; dedup basis when a lesson was considered); PR draft + merge checklist.
 - **CHECKS** — acceptance met · tests pass · no debug artifacts.
 - **MY READ** — recommendation + why (never approve while a Critical stands).
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (run the merge checklist), **fix** (`<ids>`, then re-verify), **revise**, **merged** (finalize after you merge), **abort**.
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: ship`, `Gate: 2/2`): **approve** (run the merge checklist), **fix** (`<ids>`, then re-verify), **revise**, **merged** (after you merge — finalize state, log to `hot.md`), **abort** (halts without merging). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 2/2 · Wrap up · REQ-NNN-<slug>  (task)
@@ -199,7 +203,7 @@ MY READ  approve — small, clean, covered
 Decision →  approve · fix <ids> · revise <what> · merged · abort
 ```
 
-Gate clearance mirrors `/wrapup`: on `approve`, set `gateState: "cleared"`, log to `hot.md`; on `merged`, finalize `pipeline-state` (`terminal`/`prState: merged`), update `now.md`, log `## [DATE] req-merged | REQ-NNN-<slug>`.
+Gate clearance mirrors `/wrapup`: on `approve`, delete the marker, set `gateState: "cleared"`, log to `hot.md`; on `fix`, fix and re-verify, then rewrite the marker and re-emit the card; on `merged`, finalize `pipeline-state` (`terminal`/`prState: merged`), update `now.md`, log `## [DATE] req-merged | REQ-NNN-<slug>`.
 
 ## Escalation handoff
 

@@ -113,12 +113,19 @@ Each item is reported in the gate prompt with a tick or a flag.
 
 ### 5. Write the gate marker
 
-Create `.adlc/<REQ_PATH>/.awaiting-approval` with content:
+Create `.adlc/<REQ_PATH>/.awaiting-approval` per GATE-PROTOCOL → *The marker*, with content:
 
 ```
 Phase: spec
 REQ: REQ-NNN-<slug>
+Gate: 1/5
 Awaiting: review the requirement and approve to proceed, or reply with revisions.
+Ask: <the verdict line, as a question>
+Options:
+  - approve — ready for /architect
+  - revise <what> — I change requirement.md, re-check, ask again
+  - abort — deletes this REQ's folder
+Recommended: <label>
 Files:
   - .adlc/<REQ_PATH>/requirement.md
 ```
@@ -132,7 +139,7 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A spec gate is one of t
 - **NEEDS YOU** (only if any) — open questions that bear on scope, or a vault lesson that should change an acceptance criterion. Omit when there are none.
 - **CHECKS** — the step-4 inline validation, one compact line: criteria testable · goal specific · assumptions explicit · no design · non-goals present. Note any vault references found (`[[…]]`) here or under READY.
 - **MY READ** — your recommendation + one-line why.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (ready for `/architect`), **revise** (describe the change), **abort** (discard this REQ). Mark approve *(Recommended)* per `MY READ`.
+- **Decision** — the last line, `Decision →`, with the same options as the marker: **approve** (ready for `/architect`), **revise** (describe the change), **abort** (deletes this REQ's folder). Mark the one `MY READ` names `(recommended)`. Then end your turn: the user's reply is the answer (GATE-PROTOCOL invariant 5).
 
 Example shape:
 
@@ -144,12 +151,15 @@ CHECKS   ✓ criteria testable · ✓ goal specific · ✓ assumptions explicit 
 
 MY READ  approve — spec is tight; the one open question is non-blocking
 
-Decision →  approve · revise <what> · abort
+Decision →  approve (recommended — ready for /architect) · revise <what> ·
+            abort (deletes this REQ's folder)
 ```
 
 ## Gate clearance
 
-**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words.
+**The answer is the user's next message.** Read its first words for the option — `approve`, `revise …`, `abort` — and treat the rest as their note. A reply that names no option is not an answer: respond to it, then end the turn with the `Decision →` line again; the marker stays.
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the reply, verbatim>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words. If the conversation was compacted since the card, re-read this file, GATE-PROTOCOL and the marker first (GATE-PROTOCOL → *Compaction at a gate*).
 
 If the user replies `approve`:
 
@@ -162,12 +172,12 @@ If the user replies with `revise: ...`:
 
 1. Apply the requested revisions to `requirement.md`.
 2. Re-run inline validation.
-3. Re-emit the gate prompt.
+3. Rewrite the marker, re-emit the gate card, and end the turn.
 
 If the user replies `abort`:
 
-1. Confirm explicitly ("This will delete the REQ folder. Confirm?").
-2. On confirmation, delete the REQ folder.
+1. Ask once, plainly, and end the turn — "This deletes `.adlc/<REQ_PATH>/`. Abort?" — and act only on a yes in the next reply.
+2. On that yes, delete the REQ folder.
 3. Append to `hot.md`: `## [DATE] spec-aborted | REQ-NNN-<slug>`.
 
 ## Constraints

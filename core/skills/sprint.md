@@ -146,7 +146,7 @@ Every 60 seconds (or on user nudge), poll each REQ's `pipeline-state.json`:
 - `terminal == "blocked"` → REQ is blocked, surface to user
 - `terminal == "failed"` → REQ failed, surface to user
 
-Update the sprint registry's `currentGateQueue` with all REQs in `awaiting` state.
+Update the sprint registry's `currentGateQueue` with all REQs in `awaiting` state. For each one, read its `.awaiting-approval`: the runner writes it per GATE-PROTOCOL → *The marker*, so its `Ask:`, `Options:` and `Recommended:` are the gate's real options for the queue entry (a marker without `Options:`, from an older runner, gets the phase's standard options).
 
 ### Presenting the queue
 
@@ -159,6 +159,7 @@ SPRINT GATE QUEUE · SPRINT-...
 
   1. REQ-101-add-export-button
      Phase: architect (gate)
+     Options: approve (recommended) · approve, reject ADR-014 · revise · abort
      Files affected: 6
      ADR proposed: yes (ADR-014)
      Drafted: .adlc/<REQ_PATH>/architecture.md
@@ -166,6 +167,7 @@ SPRINT GATE QUEUE · SPRINT-...
 
   2. REQ-103-fix-cookie-domain
      Phase: implement (gate)
+     Options: approve (recommended) · revise · abort
      Tasks complete: 4/4
      Tests pass: ✓
      Drafted commits: .adlc/<REQ_PATH>/commits-draft.md
@@ -176,6 +178,9 @@ Not yet at gate:
 
 Reply with one of:
   approve <N>       — clear gate N; that runner advances
+  approve <N>, reject ADR-NNN
+                    — architect gates with a proposed ADR: clear it;
+                      the ADR is recorded rejected
   revise <N>: <txt> — send revisions to gate N's runner
   fix <N>: <ids|all> — review gates only; fix the listed findings,
                        or every actionable finding (`all`)
@@ -196,7 +201,7 @@ When the user clears gate N for REQ-X:
 5. The runner advances to its next phase.
 6. After the runner completes the next phase, it pauses at its next gate and the cycle repeats.
 
-If a gate response requires revisions (`revise`, `fix`), the runner applies them and re-emits the gate prompt for the same phase.
+If a gate response requires revisions (`revise`, `fix`), the runner applies them, rewrites the marker with the new options and counts, and re-emits the gate prompt for the same phase.
 
 ### Cross-REQ concerns
 

@@ -123,12 +123,19 @@ Run these commits in order from the worktree.
 
 ### 8. Write the gate marker
 
-`.awaiting-approval` with:
+`.awaiting-approval` per GATE-PROTOCOL → *The marker*, with:
 
 ```
 Phase: implement
 REQ: REQ-NNN-<slug>
+Gate: 3/5
 Awaiting: review the implementation, run the drafted commits, approve to proceed to /review.
+Ask: <the verdict line, as a question>
+Options:
+  - approve — run the commits in commits-draft.md, then /review
+  - revise <what> — I change the code, re-check, ask again
+  - abort — discards the uncommitted code; cleanup commands follow
+Recommended: <label>
 Files:
   - Working diff at: <workPath>
   - .adlc/<REQ_PATH>/commits-draft.md
@@ -144,7 +151,7 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. Map this phase's conten
 - **NEEDS YOU** — flagged artifacts to clean before committing (debug prints, TODO without link, `.skip()`/commented tests) and any surfaced deviation and whether it's handled or unresolved. Omit if nothing flagged.
 - **CHECKS** — one compact line: no debug prints · no untracked TODO · no skipped/commented tests · all tests pass. Every count names its evidence (GATE-PROTOCOL invariant 8): `✓ tests 41/41 — verify-output.md:14`, `✓ no debug — grep in review-log.md:3`.
 - **MY READ** — recommendation + one-line why (don't recommend approve while a deviation is unresolved or tests fail).
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (gate cleared — run the commits from `commits-draft.md`, then `/review`), **revise** (what to change first), **abort** (discard implementation; worktree cleanup required). Mark approve *(Recommended)* per `MY READ`.
+- **Decision** — the last line, `Decision →`, with the same options as the marker: **approve** (gate cleared — run the commits from `commits-draft.md`, then `/review`), **revise** (what to change first), **abort** (discard implementation; worktree cleanup required). Mark the one `MY READ` names `(recommended)`. Then end your turn: the user's reply is the answer (GATE-PROTOCOL invariant 5).
 
 Example shape:
 
@@ -160,12 +167,15 @@ CHECKS      ⚠ debug prints · ✓ no untracked TODO · ✓ no skipped tests ·
 
 MY READ     revise — drop the stray log, then approve
 
-Decision →  approve · revise <what> · abort
+Decision →  approve (run the commits, then /review) · revise <what>
+            (recommended — I change it, re-check, ask again) · abort
 ```
 
 ## Gate clearance
 
-**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words.
+**The answer is the user's next message.** Read its first words for the option — `approve`, `revise …`, `abort` — and treat the rest as their note. A reply that names no option is not an answer: respond to it, then end the turn with the `Decision →` line again; the marker stays.
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the reply, verbatim>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words. If the conversation was compacted since the card, re-read this file, GATE-PROTOCOL and the marker first (GATE-PROTOCOL → *Compaction at a gate*).
 
 If `approve`:
 
@@ -178,12 +188,12 @@ If `revise: ...`:
 
 1. Apply revisions — either dispatch task-implementer for specific fixes, or edit directly for trivial changes.
 2. Re-run final verification (step 5).
-3. Re-emit gate prompt.
+3. Rewrite the marker, re-emit the gate card, and end the turn.
 
 If `abort`:
 
-1. Confirm explicitly. ("This will discard uncommitted code. Confirm?")
-2. On confirmation, surface the cleanup commands. The set depends on `pipeline-state.isolation`:
+1. Ask once, plainly, and end the turn — "This discards the uncommitted code for REQ-NNN. Abort?" — and act only on a yes in the next reply.
+2. On that yes, surface the cleanup commands. The set depends on `pipeline-state.isolation`:
 
    **`branch` mode** (Claude cannot run these — all mutate working-tree or branch state):
 

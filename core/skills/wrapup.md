@@ -145,7 +145,7 @@ Copy `.adlc/templates/record-template.md` (toolkit fallback `$TOOLKIT_PATH/templ
 | Acceptance criteria | `requirement.md`, ticked from `verification.md`'s cross-check |
 | What changed | `architecture.md` blast-radius table, paths only; two to four sentences of approach |
 | Decisions | ADRs touched this REQ; gate decisions from `pipeline-state.notes` |
-| Trail | `pipeline-state.phases` (1.10): one line per phase — `3 implement · 2 rounds (revise → approve · viewed 4/7) · 6 agents · 14m` — then the findings decisions as a short table (`id · severity · decision · reason`). Rounds and agents counted from the block; a round's `viewed` rides after its decision; a `predict` or `summary` round is quoted in full, like a note. Durations from `startedAt` to the last round. No paths, no session ids. Absent block → `Trail: not recorded (pre-1.10)`. |
+| Trail | `pipeline-state.phases` (1.10): one line per phase — `3 implement · 2 rounds (revise · typed → approve · viewed 4/7 · via pane) · 6 agents · 14m` — then the findings decisions as a short table (`id · severity · decision · reason`). Rounds and agents counted from the block; a round's `viewed`, then its `via` (1.12: `· via pane` when it was answered from the cockpit, `· typed` otherwise; nothing for a round without `via`, which predates 1.12) and its `compactions` (`· 1 compaction`) ride after its decision, in that order — `trail stats` reads them back; a `predict` or `summary` round is quoted in full, like a note. Durations from `startedAt` to the last round. No paths, no session ids. Absent block → `Trail: not recorded (pre-1.10)`. |
 | Verification | `verification.md` verdict line, tests added, the `verify:` runs it quotes, the ui line |
 | Knowledge | IDs from step 3's verdict table and the gotcha/concept/component pages you touched |
 | Follow-ups | `verification.md` follow-ups + anything deferred at a gate |
@@ -220,10 +220,20 @@ Only if `config.yml.sources.write` includes the issue tracker **and** this REQ w
 
 ### 7. Write the gate marker
 
+Per GATE-PROTOCOL → *The marker*, after step 7b's ask has had its reply (or was skipped):
+
 ```
 Phase: ship
 REQ: REQ-NNN-<slug>
+Gate: 5/5
 Awaiting: review the PR draft and vault updates, then run the merge checklist.
+Ask: <the verdict line, as a question>
+Options:
+  - approve — run the merge checklist; reply merged when done
+  - revise <what> — I change the PR draft or vault updates, ask again
+  - merged — after you merge: I finalize the state and log it
+  - abort — halts without merging
+Recommended: <label>
 Files:
   - .adlc/<REQ_PATH>/pr-draft.md
   - .adlc/<REQ_PATH>/merge-checklist.md
@@ -233,7 +243,16 @@ Files:
 
 ### 7b. Ask for the review summary
 
-Unless `config.yml.autonomy.review_summary` is `false`, or this run is driven by `/autopilot` or a `pipeline-runner` under `/sprint`: before the card, one `AskUserQuestion` whose only listed option is **skip** (the answer goes through the dialog's *Other*, as free text) — *"In your words: what does this change do, and what did you check? Two to four lines."* Record it at once — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision summary --note "<the answer, verbatim>" --phase 5` — then compare it with the diff: the changed files whose name (or stem) the summary never mentions, and any claim in it that the tree contradicts. A summary that names no file is handed back once — *"name the files you looked at"* — and then taken as given. Append to `pr-draft.md`, after `### Summary`, a block `### Reviewed by <git user.name>` holding the lines verbatim; the user keeps or cuts it when opening the PR. The commits stay as drafted in step 1, in the repo's convention — this is the reviewer's account, not the author's message.
+**This runs before steps 6 and 7** — the ask ends the turn, and a marker already on disk would make the trail hook take the ask for the gate. Unless `config.yml.autonomy.review_summary` is `false`, this run is driven by `/autopilot` or a `pipeline-runner` under `/sprint`, or a `summary` round already exists for this REQ (`pipeline-state.json` → `phases["5"].gates[]`): ask — as text, never a question dialog — and end the turn (GATE-PROTOCOL → *The trail*). No marker; this is not a gate.
+
+```
+ASK · Summary · REQ-NNN-<slug>
+In your words: what does this change do, and what did you check?
+Two to four lines.
+skip — no summary; I go straight to the ship gate
+```
+
+On the reply, record it at once — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision summary --note "<the reply, verbatim>" --phase 5` (a `skip` is recorded as `--note skip`) — then compare it with the diff: the changed files whose name (or stem) the summary never mentions, and any claim in it that the tree contradicts. A summary that names no file is handed back once — *"name the files you looked at"*, which ends the turn the same way — and then taken as given. Append to `pr-draft.md`, after `### Summary`, a block `### Reviewed by <git user.name>` holding the lines verbatim; the user keeps or cuts it when opening the PR. The commits stay as drafted in step 1, in the repo's convention — this is the reviewer's account, not the author's message. Then, in the same turn, write the state (step 6), the marker (step 7) and the card (step 8).
 
 ### 8. Emit the gate card
 
@@ -246,7 +265,7 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A wrap-up gate's body i
 - **CHECKS** — final diff sanity as one compact `✓ / ⚠` line: blast radius matches architecture · user-facing docs swept (`N` stale claims listed / none / skipped) · no debug artifacts · no `--no-verify` · commit drafts all in git log.
 - **YOUR SUMMARY** — when a `summary` round was recorded (step 7b): `names 5 of 7 changed files · not mentioned: Startup.cs, docs/retries.md` and any contradiction in one line. Omit when the ask was skipped. The cockpit draws the summary beside the diffstat.
 - **MY READ** — recommendation + one-line why.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (gate cleared — run the merge checklist), **revise** (adjust PR draft or vault updates), **merged** (after you merge — finalize state, log to `hot.md`), **abort** (halt without merging). Mark approve *(Recommended)* per `MY READ`.
+- **Decision** — the last line, `Decision →`, with the same options as the marker: **approve** (gate cleared — run the merge checklist), **revise** (adjust PR draft or vault updates), **merged** (after you merge — finalize state, log to `hot.md`), **abort** (halt without merging). Mark the one `MY READ` names `(recommended)`. Then end your turn: the user's reply is the answer (GATE-PROTOCOL invariant 5).
 
 Example shape:
 
@@ -266,12 +285,15 @@ CHECKS      ✓ changed files match the plan · ✓ docs updated · ✓ no debug
 
 MY READ     approve — clean wrap; the write-back is the only thing awaiting you
 
-Decision →  approve · revise <what> · merged · abort
+Decision →  approve (recommended — run the merge checklist) · revise <what> ·
+            merged (after you merge) · abort (halts without merging)
 ```
 
 ## Gate clearance
 
-**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words.
+**The answer is the user's next message.** Read its first words for the option — `approve`, `revise …`, `merged`, `abort` — and treat the rest as their note. A reply that names no option is not an answer: respond to it, then end the turn with the `Decision →` line again; the marker stays.
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the reply, verbatim>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words. If the conversation was compacted since the card, re-read this file, GATE-PROTOCOL and the marker first (GATE-PROTOCOL → *Compaction at a gate*).
 
 If `approve`:
 
@@ -283,7 +305,7 @@ If `approve`:
 If `revise: ...`:
 
 1. Apply revisions to pr-draft.md or vault updates.
-2. Re-emit the gate prompt.
+2. Rewrite the marker, re-emit the gate card, and end the turn.
 
 If `merged`:
 
@@ -291,17 +313,17 @@ If `merged`:
 2. Update `pipeline-state.json`: `prState: "merged"`, `mergedAt: <timestamp>`, terminal status.
 3. Append to `hot.md`: `## [DATE] req-merged | REQ-NNN-<slug>`.
 4. Update `now.md`: remove this REQ from active focus. Fill the record's header `Status` → `merged` and `Opened → merged` date if they were still `ready-to-merge` (the one edit a record ever takes besides `## Later`).
-5. **Offer to clean up the working set.** One question, with the numbers in it:
+5. **Offer to clean up the working set.** One question, with the numbers in it, and end the turn:
 
    > Record written at `.adlc/<REQ_PATH>.md`. The working set `.adlc/<REQ_PATH>/` (N files, M MB — exploration, tasks, review log, packets, evidence, drafts, state) is local and nothing links into it. **Delete it now, or keep it?**
 
-   Default is **keep**. On `delete`: `rm -rf .adlc/<REQ_PATH>/` — the folder only; the record and every `knowledge/` page stay, and `/spec`, `/status`, `mint` all still see the item through its record (`VAULT-LAYOUT.md` → `record(ID)`). Append `## [DATE] req-cleaned | REQ-NNN-<slug> | M MB` to `hot.md`. On `keep`: leave it; `/analyze`'s vault-health lists working sets of merged items older than 30 days with their sizes, so the question comes back with a total attached. A vault without git (no `.git` at the repo root, or `.adlc/` ignored by it) gets the same question with one more sentence: *"This vault is not under version control — deleted means gone."*
+   Default is **keep**: a reply that is not `delete` keeps it. On `delete`: `rm -rf .adlc/<REQ_PATH>/` — the folder only; the record and every `knowledge/` page stay, and `/spec`, `/status`, `mint` all still see the item through its record (`VAULT-LAYOUT.md` → `record(ID)`). Append `## [DATE] req-cleaned | REQ-NNN-<slug> | M MB` to `hot.md`. On `keep`: leave it; `/analyze`'s vault-health lists working sets of merged items older than 30 days with their sizes, so the question comes back with a total attached. A vault without git (no `.git` at the repo root, or `.adlc/` ignored by it) gets the same question with one more sentence: *"This vault is not under version control — deleted means gone."*
 6. **Archive is for kept folders only.** If the working set was kept and the user wants `specs/` to show active work only, offer the `_archive/` move: the destination **mirrors the source's tail** (`specs/2026-08/sf/REQ-042-slug/` → `specs/_archive/2026-08/sf/REQ-042-slug/`; flat archives flat; never mint a month here — that would bucket by merge date). `mkdir -p` the destination's parent, then plain `mv` — **not `git mv`**, which stages a rename and would be a git write in `manual` mode. The record does not move. Append `## [DATE] req-archived | REQ-NNN-<slug>` to `hot.md`. A deleted working set needs no archive: the record already sits in `specs/` at its month/author position, which is the browsable history.
 7. Rebuild `index.md` (`node $TOOLKIT_PATH/scripts/adlc.mjs index --vault .adlc`) so the item moves from in-flight to done.
 
 If `abort`:
 
-1. Confirm. Roll back what makes sense.
+1. Ask once, plainly, and end the turn — "This halts REQ-NNN without merging. Abort?" — and act only on a yes in the next reply. Then roll back what makes sense.
 2. Append to `hot.md`: `## [DATE] ship-aborted | REQ-NNN-<slug>`.
 
 ## Constraints

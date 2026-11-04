@@ -65,7 +65,7 @@ Emit per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md` (loaded at preflight). A bug-repo
 - **NEEDS YOU** — a missing / still-non-runnable repro, or a label suggesting this is a feature not a defect (→ reframe). Omit if none.
 - **CHECKS** — symptom concise · repro runnable · expected-vs-actual concrete · environment captured.
 - **MY READ** — recommendation + why (never approve without a runnable repro).
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (→ investigate), **revise** (refine the report), **reframe** (convert to a feature REQ — calls `/spec`), **abort** (discard).
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: report`, `Gate: 1/5`): **approve** (→ investigate), **revise** (refine the report), **reframe** (turns this into a feature REQ via `/spec`), **abort** (discard). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 1/5 · Bug report · BUG-NNN-<slug>
@@ -78,10 +78,10 @@ MY READ  approve — repro is clean and reproduces the symptom
 Decision →  approve · revise <what> · reframe · abort
 ```
 
-Every gate answer in this skill is recorded before it is acted on: `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <BUG_PATH> --decision <option> --note "<the user's own words, if any>"` (GATE-PROTOCOL → *The trail*).
+**Every gate in this skill** (all five) runs the same way. Before its card, write `.adlc/<BUG_PATH>/.awaiting-approval` per GATE-PROTOCOL → *The marker* — `Phase:` and `Gate:` as that gate's **Decision** bullet names them, `REQ: BUG-NNN-<slug>`, `Ask:`, the card's options with their consequences under `Options:`, `Recommended:`, and the files the card names under `Files:` — and set `currentPhase`, `gateState: "awaiting"` and `currentPhaseGate` (the same name as `Phase:`) in `pipeline-state.json`. Then emit the card and end the turn. The answer is the user's next message: read its first words for the option and treat the rest as their note; a reply that names no option gets an answer and the `Decision →` line again, and the marker stays. Record every answer before acting on it: `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <BUG_PATH> --decision <option> --note "<the reply, verbatim>"` (GATE-PROTOCOL → *The trail*). On `approve`, delete the marker, set `gateState: "cleared"`, and advance; on `revise`, apply it, rewrite the marker and re-emit the card; on `abort`, ask once, plainly, and end the turn — act only on a yes in the next reply. If the conversation was compacted since the card, re-read this file, GATE-PROTOCOL and the marker first.
 
-On `approve`: clear gate, advance.
-On `reframe`: archive `bug.md`, call `/spec` with the bug content as input, exit this skill.
+On `approve`: delete the marker, clear the gate, advance.
+On `reframe`: delete the marker, archive `bug.md`, call `/spec` with the bug content as input, exit this skill.
 
 ## Phase 2 — Investigate (gate)
 
@@ -133,7 +133,7 @@ Emit per the gate protocol:
 - **NEEDS YOU** — only if the diagnosis is uncertain or scope is creeping (→ reframe). Omit otherwise.
 - **CHECKS** — diagnosis matches repro · fix in scope (no creep) · regression-test plan concrete.
 - **MY READ** — recommendation + why.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (→ fix), **revise** (refine diagnosis/approach), **reframe** (scope too big → feature REQ), **abort** (halt; cleanup worktree).
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: plan`, `Gate: 2/5`): **approve** (→ fix), **revise** (refine diagnosis/approach), **reframe** (scope too big — turns this into a feature REQ via `/spec`), **abort** (halt; cleanup worktree). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 2/5 · Investigation · BUG-NNN-<slug>
@@ -186,7 +186,7 @@ Emit per the gate protocol:
 - **READY** — `<count>` files changed; regression test `<name>` (fails before, passes after); all tests pass; commit drafted.
 - **CHECKS** — regression test present · original repro no longer triggers · no other tests broke.
 - **MY READ** — recommendation + why.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (→ verify), **revise** (adjust the fix), **abort**.
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: fix`, `Gate: 3/5`): **approve** (→ verify), **revise** (adjust the fix), **abort** (halt; cleanup worktree). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 3/5 · Fix · BUG-NNN-<slug>
@@ -220,7 +220,7 @@ Emit per the gate protocol — findings-led like `/review`, but only two reviewe
 - **Verdict** — "`<total>` findings — `<k>` need a call", or "clean — recommend approve".
 - **FINDINGS** — one line each, `crit / maj / min` + reviewer. This block is the `NEEDS YOU`.
 - **MY READ** — recommendation + why (never approve while a Critical stands).
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (→ ship), **fix** (`<ids>`), **revise**, **abort**.
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: verify`, `Gate: 4/5`): **approve** (→ ship), **fix** (`<ids>` — I fix those, re-check, gate comes back), **revise**, **abort**. Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 4/5 · Review · BUG-NNN-<slug>
@@ -278,7 +278,7 @@ Emit per the gate protocol — mirrors `/wrapup`'s ship gate, bug-scoped:
 - **NEEDS YOU** — a drafted comment for the issue tracker, shown before sending (it is never sent without your OK); or, if no lesson or gotcha was kept at all, a confirmation — bug fixes usually teach something, so confirm that's right or reply `revise: capture` to take another pass through `bug.md` / `investigation.md` / `verification.md`. Omit if neither applies.
 - **CHECKS** — regression test in the diff · commit drafts landed in git log · no debug artifacts.
 - **MY READ** — recommendation + why.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (run the merge checklist), **revise**, **merged** (finalize after you merge), **abort**.
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: ship`, `Gate: 5/5`): **approve** (run the merge checklist), **revise**, **merged** (finalize after you merge), **abort** (halts without merging). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 5/5 · Wrap up · BUG-NNN-<slug>

@@ -138,8 +138,25 @@ The user runs the commit and merge. After the user reports merge complete, you m
 
 At every gate:
 
-1. Write `.adlc/<REQ_PATH>/.awaiting-approval` with the phase name and what's waiting for the user.
-2. Update `pipeline-state.json` with `gateState: awaiting`, `currentPhaseGate: <phase>`.
+1. Write `.adlc/<REQ_PATH>/.awaiting-approval` per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The marker*, so the sprint queue and the cockpit carry the gate's real options:
+
+   ```
+   Phase: <spec | architect | implement | verify | ship>
+   REQ: REQ-NNN-<slug>
+   Gate: <1–5>/5
+   Awaiting: <what's waiting for the user, one line>
+   Ask: <the verdict line, as a question>
+   Options:
+     - approve — <what happens next>
+     - revise <what> — <what happens next>
+     - abort — <what happens next>
+   Recommended: <label>
+   Files:
+     - .adlc/<REQ_PATH>/<the artifacts this phase produced>
+   ```
+
+   The options are that phase skill's own (`core/skills/<spec|architect|implement|review|wrapup>.md` → its marker step), `label — consequence`, in the same words: `fix all` and `fix <ids|all-major>` at verify whenever an actionable finding exists; `approve` and `approve, reject ADR-NNN` at architect when you proposed an ADR; `merged` at ship. `Recommended:` is your own read. Rewrite the whole marker when a `revise` or `fix` brings the gate back.
+2. Update `pipeline-state.json` with `gateState: awaiting`, `currentPhaseGate: <phase>` (the marker's `Phase:`).
 3. Emit a terminal claim (see "Terminal state contract" below).
 4. **Stop executing**. Do not proceed to the next phase until the marker file is deleted (the user's approval signal) or the orchestrator sends an explicit "approved" message.
 

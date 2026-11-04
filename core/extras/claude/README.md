@@ -42,6 +42,10 @@ silent when there is nothing to say.
   subagent with the first line of its last message and its transcript path,
   each gate round with the option chosen and the user's words (the skills close
   the round via `adlc.mjs trail gate`), and `/review`'s per-finding verdicts.
+  Since 1.12 a round also carries the marker's options (`ask`), `via` (`pane`
+  when the reply was sent from the cockpit, else `typed`) and `compactions` (a
+  `SessionStart` with `source: compact` at an open gate counts one);
+  `adlc.mjs trail stats` reports both (`via pane`, `compaction`).
   Bounded (20 agents per phase, 160-character lines) and read by nothing on the
   hot path — the cockpit mod (`mods/adlc-flightdeck`) draws it and `/wrapup`
   folds it into the record's `## Trail`.

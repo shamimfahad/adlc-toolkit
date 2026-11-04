@@ -62,6 +62,7 @@ For each REQ/BUG/sprint, gather signals.
 **From disk:**
 
 - `pipeline-state.workPath` exists as a directory?
+- `.adlc/<REQ_PATH>/.awaiting-approval` present, and its `Phase:` and `Gate:` lines
 - If `isolation: "branch"` and the work path is the repo root, `git -C <workPath> status --porcelain` — surface uncommitted changes but don't act on them.
 
 **From the REQ folder:**
@@ -76,17 +77,20 @@ Inventory which artifact files exist: `requirement.md`, `architecture.md`, `task
 | Branch merged (or PR found merged), `currentPhase < 5` or `prState != merged` | **stale-state-reality-further** | back-fill missing phases, mark merged |
 | Branch merged AND `currentPhase == 5` cleared but vault capture missing (no recent hot.md entry, no `recoveredAt`) | **stale-state-reality-matches** | back-fill vault capture only |
 | No branch, no merge detected, no commits in base referencing the REQ, work path missing | **abandoned** | mark aborted with reconciliation note |
+| `.awaiting-approval` present, branch alive, artifacts match its `Phase:` — whatever `gateState` says | **in-sync-at-gate** | suggest `/proceed`; it re-emits the gate. If `gateState` is not `awaiting`, set it (`currentPhaseGate` from the marker's `Phase:`) and note `recoveryNotes: "gateState restored from marker"` |
 | State claims shipped (`prState == "merged"`) but branch is alive and unmerged | **divergent** | surface raw signals; user decides |
 | Sprint registry `status: "running"`, all its REQs already classified non-running | **sprint-stuck** | mark sprint ended |
 
 If signals don't cleanly fit any bucket, classify as `divergent` and surface the raw signals — let the user judge. Never guess.
+
+The marker is the gate signal. `gateState` can lag it — a session that wrote the marker and died before the state write, or a hand edit — and the marker wins. A marker whose `Phase:` disagrees with `currentPhaseGate` (or, without one, with `currentPhase`) is `divergent`.
 
 ### 3. Present the triage queue
 
 Build a queue with one entry per classified candidate. Show:
 
 - ID and one-line title (from `requirement.md` first H1, or `bug.md`)
-- Claimed state: `phase / gateState`
+- Claimed state: `phase / gateState · marker: <phase> | none`
 - Detected reality: classified phase
 - Classification + recommended action
 
@@ -98,22 +102,22 @@ ADLC recovery queue — YYYY-MM-DD HH:MM
 Scanned: <count> entries (<spec-count> REQs, <bug-count> bugs, <sprint-count> sprints)
 
   1. REQ-042-firestore-indexes
-     Claimed: phase 3 (implement) / gateState: awaiting
+     Claimed: phase 3 (implement) / gateState: awaiting · marker: implement
      Reality: merged via PR #117 on 2026-05-09
      Status:  records are behind — this actually shipped
               (stale-state-reality-further)
      Recommend: recover (back-fill phases 4-5, mark merged)
 
   2. REQ-051-export-button
-     Claimed: phase 2 (architect) / gateState: cleared
+     Claimed: phase 2 (architect) / gateState: cleared · marker: none
      Reality: branch deleted, no merge, no commits in base
      Status:  looks abandoned — nothing came of it (abandoned)
      Recommend: abort
 
   3. BUG-009-cookie-domain
-     Claimed: phase 4 (review) / gateState: awaiting
+     Claimed: phase 4 (review) / gateState: awaiting · marker: verify
      Reality: branch alive, 3 commits ahead of base, unmerged
-     Status:  alive and consistent — just pick it back up (in-sync-alive)
+     Status:  waiting at its gate — just pick it back up (in-sync-at-gate)
      Recommend: leave (run /proceed BUG-009-cookie-domain yourself)
 
   4. SPRINT-2026-04-30-1400
@@ -252,6 +256,12 @@ No vault changes. Just confirm:
 ```
 REQ-NNN-<slug> looks alive. State and git agree. Run /proceed REQ-NNN-<slug> to continue.
 ```
+
+#### `recover` with classification `in-sync-at-gate`
+
+1. If `gateState` is already `awaiting`, nothing to write — answer as `leave` does.
+2. Otherwise update `pipeline-state.json`: `gateState: "awaiting"`, `currentPhaseGate: <the marker's Phase:>`, `recoveredAt: <now>`, `recoveryNotes: "gateState restored from marker"`. Append `## [DATE] req-recovered | REQ-NNN-<slug> | gateState restored from marker (<phase>)` to `hot.md`.
+3. Then: `REQ-NNN-<slug> is waiting at its <phase> gate. Run /proceed REQ-NNN-<slug>; it re-emits the gate.`
 
 #### `recover` with classification `sprint-stuck`
 

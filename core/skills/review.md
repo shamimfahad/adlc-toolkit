@@ -342,10 +342,21 @@ If any criterion isn't met, flag it as a Critical finding.
 
 ### 8. Write the gate marker
 
+Write `.adlc/<REQ_PATH>/.awaiting-approval` per GATE-PROTOCOL → *The marker*, with this gate's options. Include `fix all` whenever at least one actionable finding exists; set `Recommended:` to the option `MY READ` will name.
+
 ```
 Phase: verify
 REQ: REQ-NNN-<slug>
+Gate: 4/5
 Awaiting: review the findings, decide which to fix.
+Ask: <the verdict line, as a question>
+Options:
+  - approve — accept the findings as they are; moves on to /wrapup
+  - fix all — I fix every actionable finding, re-check, gate comes back
+  - fix <ids|all-major> — the same loop, only the findings you name
+  - revise <what> — other changes to the review
+  - abort — stops this REQ; nothing is committed
+Recommended: <label>
 Files:
   - .adlc/<REQ_PATH>/verification.md
   - .adlc/<REQ_PATH>/review-log.md (full narratives — open on demand)
@@ -361,7 +372,7 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A review gate **leads w
 - **READY** (brief) — `<4 or 5>` reviewers ran; `<total>` possible lessons noted (you decide what to keep at `/wrapup`); how the UI was checked + counts (or "UI check skipped — nothing visual changed"; omit entirely when the project has no frontend); when any doc is now out of date, name it ("docs now stale: docs/auth.md — update it in this branch before merging").
 - **CHECKS** — the step-0 `verify:` line first, then the acceptance-criteria check as one compact `✓ / ⚠` line; call out any special item (a reflector `vault-stale` finding, an `adr-conflict`, an architecture "new ADR needed") on its own line since those need deliberate handling. Every pass names where it was seen (invariant 8): `✓ tests 41/41 — verify-output.md:14`, `✓ AC 5/5 — verification.md § Acceptance criteria check`.
 - **MY READ** — recommendation + one-line why. **Never recommend approve while a Critical is unaddressed** — that's a `fix` or `revise`.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (accept findings as-is → `/wrapup`), **fix all** (every actionable finding gets fixed, affected reviewers re-run, gate comes back — needs-decision findings return named), **fix** (`<ids>` or `all-major` — same loop, scoped), **revise** (other changes to the review), **abort** (escalate; halt). `fix all` is always offered whenever at least one actionable finding exists. Mark the recommended one per `MY READ`.
+- **Decision** — the last line, `Decision →`, with the same options as the marker: **approve** (accept findings as-is → `/wrapup`), **fix all** (every actionable finding gets fixed, affected reviewers re-run, gate comes back — needs-decision findings return named), **fix** (`<ids>` or `all-major` — same loop, scoped), **revise** (other changes to the review), **abort** (escalate; halt). `fix all` is always offered whenever at least one actionable finding exists. Mark the one `MY READ` names `(recommended)`. Then end your turn: the user's reply is the answer (GATE-PROTOCOL invariant 5).
 
 Example shape:
 
@@ -380,17 +391,20 @@ READY       4 reviewers ran · 3 possible lessons noted (decided at /wrapup)
 CHECKS      verify: typecheck ✓ · test ✓ (412) · lint ✓ · sensors 2/2 ✓
             ✓ criteria 1–2 met · ⚠ criterion 3 — safe-retry not verified
             ! past-mistakes check: repeats LESSON-REQ-031-1 (retry side effects)
+full view: /flight
 
-MY READ     fix — the critical finding must be fixed before this ships
+MY READ     fix all — the critical finding must be fixed before this ships
 
-Decision →  approve (accept as-is) · fix all (every actionable
-            finding; I fix, then re-check) · fix <ids|all-major> ·
+Decision →  approve (accept as-is) · fix all (recommended — every
+            actionable finding; I fix, then re-check) · fix <ids|all-major> ·
             revise <what> · abort
 ```
 
 ## Gate clearance
 
-**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the user's own words, if any>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words.
+**The answer is the user's next message.** Read its first words for the option — `approve`, `fix all`, `fix C1,M1`, `fix all-major`, `revise …`, `abort` — and treat the rest as their note. A reply that names no option is not an answer: respond to it, then end the turn with the `Decision →` line again; the marker stays.
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the reply, verbatim>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words. If the conversation was compacted since the card, re-read this file, GATE-PROTOCOL and the marker first (GATE-PROTOCOL → *Compaction at a gate*).
 
 If `approve` (no fixes needed):
 
@@ -420,11 +434,11 @@ If `fix: <ids>`, `fix: all-major`, or `fix: all`:
    **Slim pipelines follow the same split from round 1.** `/task` and `/bugfix` dispatch fewer reviewers, not a different file layout: narrative in `review-log.md`, digest in `verification.md`, from the first pass. Being a slim pipeline is not a licence to grow the verdict file without bound.
 
    **From round 3, say the number out loud.** Lead the re-emitted gate card with `Re-review round <N> · verdict file <N>KB`. This does not block — the loop is the user's to run, each round on their say-so — but round five should never arrive unannounced.
-5. Refresh `verification.md` — digest rows, consolidated entries, summary counts — from the updated log, then re-emit the gate prompt with updated counts — and, when the set excluded needs-decision findings, carry those into `NEEDS YOU` by ID.
+5. Refresh `verification.md` — digest rows, consolidated entries, summary counts — from the updated log. Rewrite the marker with the new counts and options before the card, then re-emit the gate card with updated counts — and, when the set excluded needs-decision findings, carry those into `NEEDS YOU` by ID — and end the turn.
 
 If `abort`:
 
-1. Confirm explicitly.
+1. Ask once, plainly, and end the turn — "This stops REQ-NNN; nothing is committed. Abort?" — and act only on a yes in the next reply.
 2. Append to `hot.md`: `## [DATE] verify-aborted | REQ-NNN-<slug>`.
 3. Update state to reflect rollback.
 

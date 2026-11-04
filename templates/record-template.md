@@ -71,8 +71,8 @@ Open items that outlive the REQ. Each names an owner or "unassigned".
 What the pipeline recorded while it ran (`pipeline-state.phases`, 1.10). One line per phase; then the findings decisions. A `predict` round (what you expected before the design) and a `summary` round (your own account at ship) are quoted in full. Nothing here links into the working set.
 
 - 1 spec · 1 round (approve) · 1 agent · 6m
-- 3 implement · 2 rounds (revise → approve · viewed 4/7) · 6 agents · 14m — "keep the 3-retry default but make it config"
-- 4 review · 1 round (fix-all) · 4 agents · 22m
+- 3 implement · 2 rounds (revise · typed → approve · viewed 4/7 · via pane) · 6 agents · 14m — "keep the 3-retry default but make it config"
+- 4 review · 1 round (fix-all · typed · 1 compaction) · 4 agents · 22m
 
 | ID | Severity | Decision | Reason |
 |---|---|---|---|

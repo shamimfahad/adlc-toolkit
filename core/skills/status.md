@@ -59,6 +59,8 @@ For `.adlc/audits/`, find audits from the last 30 days. Note any unaddressed Cri
 
 Run `node $TOOLKIT_PATH/scripts/adlc.mjs trail stats --vault .adlc` and paste its lines verbatim under `Gate evidence` — it is deterministic, so never restate it. What it measures, across in-flight folders and committed records: how much of the changed tree was viewed when implement/review gates were answered (and approvals under 50%), how many architect gates asked the predict-first question and how many ship gates the review summary, findings whose `Where` is not a location, and specs carrying `## Behaviour`. These are the numbers that say whether the evidence pages changed behaviour; a vault that predates 1.10 prints zeros, which is itself the answer. `--all` adds one row per item when the user asks for it.
 
+Two more lines since 1.12: how many gate answers came from the cockpit rather than typed (`via pane`; rounds recorded before 1.12 are counted apart, never as typed) — the number that says whether answering beside the evidence is used — and compactions at gates per round (`compaction`, with any that fell between gates), the cost of long phases made visible. Paste them verbatim like the rest.
+
 ### 5. Compile and emit
 
 Output a structured status report in chat:
@@ -97,6 +99,8 @@ Gate evidence (trail stats, verbatim):
   summary     3 of 4 ship gates asked · 3 answered
   pointers    findings with no location: 2 (REQ-094 m3, REQ-096 M2)
   behaviour   5 of 7 in-flight specs carry ## Behaviour
+  via pane    12 of 19 gate answers (7 typed · 4 before 1.12)
+  compaction  5 at gates across 31 rounds · 0.16 per gate · 3 rounds compacted
 
 Suggested next actions:
   - Gate to clear: <REQ at awaiting> → /proceed REQ-NNN-<slug>
