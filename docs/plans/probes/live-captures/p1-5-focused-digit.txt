@@ -1,0 +1,40 @@
+                                                                                            ╭──────────────────────────╮
+ ▐▛███▛█   Claude Code v2.1.318                                                             │ flightdeck-engine-probes │
+▝▜██████▀  Opus 5.5 · Claude Max                                                            │ probe pressed: digit     │
+ ▝▝   ▝▝   ~/code/adlc-toolkit                                                              ╰──────────────────────────╯
+
+  Introducing Opus 5.5
+  Get to finished work sooner with Opus 5.5. Switch anytime with /model.
+
+❯ /probe p1
+  ⎿  flightdeck-engine-probes: probe mode: p1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1: Digit one a: Letter a                                                                                            [-]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle) · PR #1 · ← 1 agent

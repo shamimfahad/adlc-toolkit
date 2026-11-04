@@ -1,0 +1,40 @@
+                                                                            ╭──────────────────────────────────────────╮
+ ▐▛███▛█   Claude Code v2.1.318                                             │ flightdeck-engine-probes                 │
+▝▜██████▀  Opus 5.5 · Claude Max                                            │ probe submit resolved:                   │
+ ▝▝   ▝▝   ~/code/adlc-toolkit                                              │ {"text":"probe-approve","origin":{"kind" │
+                                                                            │ :"plugin","name":"flightdeck-engine-pro… │
+  Introducing Opus 5.5                                                      ╰──────────────────────────────────────────╯
+  Get to finished work sooner with Opus 5.5. Switch anytime with /model.
+
+❯ /probe p7
+  ⎿  flightdeck-engine-probes: probe mode: p7
+
+❯ Use AskUserQuestion to ask me to pick A or B. Don't do anything else.
+
+⏺ User answered Claude's questions:
+  ⎿  · Pick A or B? → A
+
+⏺ You picked A.
+
+✻ Cogitated for 4s · done 1:37 AM
+
+› Prompt from the flightdeck-engine-probes plugin
+❯ probe-approve
+
+
+
+
+
+
+
+
+
+
+✳ Sublimating… (1s · thinking)
+  ⎿  Tip: Use /permissions to pre-approve and pre-deny bash, edit, and MCP tools
+[ Approve via submit ]                                                                                              [-]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ my unsent draft
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle)

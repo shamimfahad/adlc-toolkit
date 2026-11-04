@@ -1,0 +1,7 @@
+{
+  "name": "flightdeck-engine-probes",
+  "version": "0.1.0",
+  "description": "Engine behaviour probes for adlc-flightdeck design decisions",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

@@ -1,0 +1,40 @@
+
+❯ Use AskUserQuestion to ask me to pick A or B. Don't do anything else.
+
+⏺ User answered Claude's questions:
+  ⎿  · Pick A or B? → A
+
+⏺ You picked A.
+
+✻ Cogitated for 4s · done 1:37 AM
+
+› Prompt from the flightdeck-engine-probes plugin
+❯ probe-approve
+
+⏺ Got "probe-approve". You picked A on the last question. Nothing else is queued, and I haven't run any other action.
+  Tell me what you want next.
+
+✻ Crunched for 2s · done 1:37 AM
+
+❯ /probe p2
+  ⎿  flightdeck-engine-probes: probe mode: p2
+window 0..13 of 30 (engine offset 0, maxRows 15)                                                                    [-]
+row 0
+row 1
+row 2
+row 3
+row 4
+row 5
+row 6
+row 7
+row 8
+row 9
+row 10
+row 11
+row 12
+row 13
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle) · ← 1 agent

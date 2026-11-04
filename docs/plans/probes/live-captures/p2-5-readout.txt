@@ -1,0 +1,40 @@
+› Prompt from the flightdeck-engine-probes plugin                 │                                                   ✕
+❯ probe-approve                                                   │mode="p2"
+                                                                  │presses=["submit:start","submit:resolved {\"text\":\"
+⏺ Got "probe-approve". You picked A on the last question. Nothing │probe-approve\",\"origin\":{\"kind\":\"plugin\",\"nam
+  else is queued, and I haven't run any other action. Tell me what│e\":\"flightdeck-engine-probes\",\"asUser\":true}}"]
+  you want next.                                                  │bandOffset=0
+                                                                  │viewedMarks=0
+✻ Crunched for 2s · done 1:37 AM                                  │p5Open=null
+                                                                  │p8Submits=[]
+❯ /probe p2                                                       │p8Inputs=[]
+  ⎿  flightdeck-engine-probes: probe mode: p2                     │measure={"percent":6,"tokens":56172,"window":1000000,
+                                                                  │"keys":["percent","tokens","window"],"changed":["cont
+❯ /probe p3                                                       │ext","cost"]}
+  ⎿  flightdeck-engine-probes: probe mode: p3                     │
+                                                                  │
+❯ /probe p2                                                       │
+  ⎿  flightdeck-engine-probes: probe mode: p2                     │
+                                                                  │
+❯ /probe readout                                                  │
+  ⎿  flightdeck-engine-probes: readout pane: {"isPlaced":true}    │
+window 0..13 of 30 (engine offset 0, maxRows 15)              [-] │
+row 0                                                             │
+row 1                                                             │
+row 2                                                             │
+row 3                                                             │
+row 4                                                             │
+row 5                                                             │
+row 6                                                             │
+row 7                                                             │
+row 8                                                             │
+row 9                                                             │
+row 10                                                            │
+row 11                                                            │
+row 12                                                            │
+row 13                                                            │
+                                                                  │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle) · ← 1 agent

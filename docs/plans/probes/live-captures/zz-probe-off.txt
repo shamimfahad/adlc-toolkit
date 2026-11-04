@@ -1,0 +1,40 @@
+                                                                  │                                                   ✕
+ ▐▛███▛█   Claude Code v2.1.318                                   │mode=null
+▝▜██████▀  Opus 5.5 · Claude Max                                  │presses=[]
+ ▝▝   ▝▝   ~/code/adlc-toolkit                                    │bandOffset=0
+                                                                  │viewedMarks=0
+  Introducing Opus 5.5                                            │p5Open="{\"isPlaced\":true}"
+  Get to finished work sooner with Opus 5.5. Switch anytime with  │p8Submits=[]
+  /model.                                                         │p8Inputs=[]
+                                                                  │measure={"percent":null,"tokens":null,"window":100000
+❯ /probe p5                                                       │0,"keys":["window"],"changed":["context","rateLimits"
+  ⎿  flightdeck-engine-probes: probe mode: p5                     │,"cost"]}
+                                                                  │
+❯ /probe readout                                                  │
+  ⎿  flightdeck-engine-probes: readout pane: {"isPlaced":true}    │
+                                                                  │
+❯ /probe off                                                      │
+  ⎿  flightdeck-engine-probes: probe mode: off                    │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle) · PR #1 · ← 1 agent
