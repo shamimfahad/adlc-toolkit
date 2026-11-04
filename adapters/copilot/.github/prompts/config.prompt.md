@@ -1,5 +1,5 @@
 ---
-description: "View/change .adlc/config.yml settings via guided options; re-sync derived files."
+description: "View and change ADLC project settings in .adlc/config.yml — git policy, isolation, how freely the assistant may edit, external sources, autonomy levels, stack, protected branches, repos — through guided options, then re-sync any derived files. Also migrates an existing vault's config to pick up new keys after a toolkit update. Use to change how the pipeline behaves without hand-editing YAML. Vault-only; never commits."
 ---
 
 Toolkit root: .adlc-toolkit

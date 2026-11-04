@@ -1,13 +1,13 @@
 import type { On } from 'claude-code'
 import { describe, expect, test, type TestBody } from 'claude-code/testing'
 
-import type { FlightDeck, FlightItem, FlightLane, FlightTrail } from '../types'
+import type { FlightDeck, FlightGateAsk, FlightGit, FlightItem, FlightLane, FlightTrail } from '../types'
 import {
-  buildReq, describeTool, eta, markSpans, parseDispatch, parseGateCard, runs, taskGlyphs, timeline,
+  buildReq, describeTool, eta, idOf, markSpans, parseDispatch, parseGateCard, runs, splitFolder, taskGlyphs, timeline,
 } from '../hooks/model'
 import {
-  decisionOf, filterItems, firstLine, hotFor, hotTail, notesFor, parseHot, parseRecord, partsOf, phaseOf,
-  recordDecisionsFor, sectionOf,
+  filterItems, firstLine, hotFor, hotTail, notesFor, optionsFromDecision, parseHot, parseMarker, parseRecord, partsOf, phaseOf,
+  recordDecisionsFor, replyFor, replyOf, inFlight, sectionOf, sprintMembers, stripOf, idOrder, flyingTarget,
 } from '../hooks/vault'
 
 const CARD = [
@@ -47,6 +47,7 @@ describe('model', () => {
   test('tool descriptions', () => {
     expect(describeTool('Edit', { file_path: 'D:\\repo\\src\\RetryPolicy.cs' })).toBe('Edit RetryPolicy.cs')
     expect(describeTool('Bash', { command: 'dotnet   test' })).toBe('$ dotnet test')
+    expect(describeTool('Bash', { command: 'cd /repo && grep -n "x" README.md', description: 'Find  the day picker copy' })).toBe('Find the day picker copy')
   })
 
   test('timeline: void before take-off, idle gaps, writes outrank reads, failures marked', () => {
@@ -123,7 +124,8 @@ const BAND = (isWorking: boolean) => ({
 
 const stale = buildReq('BUG-016-old-thing', { currentPhase: 4, gateState: 'awaiting' }, false, null, 0)
 const vaultDeck: FlightDeck = { ...deck, reqs: [...deck.reqs, stale] }
-const state = (on: On, key: 'deck' | 'lanes' | 'focus' | 'fuel' | 'agents' | 'now' | 'view' | 'items' | 'settings' | 'trail' | 'filters', value: unknown) =>
+type Key = 'deck' | 'lanes' | 'focus' | 'fuel' | 'agents' | 'now' | 'view' | 'items' | 'settings' | 'trail' | 'filters' | 'git' | 'viewed' | 'picks' | 'gate' | 'strip' | 'layout' | 'pending'
+const state = (on: On, key: Key, value: unknown) =>
   on('state.get', { plugin: 'adlc-flightdeck', key } as never, async () => ({ value: { value, version: 1 } }) as never)
 
 describe('band', () => {
@@ -148,23 +150,31 @@ describe('band', () => {
       const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface, ...BAND(true) })
       expect(await ui.find({ type: 'Text', text: /REQ-042/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /1 flying/ })).toBeDefined()
-      expect(await ui.find({ key: 'details' })).toBeDefined() // opens the cockpit
+      expect(await ui.find({ key: 'expand' })).toBeDefined() // ⤢ opens the cockpit in place
       expect(await ui.find({ type: 'Text', text: /-30s/ })).toBeUndefined() // the tower lives in the pane
       expect(await ui.find({ type: 'Text', text: /BUG-016/ })).toBeUndefined()
       await ui.unmount()
     }
   })
 
-  test('at a gate: the wait, and resume when Claude is idle', async ($, on) => {
+  test('at a gate: resume only for a gate this session has not seen', async ($, on) => {
     const gated: FlightDeck = { ...deck, reqs: [buildReq('REQ-042-payment-retries', { currentPhase: 3, gateState: 'awaiting' }, true, 0, 0)] }
     on('clock.now', async () => ({ value: 5000 }))
     state(on, 'deck', gated)
     state(on, 'focus', 'REQ-042')
+    let seen = false // case 1: no card captured here (a gate opened in another session); case 2: this session emitted it
+    on('state.get', { plugin: 'adlc-flightdeck', key: 'trail' } as never, async () => ({ value: { value: seen ? { 'REQ-042': { implement: { rounds: [], runs: [], card: { at: 10, text: CARD } } } } : {}, version: 1 } }) as never)
     for (const surface of ['terminal', 'desktop'] as const) {
+      seen = false
       const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface, ...BAND(false) })
-      expect(await ui.find({ type: 'Text', text: /gate 3\/5 implement · waiting 0:05/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /· gate: waiting/ })).toBeDefined()
       expect(await ui.find({ key: 'resume-REQ-042' })).toBeDefined()
       await ui.unmount()
+      seen = true
+      const ui2 = await $.ui.mount({ plugin: 'adlc-flightdeck', surface, ...BAND(false) })
+      expect(await ui2.find({ type: 'Text', text: /· gate: approve\?/ })).toBeDefined() // the card's MY READ: the band asks the recommended option
+      expect(await ui2.find({ key: 'resume-REQ-042' })).toBeUndefined()
+      await ui2.unmount()
     }
   })
 })
@@ -237,12 +247,16 @@ describe('vault readers', () => {
     expect(partsOf('specs/_archive/2026-08/sf/REQ-042-slug.md')).toEqual({ month: '2026-08', author: 'sf', archived: true })
   })
 
-  test('gate answers → decision and note', () => {
-    expect(decisionOf({ 'Gate 3?': 'Approve — moves on to review' }, undefined)).toEqual({ decision: 'approve', note: '' })
-    expect(decisionOf({ 'Gate 3?': 'revise' }, 'keep 3 retries but make it config')).toEqual({ decision: 'revise', note: 'keep 3 retries but make it config' })
-    expect(decisionOf(undefined, undefined).decision).toBe('')
-    expect(decisionOf({ 'Gate 3?': 'approve' }, 'ship it [flightdeck] viewed 4/7 files')).toEqual({ decision: 'approve', note: 'ship it' })
-    expect(decisionOf({ 'Gate 3?': 'approve' }, '\n\n[flightdeck] viewed 4/7 files')).toEqual({ decision: 'approve', note: '' })
+  test('a reply → decision, note and the trailer lifted out', () => {
+    const opts = parseMarker(MARKER).options
+    expect(replyOf('approve', opts)).toEqual({ decision: 'approve', note: '', viewed: null })
+    expect(replyOf('fix C1,M1 · accept m2', opts)).toEqual({ decision: 'fix', note: 'C1,M1 · accept m2', viewed: null })
+    expect(replyOf('fix all\n\n[flightdeck] viewed 4/7 files', opts)).toEqual({ decision: 'fix all', note: '', viewed: '4/7' })
+    expect(replyOf('revise: tighten AC2 [flightdeck] viewed 4/7 files', opts)).toEqual({ decision: 'revise', note: 'tighten AC2', viewed: '4/7' })
+    expect(replyOf('approve\n\n[flightdeck] pane', opts)).toEqual({ decision: 'approve', note: '', viewed: null })
+    expect(replyOf('why is C1 critical?', opts).decision).toBe('') // a question names no option: the gate stays open
+    expect(replyOf('approved it yesterday', opts).decision).toBe('') // a word that starts like an option is not one
+    expect(replyOf('revise keep the default', []).decision).toBe('revise') // no options captured: the gate verbs
     expect(firstLine('# Done\n\n**TASK-003** landed — 4 tests', 40)).toBe('TASK-003 landed — 4 tests')
   })
 
@@ -258,7 +272,8 @@ describe('vault readers', () => {
   })
 })
 
-const PANE_PROPS = { title: 'ADLC', isFocused: true, bodyColumns: 120, placement: 'dock' as const, scroll: { offset: 0, bodyRows: 40 }, view: {} }
+// 0.7.0: the cockpit is the above-prompt band at full height (`max`); no pane.
+const PANE_PROPS = { hasSurvey: false, isWorking: false, maxRows: 400, bodyColumns: 120, scroll: { offset: 0, bodyRows: 399 }, view: {} }
 const items: FlightItem[] = [
   { id: 'REQ-042', title: 'payment retries', kind: 'req', state: 'flying', phase: 3, phaseName: 'implement', author: 'sf', month: '2026-10', touchedAt: 1000, folder: 'D:/repo/.adlc/specs/REQ-042-payment-retries', record: null },
   { id: 'BUG-016', title: 'old thing', kind: 'bug', state: 'flying', phase: 4, phaseName: 'verify', author: 'jd', month: '2026-09', touchedAt: 500, folder: 'D:/repo/.adlc/bugs/BUG-016-old-thing', record: null },
@@ -273,12 +288,12 @@ const trail: FlightTrail = {
     },
   },
 }
-const settings = { openOnStart: false, band: true, cards: true, columns: 0, history: 'all' as const, editorUri: 'vscode://file/{path}:{line}:{col}' }
+const settings = { openOnStart: false, band: true, cards: true, narrowAt: 84, showAll: false, history: 'all' as const, editorUri: 'vscode://file/{path}:{line}:{col}', compact: 'button' as const, compactAt: 70 }
 const mountPane = ($: Parameters<TestBody>[0], surface: 'terminal' | 'desktop') =>
-  $.ui.mount({ plugin: 'adlc-flightdeck', surface, component: 'Pane', requestId: 'adlc-flight', props: PANE_PROPS, viewport: { columns: 124, rows: 50 } })
+  $.ui.mount({ plugin: 'adlc-flightdeck', surface, component: 'AbovePrompt', props: PANE_PROPS, viewport: { columns: 124, rows: 800 } })
 
 describe('cockpit pane', () => {
-  test('a phase tab: the gate with its rounds, the agents and their lines, the keys', async ($, on) => {
+  test('a phase in progress: the GATE line says so, then what is flying for it and what each agent is doing', async ($, on) => {
     on('clock.now', async () => ({ value: 5000 }))
     state(on, 'deck', vaultDeck)
     state(on, 'focus', 'REQ-042')
@@ -286,57 +301,73 @@ describe('cockpit pane', () => {
     state(on, 'items', items)
     state(on, 'trail', trail)
     state(on, 'settings', settings)
+    state(on, 'layout', { height: 'max', narrow: false })
     state(on, 'view', { req: 'REQ-042', tab: 3, sub: { kind: 'page' } })
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await mountPane($, surface)
-      expect(await ui.find({ type: 'Text', text: /in phase/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /in progress — implement/ })).toBeDefined()
       expect(await ui.find({ key: 'tab-3' })).toBeDefined()
       expect(await ui.find({ key: 'tab-history' })).toBeDefined()
       expect(await ui.find({ key: 'tab-settings' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /revise/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /keep 3 retries/ })).toBeDefined()
-      expect(await ui.find({ key: 'card-3' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /AGENTS · 2/ })).toBeDefined()
-      expect(await ui.find({ key: 'lane-a1' })).toBeDefined()
-      expect(await ui.find({ key: 'run-a0' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /recon done/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /ALSO OPEN/ })).toBeUndefined() // gone: history has it
+      expect(await ui.find({ type: 'Text', text: /^SO FAR$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /1\/2 tasks/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /task-implementer · TASK-002/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /Edit RetryPolicy\.cs/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /revise · 2 rounds/ })).toBeUndefined() // a phase in progress has no cleared line
       expect(await ui.find({ type: 'Text', text: /BUG-016/ })).toBeUndefined()
       await ui.unmount()
     }
   })
 
-  test('browsing another REQ says so; the band keeps the one being flown', async ($, on) => {
+  test('a cleared phase: the decision, the rounds, on the tab and on the GATE line', async ($, on) => {
+    on('clock.now', async () => ({ value: 5000 }))
+    state(on, 'deck', { ...vaultDeck, reqs: [buildReq('REQ-042-payment-retries', { currentPhase: 4 }, false, null, 0)] })
+    state(on, 'focus', 'REQ-042')
+    state(on, 'items', items)
+    state(on, 'trail', trail)
+    state(on, 'settings', settings)
+    state(on, 'layout', { height: 'max', narrow: false })
+    state(on, 'view', { req: 'REQ-042', tab: 3, sub: { kind: 'page' } })
+    const ui = await mountPane($, 'terminal')
+    expect(await ui.find({ type: 'Text', text: /cleared · approve · round 2/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /approve · 2 rounds/ })).toBeDefined() // the tab's status line
+    await ui.unmount()
+  })
+
+  test('a REQ opened from history rides level 1 as the selected chip when nothing else is in flight', async ($, on) => {
     on('clock.now', async () => ({ value: 5000 }))
     state(on, 'deck', vaultDeck)
     state(on, 'focus', 'REQ-042')
     state(on, 'items', items)
     state(on, 'trail', {})
     state(on, 'settings', settings)
+    state(on, 'layout', { height: 'max', narrow: false })
     state(on, 'view', { req: 'BUG-016', tab: 4, sub: { kind: 'page' } })
     const ui = await mountPane($, 'terminal')
-    expect(await ui.find({ type: 'Text', text: /browsing · flying REQ-042/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /BUG-016/ })).toBeDefined()
+    expect((await ui.find({ key: 'strip-BUG-016' }))?.props.dimColor).toBe(false)
+    expect(await ui.find({ key: 'tab-4' })).toBeDefined()
     await ui.unmount()
   })
 
-  test('history lists every item with state, author and age; done ones too', async ($, on) => {
+  test('history lists every item with its state, date and author, and a first / last state each', async ($, on) => {
     on('clock.now', async () => ({ value: 3 * 86_400_000 }))
     state(on, 'deck', vaultDeck)
     state(on, 'focus', 'REQ-042')
     state(on, 'items', items)
     state(on, 'trail', {})
     state(on, 'settings', settings)
-    state(on, 'filters', { author: null, text: '' })
-    state(on, 'view', { req: 'REQ-042', tab: 'history', sub: { kind: 'page' } })
+    state(on, 'layout', { height: 'max', narrow: false })
+    state(on, 'view', { req: 'REQ-042', tab: 'history', sub: { kind: 'page' }, hist: { id: 'REQ-007', which: 'last' } })
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await mountPane($, surface)
       expect(await ui.find({ key: 'hist-REQ-042' })).toBeDefined()
       expect(await ui.find({ key: 'hist-BUG-016' })).toBeDefined()
       expect(await ui.find({ key: 'hist-REQ-007' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /merged/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /3 of 3/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /3d ago/ })).toBeDefined()
+      expect(await ui.find({ key: 'hist-REQ-007-first' })).toBeDefined()
+      expect(await ui.find({ key: 'hist-REQ-007-last' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /3 REQs/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /shipped/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /last state · nothing in hot\.md for REQ-007/ })).toBeDefined()
       await ui.unmount()
     }
   })
@@ -348,12 +379,15 @@ describe('cockpit pane', () => {
     state(on, 'items', items)
     state(on, 'trail', {})
     state(on, 'settings', settings)
+    state(on, 'layout', { height: 'max', narrow: false })
     state(on, 'view', { req: 'REQ-042', tab: 'settings', sub: { kind: 'page' } })
     const ui = await mountPane($, 'terminal')
-    expect(await ui.find({ key: 'set-open' })).toBeDefined()
-    expect(await ui.find({ key: 'set-band' })).toBeDefined()
-    expect(await ui.find({ key: 'set-cards' })).toBeDefined()
-    expect(await ui.find({ key: 'set-columns' })).toBeDefined()
+    expect(await ui.find({ key: 'set-editor' })).toBeDefined()
+    for (const k of ['set-compact-button', 'set-compact-suggest', 'set-compact-never', 'set-compact-at-70', 'set-narrow-84', 'set-open-off', 'set-cards-on', 'set-show-all-off', 'set-forget', 'set-forget-viewed']) {
+      expect(await ui.find({ key: k })).toBeDefined()
+    }
+    expect(await ui.find({ key: 'set-columns' })).toBeUndefined() // no pane, no pane width
+    expect(await ui.find({ type: 'Text', text: /^KEYS$/ })).toBeDefined()
     await ui.unmount()
   })
 })
@@ -376,8 +410,447 @@ describe('gate card', () => {
       expect(await ui.find({ type: 'Text', text: /NEEDS YOU/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /waiting 0:42/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /next: review ≈ 88k tok \(avg of 2\)/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /your call/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /your call — reply in the prompt, or pick in the flightdeck above it/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /dialog/ })).toBeUndefined() // the open card's last line names the cockpit, not a dialog
       await ui.unmount()
     }
+  })
+})
+
+// ---------- 0.6.0: ids by their full name, the gate is the turn ----------
+
+const MARKER = [
+  'Phase: verify',
+  'REQ: REQ-sf-033-payment-retries',
+  'Gate: 4/5',
+  'Awaiting: review the findings, decide which to fix.',
+  'Ask: 3 findings — 1 needs a call. Fix before this ships?',
+  'Options:',
+  '  - approve — accept the findings as they are; moves on to /wrapup',
+  '  - fix all — I fix every actionable finding, re-check, gate comes back',
+  '  - fix <ids> — the same loop, only the findings you name',
+  '  - revise <what> — other changes to the review',
+  '  - abort — stops this REQ; nothing is committed',
+  'Recommended: fix all',
+  'Files:',
+  '  - .adlc/specs/2026-10/sf/REQ-sf-033-payment-retries/verification.md',
+].join('\n')
+
+const IMPLEMENT_MARKER = [
+  'Phase: implement', 'REQ: REQ-042-payment-retries', 'Gate: 3/5', 'Awaiting: review the code.', 'Ask: 7/7 tasks landed. Run the commits?',
+  'Options:', '  - approve — run the commits in commits-draft.md, then /review', '  - revise <what> — I change the code, re-check, ask again',
+  '  - abort — discards the uncommitted code; cleanup commands follow', 'Recommended: approve',
+].join('\n')
+
+const gated: FlightDeck = { vault: 'D:/repo/.adlc', scannedAt: 0, reqs: [buildReq('REQ-042-payment-retries', { currentPhase: 3, gateState: 'awaiting' }, true, 0, 0)] }
+const gitFacts: Record<string, FlightGit> = {
+  'REQ-042': {
+    at: 0, cwd: 'D:/repo', base: 'abc', baseName: 'main', branch: 'feat/REQ-042', me: 'sf', error: null, tip: 'feat/REQ-042', checkedOut: true,
+    touched: [{ path: 'src/pay/RetryPolicy.cs', status: 'M', add: 12, del: 3 }, { path: 'src/pay/Startup.cs', status: 'M', add: 1, del: 0 }],
+    hashes: { 'src/pay/retrypolicy.cs': 'h1', 'src/pay/startup.cs': 'h2' }, authors: {},
+  },
+}
+const atGate = (on: On, extra: Partial<Record<Key, unknown>> = {}) => {
+  on('clock.now', async () => ({ value: 5000 }))
+  const seed: Partial<Record<Key, unknown>> = {
+    deck: gated, focus: 'REQ-042', lanes: [], items, trail: {}, settings, git: gitFacts, layout: { height: 'max', narrow: false },
+    viewed: { 'REQ-042': { 'src/pay/retrypolicy.cs': 'h1' } }, picks: {},
+    gate: { 'REQ-042': parseMarker(IMPLEMENT_MARKER) } as Record<string, FlightGateAsk>,
+    view: { req: 'REQ-042', tab: 3, sub: { kind: 'page' }, home: false },
+    ...extra,
+  }
+  // A key passed as undefined is left to the real state: a pressed control that writes it then lands (a stub's version never moves).
+  for (const [k, v] of Object.entries(seed)) if (v !== undefined) state(on, k as Key, v)
+}
+// The test host runs hooks off the press; give them a few ticks (setTimeout is there at run time, not in the hooks' lib types).
+const tick = (globalThis as unknown as { setTimeout: (f: () => void, ms: number) => unknown }).setTimeout
+const settle = async (until: () => boolean) => { for (let i = 0; i < 40 && !until(); i++) await new Promise<void>(r => { tick(() => r(), 5) }) }
+
+describe('0.6.0', () => {
+  test('ids: REQ-sf-033 resolves whole — never REQ-033, and L-REQ-035-1 is not REQ-035', () => {
+    expect(splitFolder('REQ-sf-033-gate-turn')).toEqual({ id: 'REQ-sf-033', title: 'gate turn', kind: 'req' })
+    expect(splitFolder('REQ-042-2fa-login').id).toBe('REQ-042') // a slug that starts with a digit is not a prefix
+    expect(splitFolder('BUG-sf-7-null-ref').kind).toBe('bug')
+    expect(idOf('the lesson L-REQ-035-1 says jitter')).toBe(null)
+    expect(idOf('/proceed REQ-sf-033')).toBe('REQ-sf-033')
+    expect(idOf('REQ-035 is next')).toBe('REQ-035')
+    expect(parseGateCard('GATE 4/5 · Review · REQ-sf-033 — gate turn\n   3 findings\n\nMY READ  fix all')?.req).toBe('REQ-sf-033')
+    const hot = parseHot('## [2026-10-24] verify-gate-cleared | REQ-sf-033-gate-turn | findings fixed')
+    expect(hot[0]?.req).toBe('REQ-sf-033')
+    expect(hotTail(hot[0] as never)).toBe('findings fixed')
+    expect(parseDispatch('Task file: .adlc/specs/2026-10/sf/REQ-sf-033-x/tasks/TASK-002.md').req).toBe('REQ-sf-033')
+    expect(parseRecord('# REQ-sf-033 — gate turn\n').id).toBe('REQ-sf-033')
+  })
+
+  test('focus: a prompt that mentions a lesson id keeps the REQ being flown', async ($, on) => {
+    on('clock.now', async () => ({ value: 5000 }))
+    const flown: FlightDeck = { vault: 'D:/repo/.adlc', scannedAt: 0, reqs: [buildReq('REQ-sf-033-gate-turn', { currentPhase: 3 }, false, null, 0)] }
+    state(on, 'deck', flown)
+    state(on, 'items', [])
+    state(on, 'lanes', [])
+    on('prompt.submit', async ($, e) => ({ text: e.text }))
+    const typed = (text: string) => ({ text, wait: false, origin: { kind: 'composer' } }) as never // a prompt as the person types it
+    await $.prompt.submit(typed('/proceed REQ-sf-033'))
+    await $.prompt.submit(typed('the lesson L-REQ-035-1 says jitter; also see REQ-035 in the old log'))
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...BAND(false) })
+    expect(await ui.find({ type: 'Text', text: /REQ-sf-033/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /REQ-035/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('marker: Ask, Options and Recommended parse; a 1.11 marker gives no options and the card\'s Decision line fills in', () => {
+    const m = parseMarker(MARKER)
+    expect(m.phase).toBe('verify')
+    expect(m.ask).toBe('3 findings — 1 needs a call. Fix before this ships?')
+    expect(m.options.map(o => o.label)).toEqual(['approve', 'fix all', 'fix <ids>', 'revise <what>', 'abort'])
+    expect(m.options.filter(o => o.recommended).map(o => o.label)).toEqual(['fix all'])
+    expect(m.options[2]?.needsArg).toBe(true)
+    expect(m.options[4]?.consequence).toBe('stops this REQ; nothing is committed')
+    expect(m.files).toEqual(['.adlc/specs/2026-10/sf/REQ-sf-033-payment-retries/verification.md'])
+    const old = parseMarker('Phase: verify\nREQ: REQ-042-x\nAwaiting: review\nFiles:\n  - .adlc/specs/REQ-042-x/verification.md\n')
+    expect(old.options).toEqual([])
+    const card = parseGateCard(CARD)
+    const fromCard = optionsFromDecision(card?.decision ?? null, 'approve — the Startup.cs edit is the DI line')
+    expect(fromCard.map(o => o.label)).toEqual(['approve', 'revise', 'abort'])
+    expect(fromCard[0]?.recommended).toBe(true)
+    const paren = optionsFromDecision('approve · fix all (recommended — I fix, then re-check) · fix <ids|all-major> · revise <what> · abort', '')
+    expect(paren.find(o => o.recommended)?.label).toBe('fix all')
+    expect(paren.find(o => o.label.startsWith('fix <'))?.needsArg).toBe(true)
+  })
+
+  test('reply text: trailer at implement and review only, pane elsewhere, an argument substituted for <ids>', () => {
+    const [approve, , fixIds] = parseMarker(MARKER).options
+    expect(replyFor(approve!, null, 3, { n: 1, m: 2 })).toBe('approve\n\n[flightdeck] viewed 1/2 files')
+    expect(replyFor(approve!, null, 2, { n: 1, m: 2 })).toBe('approve\n\n[flightdeck] pane')
+    expect(replyFor(approve!, null, 4, { n: 0, m: 0 })).toBe('approve\n\n[flightdeck] pane')
+    expect(replyFor(fixIds!, 'C1,M1', 4, { n: 4, m: 7 })).toBe('fix C1,M1\n\n[flightdeck] viewed 4/7 files')
+    expect(replyOf(replyFor(fixIds!, 'C1,M1', 4, { n: 4, m: 7 }), parseMarker(MARKER).options)).toEqual({ decision: 'fix', note: 'C1,M1', viewed: '4/7' })
+  })
+
+  test('pane at a gate: an option button submits as the user, once', async ($, on) => {
+    atGate(on)
+    const sent: { text: string; asUser: boolean }[] = []
+    on('prompt.submit', async ($, e) => { sent.push({ text: e.text, asUser: e.origin.kind === 'plugin' && e.origin.asUser === true }); return { text: e.text } })
+    const ui = await mountPane($, 'terminal')
+    expect((await ui.find({ key: 'opt-approve' }))?.props.hotkey).toBe('1')
+    expect(await ui.find({ type: 'Text', text: /1 of 2 changed files not viewed/ })).toBeDefined()
+    await ui.press({ key: 'opt-approve' })
+    await settle(() => sent.length > 0)
+    expect(sent).toEqual([{ text: 'approve\n\n[flightdeck] viewed 1/2 files', asUser: true }])
+    // One press, one reply: the gate now reads sent, and its options are gone until the next gate.
+    expect(await ui.find({ type: 'Text', text: /Sent to Claude/ })).toBeDefined()
+    expect(await ui.find({ key: 'opt-approve' })).toBeUndefined()
+    expect(sent.length).toBe(1)
+    await ui.unmount()
+  })
+
+  test('the dialog is left alone: an AskUserQuestion call passes through untouched', async ($, on) => {
+    atGate(on)
+    let seen: unknown = null
+    on('tool.call', async ($, e) => { seen = e; return { result: { questions: [], answers: { 'Gate 3?': 'approve' } } } as never })
+    const questions = [{ question: 'Gate 3?', header: 'Gate', multiSelect: false, options: [{ label: 'approve', description: 'moves on to review' }, { label: 'revise', description: 'say what' }] }]
+    const ran = await $.tool.call({ tool: 'AskUserQuestion', questions } as never) as { result?: { response?: string; answers?: Record<string, string> } }
+    expect(ran.result?.response).toBeUndefined()
+    expect(ran.result?.answers).toEqual({ 'Gate 3?': 'approve' })
+    expect((seen as { questions: typeof questions }).questions[0]?.options[0]?.description).toBe('moves on to review')
+  })
+
+  test('compact first: drawn with the context fill; suggest dims it below the threshold; never hides it', async ($, on) => {
+    let mode: Record<string, unknown> = { ...settings }
+    atGate(on, { settings: undefined })
+    on('state.get', { plugin: 'adlc-flightdeck', key: 'settings' } as never, async () => ({ value: { value: mode, version: 1 } }) as never)
+    on('session.usage', async () => ({ value: { startedAt: 0, context: { window: 200_000, tokens: 150_000, percent: 75 }, rateLimits: [] } }) as never)
+    const look = async () => {
+      const ui = await mountPane($, 'terminal')
+      const out = { first: await ui.find({ key: 'compact-first' }), pct: await ui.find({ type: 'Text', text: /context 75%/ }) }
+      await ui.unmount()
+      return out
+    }
+    const button = await look()
+    expect(button.first).toBeDefined()
+    expect(button.first?.props.dimColor).toBe(false)
+    expect(button.pct).toBeDefined()
+    mode = { ...settings, compact: 'suggest', compactAt: 70 }
+    expect((await look()).first?.props.dimColor).toBe(false) // past the threshold: lit
+    mode = { ...settings, compact: 'suggest', compactAt: 80 }
+    expect((await look()).first?.props.dimColor).toBe(true)
+    mode = { ...settings, compact: 'never' }
+    expect((await look()).first).toBeUndefined()
+  })
+
+  test('compact first, then an option: compacts, then sends; a skipped or rejected compact sends nothing', async ($, on) => {
+    atGate(on, { layout: { height: 'max', narrow: false, compactFirst: true } })
+    let answer: 'skip' | 'reject' | 'ok' = 'skip'
+    let compacted = 0
+    const sent: string[] = []
+    on('session.usage', async () => ({ value: { startedAt: 0, context: { window: 200_000, percent: 40 }, rateLimits: [] } }) as never)
+    on('session.compact', async ($, e) => {
+      if (answer === 'reject') throw new Error('turn running')
+      if (answer === 'skip') return { skip: 'vetoed' }
+      compacted += 1
+      expect(e.instructions ?? '').toMatch(/ADLC gate compaction\. Resuming REQ-042/)
+      return { messages: [{ role: 'user', text: 'summary', toolUses: [] }] }
+    })
+    on('ui.toast', async () => ({ value: undefined }) as never)
+    on('prompt.submit', async ($, e) => { sent.push(e.text); return { text: e.text } })
+    for (const a of ['skip', 'reject', 'ok'] as const) {
+      answer = a
+      const ui = await mountPane($, 'terminal')
+      await ui.press({ key: 'opt-approve' })
+      await settle(() => sent.length > 0)
+      await ui.unmount()
+      if (a !== 'ok') expect(sent.length).toBe(0)
+    }
+    expect(compacted).toBe(1)
+    expect(sent).toEqual(['approve\n\n[flightdeck] viewed 1/2 files'])
+  })
+})
+
+// ---------- 0.7.0: one band above the prompt, three heights; in flight means in flight ----------
+
+const twoReqs = (): FlightDeck => ({ vault: 'D:/repo/.adlc', scannedAt: 0, reqs: [
+  buildReq('REQ-042-payment-retries', { currentPhase: 3 }, false, null, 900),
+  buildReq('REQ-sf-033-gate-turn', { currentPhase: 4, gateState: 'awaiting' }, true, 100, 100),
+] })
+const bandAt = (cols: number, rows = 24) => ({
+  component: 'AbovePrompt' as const,
+  props: { hasSurvey: false, isWorking: false, maxRows: rows, bodyColumns: cols, scroll: { offset: 0, bodyRows: rows - 1 }, view: {} },
+})
+
+describe('0.7.0', () => {
+  test('in flight: started and not yet at the last phase — phase 0 and ship are history, markers or not', () => {
+    const at = (name: string, st: Parameters<typeof buildReq>[1], waiting = false) => buildReq(name, st, waiting, waiting ? 1 : null, 0)
+    const reqs = [
+      at('REQ-sf-001-unstarted', { currentPhase: 0 }),
+      at('REQ-sf-002-spec', { currentPhase: 1 }),
+      at('REQ-sf-003-architect-gate', { currentPhase: 2, gateState: 'awaiting' }, true),
+      at('REQ-sf-004-review', { currentPhase: 4 }),
+      at('REQ-sf-005-ship', { currentPhase: 5 }),
+      at('REQ-sf-006-review-cleared', { currentPhase: 4, gateState: 'cleared' }), // cleared review → ship
+      at('BUG-sf-7-fix', { currentPhase: 2 }),
+    ]
+    expect(inFlight(reqs).map(r => r.id)).toEqual(['REQ-sf-002', 'REQ-sf-003', 'REQ-sf-004', 'BUG-sf-7'])
+  })
+
+  test('chips never shrink: thirty REQs in 120 columns show the ones that fit, the selected one among them, then +n', async ($, on) => {
+    const many = Array.from({ length: 30 }, (_, i) => buildReq(`REQ-sf-0${10 + i}-x`, { currentPhase: 2 + (i % 3) }, i % 4 === 0, i % 4 === 0 ? 1 : null, i))
+    atGate(on, { deck: { vault: 'D:/repo/.adlc', scannedAt: 0, reqs: many }, strip: stripOf(many, [], () => null), view: { req: 'REQ-sf-034', tab: 3, sub: { kind: 'page' }, home: false }, gate: {} })
+    for (const cols of [120, 80]) {
+      const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(cols, 400) })
+      const chips = (await ui.findAll({ type: 'Button' })).filter(b => /^strip-REQ/.test(b.key ?? ''))
+      const width = chips.reduce((w, c) => w + (c.text ?? '').length + 3, 0)
+      expect(chips.length).toBeLessThan(30)
+      expect(width).toBeLessThanOrEqual(cols)
+      expect(chips.some(c => c.key === 'strip-REQ-sf-034')).toBe(true)
+      expect((await ui.find({ key: 'strip-more' }))?.text).toBe(`+${30 - chips.length}${cols < 84 ? '' : ' more'} ▾`)
+      const ids = chips.map(c => (c.key ?? '').slice(6))
+      expect(ids).toEqual(ids.slice().sort(idOrder)) // by ID number
+      await ui.unmount()
+    }
+  })
+
+  test('no letter key on any header control: the terminal would draw it as `k: label`', async ($, on) => {
+    atGate(on)
+    for (const cols of [120, 80]) {
+      const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(cols, 400) })
+      for (const k of ['tab-history', 'tab-settings', 'size', 'collapse', 'home', 'band-open', 'expand']) {
+        expect((await ui.find({ key: k }))?.props.hotkey).toBeUndefined()
+      }
+      const letters = (await ui.findAll({ type: 'Button' })).filter(b => typeof b.props.hotkey === 'string' && /^[a-z]$/.test(b.props.hotkey as string))
+      expect(letters.map(b => b.key).filter(k => !/^(compose|mermaid-src)$/.test(k ?? ''))).toEqual([])
+      await ui.unmount()
+    }
+  })
+
+  test('strip: a sprint member that finished here rides along done, after the ones flying', () => {
+    const members = sprintMembers(JSON.stringify({ sprint: 'S1', status: 'running', reqs: [{ id: 'REQ-sf-032', status: 'merged' }, { id: 'REQ-sf-033', status: 'running' }] }))
+    expect(members.map(m => m.id)).toEqual(['REQ-sf-032', 'REQ-sf-033']) // finished members stay members while the sprint runs
+    const strip = stripOf(twoReqs().reqs, members, id => (id === 'REQ-sf-032' ? 'merged' : null))
+    expect(strip.map(s => [s.id, s.ended ?? ''])).toEqual([['REQ-sf-033', ''], ['REQ-042', ''], ['REQ-sf-032', 'merged']])
+  })
+
+  test('band: one row — REQ · phase · gate: ask · n in flight · k at gate, ⤢ and ×, no key hints', async ($, on) => {
+    on('clock.now', async () => ({ value: 5000 }))
+    const deck2 = twoReqs()
+    state(on, 'deck', deck2)
+    state(on, 'focus', null)
+    state(on, 'lanes', [])
+    state(on, 'strip', stripOf(deck2.reqs, [], () => null))
+    state(on, 'gate', { 'REQ-sf-033': { ...parseMarker(IMPLEMENT_MARKER), ask: 'fix all?' } })
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(120) })
+    expect((await ui.find({ key: 'band-open' }))?.text).toMatch(/✈ REQ-sf-033 · review · gate: approve\? · 2 in flight · 1 at gate/) // the recommended option, asked
+    expect(await ui.find({ key: 'expand' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /×/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /\bp\b.*cockpit|esc →|j \/ k/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('heights: ⤢ opens the summary, ⤢ again the evidence too, × back to the band; nothing is cut, no pane is opened', async ($, on) => {
+    on('clock.now', async () => ({ value: 5000 }))
+    const deck2 = twoReqs()
+    state(on, 'deck', deck2)
+    state(on, 'focus', 'REQ-042')
+    state(on, 'lanes', [])
+    state(on, 'items', items)
+    state(on, 'trail', {})
+    state(on, 'settings', settings)
+    state(on, 'strip', stripOf(deck2.reqs, [], () => null))
+    let opened = 0
+    on('ui.open', async () => { opened += 1; return { value: { isPlaced: true } } })
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(120, 30) })
+    await ui.press({ key: 'expand' })
+    await settle(() => false)
+    const props = ((await ui.drawn()) as unknown as { props: Record<string, unknown> }).props
+    expect(props.height).toBeUndefined() // a tree taller than the band scrolls in the engine's window
+    expect(props.overflow).toBeUndefined()
+    expect(await ui.find({ key: 'strip-REQ-042' })).toBeDefined()
+    expect(await ui.find({ key: 'tab-3' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /in progress — implement/ })).toBeDefined()
+    expect((await ui.find({ key: 'evidence' }))?.text).toMatch(/⤢ FILES/) // the summary says what ⤢ adds
+    expect(await ui.find({ type: 'Text', text: /asking git/ })).toBeUndefined() // …and draws none of it
+    expect((await ui.find({ key: 'size' }))?.text).toBe('⤢')
+    await ui.press({ key: 'size' })
+    await settle(() => false)
+    expect(await ui.find({ type: 'Text', text: /asking git/ })).toBeDefined() // FILES, waiting on git
+    expect(await ui.find({ key: 'evidence' })).toBeUndefined()
+    expect((await ui.find({ key: 'size' }))?.text).toBe('⤡')
+    await ui.press({ key: 'collapse' })
+    await settle(() => false)
+    expect(await ui.find({ key: 'band-open' })).toBeDefined()
+    expect(await ui.find({ key: 'tab-3' })).toBeUndefined()
+    expect(opened).toBe(0)
+    await ui.unmount()
+  })
+
+  test('/flight opens the cockpit in the band, never a pane; close, max and toggle change its height', async ($, on) => {
+    on('clock.now', async () => ({ value: 5000 }))
+    const deck2 = twoReqs()
+    state(on, 'deck', deck2)
+    state(on, 'focus', 'REQ-042')
+    state(on, 'lanes', [])
+    state(on, 'items', items)
+    state(on, 'trail', {})
+    state(on, 'settings', settings)
+    let opened = 0
+    on('ui.open', async () => { opened += 1; return { value: { isPlaced: true } } })
+    const run = async (args = '') => ((await $.command.run({ command: 'flight', args } as never)) as { text?: string }).text ?? ''
+    expect(await run()).toMatch(/open above the prompt/)
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(120, 30) })
+    expect(await ui.find({ key: 'tab-3' })).toBeDefined() // the band is open: the REQ's live phase
+    expect(await run('close')).toMatch(/collapsed to its one row/)
+    await settle(() => false)
+    expect(await ui.find({ key: 'band-open' })).toBeDefined()
+    expect(await run('max')).toMatch(/full height/)
+    await settle(() => false)
+    expect((await ui.find({ key: 'size' }))?.text).toBe('⤡')
+    expect(await run('toggle')).toMatch(/collapsed/)
+    expect(opened).toBe(0)
+    await ui.unmount()
+  })
+
+  test('wide: level 1 chips with history · settings · ⤢ · ×; level 2 tabs with a status line from 110 columns', async ($, on) => {
+    atGate(on)
+    const wide = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(120, 400) })
+    expect((await wide.find({ key: 'strip-REQ-042' }))?.text).toMatch(/REQ-042 ● implement/)
+    expect((await wide.find({ key: 'tab-history' }))?.text).toBe('history')
+    expect((await wide.find({ key: 'tab-3' }))?.text).toMatch(/3 implement ●/)
+    expect(await wide.find({ type: 'Text', text: /waiting 0:05/ })).toBeDefined() // implement's status line
+    expect(await wide.find({ key: 'home' })).toBeUndefined() // ‹ back exists only in narrow
+    expect(await wide.find({ type: 'Text', text: /‹|›/ })).toBeUndefined()
+    await wide.unmount()
+    const mid = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(100, 400) })
+    expect(await mid.find({ key: 'tab-3' })).toBeDefined()
+    expect(await mid.find({ type: 'Text', text: /waiting 0:05/ })).toBeUndefined() // no status lines under 110
+    await mid.unmount()
+  })
+
+  test('narrow: chips shrink to the number, h / s; the list home replaces the tabs; a row opens its page with ‹ back', async ($, on) => {
+    atGate(on, { view: undefined })
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(80, 400) })
+    expect((await ui.find({ key: 'strip-REQ-042' }))?.text).toMatch(/^042 ●$/)
+    expect((await ui.find({ key: 'tab-history' }))?.text).toBe('h')
+    expect((await ui.find({ key: 'tab-settings' }))?.text).toBe('s')
+    expect(await ui.find({ key: 'home-3' })).toBeDefined()
+    expect(await ui.find({ key: 'tab-3' })).toBeUndefined()
+    expect(await ui.find({ key: 'home' })).toBeUndefined() // no back on the list
+    await ui.press({ key: 'home-3' })
+    expect((await ui.find({ key: 'home' }))?.text).toBe('‹ back')
+    expect(await ui.find({ key: 'home-3' })).toBeUndefined()
+    expect(await ui.find({ key: 'opt-approve' })).toBeDefined() // the action bar works in narrow mode too
+    await ui.press({ key: 'home' })
+    expect(await ui.find({ key: 'home-3' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('strip: the one at a gate is selected; a member with nothing here is dim; a chip switches the tabs', async ($, on) => {
+    const reqs = twoReqs().reqs
+    const members = sprintMembers(JSON.stringify({ sprint: 'SPRINT-2026-10-24-0900', status: 'running', reqs: [{ id: 'REQ-sf-033-gate-turn', status: 'running' }, { id: 'REQ-sf-040-elsewhere', status: 'running' }] }))
+    expect(sprintMembers(JSON.stringify({ status: 'complete', reqs: [{ id: 'REQ-1-x' }] }))).toEqual([])
+    const strip = stripOf(reqs, members, () => false)
+    expect(strip.map(s => s.id)).toEqual(['REQ-sf-033', 'REQ-042', 'REQ-sf-040'])
+    atGate(on, { deck: { vault: 'D:/repo/.adlc', scannedAt: 0, reqs }, strip, view: undefined, gate: {} })
+    const ui = await mountPane($, 'terminal')
+    expect((await ui.find({ key: 'strip-REQ-sf-033' }))?.props.dimColor).toBe(false) // the one at a gate is selected
+    await ui.press({ key: 'strip-more' }) // by ID, REQ-042 is past the width: the list has it, and the member with nothing here
+    expect((await ui.find({ key: 'reqs-REQ-042' }))?.props.dimColor).toBe(true)
+    expect((await ui.find({ key: 'reqs-REQ-sf-040' }))?.text).toMatch(/not on this machine/)
+    await ui.press({ key: 'reqs-REQ-042' })
+    expect((await ui.find({ key: 'strip-REQ-042' }))?.props.dimColor).toBe(false)
+    expect(await ui.find({ type: 'Text', text: /in progress — implement/ })).toBeDefined() // its live phase: implement
+    await ui.unmount()
+  })
+})
+
+// ---------- 0.8.0: ✈ goes to what is flying; +n opens the list; everything by ID ----------
+
+describe('0.8.0', () => {
+  test('order by ID number: REQs before BUGs, the number, not the text', () => {
+    expect(['REQ-sf-026', 'BUG-3', 'REQ-sf-011', 'REQ-sf-100', 'REQ-sf-020'].sort(idOrder)).toEqual(['REQ-sf-011', 'REQ-sf-020', 'REQ-sf-026', 'REQ-sf-100', 'BUG-3'])
+  })
+
+  test('✈ target: a running sprint\'s first member in flight, else the REQ being flown, else a gate', () => {
+    const e = (id: string, x: Partial<{ waiting: boolean; sprint: string | null; here: boolean; ended: 'merged' }> = {}) =>
+      ({ id, phase: 2, phaseName: 'architect', waiting: false, sprint: null, here: true, ...x })
+    expect(flyingTarget([e('REQ-9'), e('REQ-7', { sprint: 'S' }), e('REQ-5', { sprint: 'S', ended: 'merged' }), e('REQ-6', { sprint: 'S', here: false })], 'REQ-9')).toBe('REQ-7')
+    expect(flyingTarget([e('REQ-9'), e('REQ-4', { waiting: true })], 'REQ-9')).toBe('REQ-9')
+    expect(flyingTarget([e('REQ-9'), e('REQ-4', { waiting: true })], 'REQ-1')).toBe('REQ-4')
+    expect(flyingTarget([e('REQ-9'), e('REQ-8')], null)).toBe('REQ-8')
+    expect(flyingTarget([], null)).toBe(null)
+  })
+
+  test('+n more opens every REQ in flight by ID; a row opens its phases; ✈ goes back to the one flying', async ($, on) => {
+    const many = Array.from({ length: 12 }, (_, i) => buildReq(`REQ-sf-0${40 - i}-x`, { currentPhase: 2 + (i % 3) }, false, null, i))
+    atGate(on, { deck: { vault: 'D:/repo/.adlc', scannedAt: 0, reqs: many }, strip: stripOf(many, [], () => null), focus: 'REQ-sf-035', view: undefined, gate: {} })
+    on('ui.scroll', async () => ({ value: {} }) as never)
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(100, 400) })
+    await ui.press({ key: 'fly' }) // nothing chosen yet: ✈ lands on the REQ this session flies
+    expect((await ui.find({ key: 'strip-REQ-sf-035' }))?.props.dimColor).toBe(false)
+    await ui.press({ key: 'strip-more' })
+    const rows = (await ui.findAll({ type: 'Button' })).filter(b => /^reqs-/.test(b.key ?? '')).map(b => (b.key ?? '').slice(5))
+    expect(rows.length).toBe(12)
+    expect(rows).toEqual(rows.slice().sort(idOrder))
+    expect((await ui.find({ key: 'reqs-REQ-sf-035' }))?.text).toMatch(/▸/) // the one shown, marked
+    await ui.press({ key: 'reqs-REQ-sf-030' })
+    expect(await ui.find({ key: 'tab-2' })).toBeDefined() // its phases
+    expect((await ui.find({ key: 'strip-REQ-sf-030' }))?.props.dimColor).toBe(false)
+    await ui.press({ key: 'fly' })
+    expect((await ui.find({ key: 'strip-REQ-sf-035' }))?.props.dimColor).toBe(false)
+    await ui.unmount()
+  })
+
+  test('history: by ID number, every row opens that REQ, the one shown is marked', async ($, on) => {
+    on('clock.now', async () => ({ value: 5000 }))
+    state(on, 'deck', vaultDeck)
+    state(on, 'focus', 'REQ-042')
+    state(on, 'items', items)
+    state(on, 'trail', {})
+    state(on, 'settings', settings)
+    state(on, 'layout', { height: 'max', narrow: true })
+    state(on, 'view', { req: 'REQ-042', tab: 'history', sub: { kind: 'page' } })
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'desktop', ...bandAt(70, 400) }) // narrow: the rows still press
+    const rows = (await ui.findAll({ type: 'Button' })).filter(b => /^hist-[A-Z]+-[\w-]+$/.test(b.key ?? '') && !/-(first|last)$/.test(b.key ?? '')).map(b => (b.key ?? '').slice(5))
+    expect(rows).toEqual(['REQ-007', 'REQ-042', 'BUG-016'])
+    expect((await ui.find({ key: 'hist-REQ-042' }))?.text).toMatch(/▸/)
+    await ui.unmount()
   })
 })

@@ -1,8 +1,8 @@
 // Pure readers of what the vault already writes: hot.md lines, records, pipeline-state
 // notes, and the map from a phase to the files and sections that belong to it. No `$`,
 // no state; everything here is unit-tested.
-import type { FlightItem } from '../types'
-import { BUG_PHASES, REQ_PHASES } from './model'
+import type { FlightGateAsk, FlightItem, FlightOption, FlightReq, FlightStripEntry } from '../types'
+import { BUG_PHASES, ID_SRC, REQ_PHASES, idOf, type PipelineState } from './model'
 
 /** Every name a phase goes by in hot.md events, gate names and notes — skills are not uniform. */
 const ALIASES: Record<'req' | 'bug', string[][]> = {
@@ -48,7 +48,7 @@ export function parseHot(text: string): HotEvent[] {
     const m = HOT_LINE.exec(raw.trim())
     if (!m) continue
     const rest = (m[3] ?? '').trim()
-    const req = /\b((?:REQ|BUG)-\d+)/.exec(rest)?.[1] ?? null
+    const req = idOf(rest)
     out.push({ date: m[1] ?? '', event: m[2] ?? '', req, rest })
   }
   return out
@@ -65,7 +65,8 @@ export function hotFor(events: HotEvent[], id: string, kind: 'req' | 'bug', phas
 }
 
 /** Strips the REQ id from an event's tail so a row reads `findings: C0/M3/m9 …`, not the id twice. */
-export const hotTail = (ev: HotEvent) => ev.rest.replace(/^(?:REQ|BUG)-\d+[\w-]*\s*\|?\s*/, '')
+const HOT_TAIL = new RegExp(`^${ID_SRC}[\\w-]*\\s*\\|?\\s*`)
+export const hotTail = (ev: HotEvent) => ev.rest.replace(HOT_TAIL, '')
 
 // ---------- pipeline-state.json: notes[] and the 1.10 `phases` block ----------
 
@@ -89,11 +90,13 @@ export function notesFor(kind: 'req' | 'bug', phase: number, notes: readonly str
 
 export type Record_ = { id: string; title: string; fields: Record<string, string>; sections: Record<string, string> }
 
+const RECORD_H1 = new RegExp(`^#\\s+(${ID_SRC})\\s*[—–-]+\\s*(.*)$`)
+
 export function parseRecord(text: string): Record_ {
   const lines = text.split('\n')
   const h1 = lines.find(l => /^#\s+/.test(l)) ?? ''
-  const hm = /^#\s+((?:REQ|BUG)-\d+)\s*[—–-]+\s*(.*)$/.exec(h1.trim())
-  const id = hm?.[1] ?? (/\b((?:REQ|BUG)-\d+)/.exec(h1)?.[1] ?? '')
+  const hm = RECORD_H1.exec(h1.trim())
+  const id = hm?.[1] ?? idOf(h1) ?? ''
   const title = (hm?.[2] ?? h1.replace(/^#\s+/, '')).trim()
   const fields: Record<string, string> = {}
   const sections: Record<string, string> = {}
@@ -193,12 +196,263 @@ export const firstLine = (s: string, max = 160) => {
   return clean.length > max ? clean.slice(0, max - 1) + '…' : clean
 }
 
-/** The answer of an AskUserQuestion gate dialog: the first choice, and the free text if any. */
-export function decisionOf(answers: Record<string, string> | undefined, response: string | undefined): { decision: string; note: string } {
-  const first = answers ? Object.values(answers)[0] ?? '' : ''
-  const typed = (response ?? '').replace(/\s*\[flightdeck\] viewed \d+\/\d+ files?\s*$/, '').trim() // the mod's own trailer is not the user's words
-  const decision = first.split(/\s+[—–-]\s+/)[0]?.trim().toLowerCase() || (typed ? 'typed' : '')
-  return { decision, note: typed.slice(0, 200) }
+// ---------- the gate: its options, and the reply that answers it ----------
+
+export type GateOption = FlightOption
+export type GateAsk = FlightGateAsk
+
+/** The head of an option's label: `fix <ids|all-major>` → `fix`, `fix all` → `fix all`. */
+export const optionHead = (label: string) => label.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
+/** One option from `label — consequence` or `label (consequence)`; `(recommended …)` lifted out. */
+function optionOf(part: string): GateOption | null {
+  let s = part.trim().replace(/^[-*]\s+/, '')
+  if (!s) return null
+  let recommended = false
+  s = s.replace(/\s*\((?:recommended|my read)\b\s*(?:[—–:-]\s*)?([^)]*)\)/i, (_m, rest: string) => { recommended = true; return rest.trim() ? ` — ${rest.trim()}` : '' })
+  const paren = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(s)
+  const dash = /^(.*?)\s+[—–]\s+(.*)$/.exec(s)
+  const [label, consequence] = dash ? [dash[1] ?? '', dash[2] ?? ''] : paren && !/<[^>]*$/.test(paren[1] ?? '') ? [paren[1] ?? '', paren[2] ?? ''] : [s, '']
+  const l = label.trim()
+  if (!l || l.length > 60) return null
+  return { label: l, consequence: consequence.trim(), needsArg: /<[^>]+>/.test(l), recommended }
+}
+/** Marks the option `MY READ` names (its first words), when nothing is marked yet. Longest head wins: `fix all` over `fix`. */
+function recommend(options: GateOption[], hint: string): GateOption[] {
+  if (options.some(o => o.recommended)) return options
+  const read = hint.trim().toLowerCase()
+  let best = -1, len = 0
+  options.forEach((o, i) => {
+    const h = optionHead(o.label)
+    if (h && read.startsWith(h) && !/[a-z0-9]/.test(read.charAt(h.length)) && h.length > len) { best = i; len = h.length }
+  })
+  return options.map((o, i) => ({ ...o, recommended: i === best }))
+}
+
+/** .awaiting-approval → the ask and its options (1.12 marker). A 1.11 marker has no Options: block and yields options: []. */
+export function parseMarker(text: string): GateAsk {
+  const out: GateAsk = { phase: '', req: '', ask: '', options: [], files: [], source: 'marker' }
+  let block: 'options' | 'files' | null = null
+  let rec = ''
+  for (const raw of text.replace(/\r\n/g, '\n').split('\n')) {
+    const item = /^\s+[-*]\s+(.*)$/.exec(raw)
+    if (item && block) {
+      if (block === 'options') { const o = optionOf(item[1] ?? ''); if (o) out.options.push(o) }
+      else out.files.push((item[1] ?? '').replace(/\s+\(.*\)\s*$/, '').trim())
+      continue
+    }
+    const kv = /^([A-Za-z][\w ]*?):\s*(.*)$/.exec(raw.trim())
+    if (!kv) continue
+    const key = (kv[1] ?? '').toLowerCase(), val = (kv[2] ?? '').trim()
+    block = key === 'options' ? 'options' : key === 'files' ? 'files' : null
+    if (key === 'phase') out.phase = val
+    else if (key === 'req') out.req = val
+    else if (key === 'ask' || (key === 'awaiting' && !out.ask)) out.ask = val
+    else if (key === 'recommended') rec = val
+  }
+  out.options = recommend(out.options.slice(0, 8), rec)
+  return out
+}
+
+/** Fallback for a 1.11 toolkit: the card's `Decision →` line split on ' · ', each part `label (consequence)` or `label — consequence`. */
+export function optionsFromDecision(line: string | null, myRead: string): GateOption[] {
+  if (!line) return []
+  const parts = line.split(/\s+·\s+/).map(optionOf).filter((o): o is GateOption => o !== null)
+  return recommend(parts.slice(0, 8), myRead)
+}
+
+/**
+ * The gate's own options as each phase skill defines them, for a marker that lists none and a card this
+ * machine never saw (a gate opened in another session by an older toolkit). `MY READ`, when known, marks one.
+ */
+const STANDARD: Record<string, string[]> = {
+  review: [
+    'fix all — every actionable finding gets fixed; reviewers re-run and the gate comes back',
+    'fix <ids|all-major> — the same loop, scoped to the findings you name',
+    'approve — accept the findings as they are and move on to wrapup',
+    'revise <what> — other changes to the review',
+    'abort — escalate and halt this REQ',
+  ],
+  verify: [
+    'approve — the fix is verified; move on to ship',
+    'revise <what> — change the fix first',
+    'abort — halt this bug',
+  ],
+  ship: [
+    'approve — gate cleared; run the merge checklist',
+    'revise <what> — adjust the PR draft or the vault updates',
+    'merged — after you merge: finalize state and log it to hot.md',
+    'abort — halt without merging',
+  ],
+}
+const NEXT: Record<string, string> = { spec: 'architect', architect: 'implement', implement: 'review', report: 'plan', plan: 'fix', fix: 'verify' }
+export function standardOptions(phase: string, myRead: string): GateOption[] {
+  const lines = STANDARD[phase] ?? [
+    `approve — gate cleared; ${NEXT[phase] ? `ready for ${NEXT[phase]}` : 'move on'}`,
+    'revise <what> — describe what to change first',
+    `abort — stop ${phase === 'spec' || phase === 'report' ? 'and discard this item' : `here; ${phase === 'implement' || phase === 'fix' ? 'the work tree needs cleaning up' : 'the earlier phases stay'}`}`,
+  ]
+  return recommend(lines.map(optionOf).filter((o): o is GateOption => o !== null), myRead)
+}
+
+/** The cockpit's trailer on a reply it sent: the viewed count at implement and review, `pane` elsewhere. */
+export const REPLY_TRAILER = /\s*\[flightdeck\](?: viewed (\d{1,3})\/(\d{1,3}) files?| pane)\s*$/
+export const trailerFor = (phase: number, v: { n: number; m: number } | null) =>
+  (phase === 3 || phase === 4) && v && v.m > 0 ? `\n\n[flightdeck] viewed ${v.n}/${v.m} files` : '\n\n[flightdeck] pane'
+
+/** The text the pane submits for an option: the label (an argument the
+ *  user typed substituted for its <…>), then the viewed trailer at
+ *  implement and review when files changed. */
+export function replyFor(o: GateOption, arg: string | null, phase: number, v: { n: number; m: number } | null): string {
+  const a = (arg ?? '').trim()
+  const text = o.needsArg ? (a ? o.label.replace(/<[^>]*>/, a) : optionHead(o.label)) : o.label
+  return `${text.replace(/\s+/g, ' ').trim()}${trailerFor(phase, v)}`
+}
+
+/** The words a gate understands when the marker lists no options (a 1.11 toolkit, a gate never captured here). */
+const VERBS = ['approve', 'fix all', 'fix', 'revise', 'abort', 'merged', 'reframe', 'escalate', 'skip']
+
+/** A user turn → { decision, note, viewed } — the first word or two that
+ *  name an option, the rest as the note, the trailer lifted out. */
+export function replyOf(text: string, options: GateOption[]): { decision: string; note: string; viewed: string | null } {
+  const t = REPLY_TRAILER.exec(text)
+  const viewed = t && t[1] ? `${t[1]}/${t[2]}` : null
+  const body = text.replace(REPLY_TRAILER, '').trim()
+  const low = body.toLowerCase()
+  const heads = [...new Set([...options.map(o => optionHead(o.label)), ...(options.length ? [] : VERBS)])].filter(Boolean).sort((a, b) => b.length - a.length)
+  const head = heads.find(h => low.startsWith(h) && !/[a-z0-9]/.test(low.charAt(h.length))) ?? ''
+  const note = head ? body.slice(head.length).replace(/^[\s:,—–-]+/, '').trim() : ''
+  return { decision: head, note: note.slice(0, 200), viewed }
+}
+
+/**
+ * The REQ strip: the in-flight REQs (see `inFlight`), plus the members of a running sprint,
+ * matched by full id — one that finished here rides along done, one with nothing here is
+ * kept, dim. At a gate first (oldest wait first), then the most recently stamped.
+ */
+export function stripOf(
+  reqs: readonly FlightReq[],
+  members: readonly { id: string; sprint: string }[],
+  endedHere: (id: string) => string | false | null | undefined,
+): FlightStripEntry[] {
+  const out: FlightStripEntry[] = reqs.map(r => ({ id: r.id, phase: r.phase, phaseName: r.phaseName, waiting: r.waiting, sprint: null, here: true }))
+  const at = new Map(reqs.map(r => [r.id, r] as const))
+  for (const m of members) {
+    const id = idOf(m.id) ?? m.id
+    const have = out.find(x => x.id === id)
+    if (have) { have.sprint ??= m.sprint; continue }
+    const ended = endedHere(id)
+    // A member with a folder or record here that is no longer flying finished in this sprint: it rides the strip, done.
+    if (ended === 'merged' || ended === 'archived' || ended === 'cancelled') {
+      out.push({ id, phase: 5, phaseName: 'ship', waiting: false, sprint: m.sprint, here: true, ended: ended === 'cancelled' ? 'cancelled' : 'merged' })
+      continue
+    }
+    if (ended) continue
+    out.push({ id, phase: 0, phaseName: '', waiting: false, sprint: m.sprint, here: false })
+  }
+  // Waiting first, then flying, then finished, then members with nothing here.
+  const rank = (s: FlightStripEntry) => (!s.here ? 3 : s.ended ? 2 : s.waiting ? 0 : 1)
+  return out.sort((a, b) => {
+    if (rank(a) !== rank(b)) return rank(a) - rank(b)
+    const ra = at.get(a.id), rb = at.get(b.id)
+    if (a.waiting) return (ra?.waitingSince ?? 0) - (rb?.waitingSince ?? 0)
+    return (rb?.touchedAt ?? 0) - (ra?.touchedAt ?? 0)
+  })
+}
+
+/** By ID number: REQs before BUGs, then the number (`REQ-sf-011` before `REQ-sf-026`), then the text. */
+export function idOrder(a: string, b: string): number {
+  const kind = (id: string) => (/^BUG/.test(id) ? 1 : 0)
+  const num = (id: string) => Number(/(\d+)$/.exec(id)?.[1] ?? Number.MAX_SAFE_INTEGER)
+  return kind(a) - kind(b) || num(a) - num(b) || a.localeCompare(b)
+}
+
+/**
+ * Where ✈ takes you: while a sprint runs, its first member still in flight (by ID); else the REQ this
+ * session is flying, when it is in flight; else the first one at a gate; else the first in flight.
+ */
+export function flyingTarget(strip: readonly FlightStripEntry[], focus: string | null): string | null {
+  const live = strip.filter(s => s.here && !s.ended).slice().sort((a, b) => idOrder(a.id, b.id))
+  const sprint = live.find(s => s.sprint)
+  if (sprint) return sprint.id
+  if (focus && live.some(s => s.id === focus)) return focus
+  return (live.find(s => s.waiting) ?? live[0])?.id ?? null
+}
+
+/** A sprint registry (`sprints/<month>/SPRINT-*.json`, or flat) → its members, finished ones too; none once the sprint is complete. */
+export function sprintMembers(json: string): { id: string; sprint: string }[] {
+  let reg: { sprint?: string; status?: string; reqs?: { id?: string; status?: string }[] }
+  try { reg = JSON.parse(json) as typeof reg } catch { return [] }
+  if (reg.status && reg.status !== 'running') return []
+  const sprint = reg.sprint ?? 'sprint'
+  return (reg.reqs ?? []).filter(r => r.id).map(r => ({ id: r.id as string, sprint }))
+}
+
+/**
+ * 0.7.0 — which REQs are in flight: started (past phase 0) and not yet at their last phase. A REQ that has not
+ * begun, or has reached ship (wrapup), is history, whatever markers or registries it still carries.
+ */
+export function inFlight(reqs: readonly FlightReq[]): FlightReq[] {
+  return reqs.filter(r => r.phase >= 1 && r.phase < r.phases.length)
+}
+
+/**
+ * One row of the narrow list home: the gate state, the last round's decision and how many
+ * rounds, findings that need a call at review, the viewed count at implement and review,
+ * whether the predict (architect) or summary (ship) ask was answered, and the wait.
+ */
+export function phaseLine(c: {
+  n: number
+  state: 'done' | 'now' | 'gate' | 'todo' | string
+  rounds: readonly { decision: string; note: string }[]
+  needCall?: number
+  findings?: number
+  viewed?: { n: number; m: number } | null
+  waiting?: string | null
+}): string {
+  const parts: string[] = []
+  const gates = c.rounds.filter(r => r.decision !== 'predict' && r.decision !== 'summary')
+  const last = gates[gates.length - 1]
+  if (c.n === 4 && c.findings) parts.push(`${c.findings} finding${c.findings > 1 ? 's' : ''}`)
+  if (c.n === 4 && c.needCall) parts.push(`${c.needCall} need${c.needCall > 1 ? '' : 's'} a call`)
+  if (last && c.state !== 'gate') parts.push(`${last.decision} · ${gates.length} round${gates.length > 1 ? 's' : ''}`)
+  else if (last) parts.push(`last: ${last.decision}`)
+  const ask = c.n === 2 ? c.rounds.find(r => r.decision === 'predict') : c.n === 5 ? c.rounds.find(r => r.decision === 'summary') : undefined
+  if (ask) parts.push(`${c.n === 2 ? 'predict' : 'summary'} ${!ask.note || /^skip\b/i.test(ask.note) ? 'skipped' : 'answered'}`)
+  if ((c.n === 3 || c.n === 4) && c.viewed && c.viewed.m > 0) parts.push(`viewed ${c.viewed.n}/${c.viewed.m}`)
+  if (c.state === 'gate' && c.waiting) parts.push(`waiting ${c.waiting}`)
+  if (!parts.length) parts.push(c.state === 'todo' ? '' : c.state === 'now' ? 'in progress' : c.state === 'gate' ? 'at the gate' : 'cleared')
+  return parts.join(' · ')
+}
+
+const SKILL_OF: Record<number, string> = { 1: 'spec', 2: 'architect', 3: 'implement', 4: 'review', 5: 'wrapup' }
+
+/** The instructions the cockpit hands `$.session.compact` at a gate: what to keep, what is on disk, what to re-read. ≤1,200 characters. */
+export function compactBrief(r: FlightReq, st: PipelineState | undefined, ask: GateAsk | undefined, folder: string | undefined, vault: string | null, digestIds: readonly string[] = []): string {
+  const rel = folder && vault && folder.startsWith(vault) ? folder.slice(vault.length).replace(/^\/+/, '') : (folder ?? r.id)
+  const skill = r.kind === 'bug' ? 'bugfix' : SKILL_OF[r.phase] ?? 'proceed'
+  const vp = st?.phases?.[String(r.phase)]
+  const open = (st?.phases?.['4']?.findings ?? []).filter(f => f.id && f.decision !== 'accept').map(f => f.id as string)
+  const ids = (open.length ? open : [...digestIds]).slice(0, 12)
+  const tasks = Object.entries(st?.taskStatus ?? {}).sort(([a], [b]) => a.localeCompare(b)).slice(0, 12).map(([k, v]) => `${k} ${v}`)
+  const words = (vp?.gates ?? []).map(g => g.note ?? '').filter(Boolean).slice(-3).map(n => `“${n.slice(0, 80)}”`)
+  const since = r.waitingSince != null ? ` waiting since ${timeOf(r.waitingSince)}` : ''
+  const files = (ask?.files ?? []).slice(0, 4).map(f => `  ${f.startsWith('.adlc/') ? f : `.adlc/${f}`}`)
+  const lines = [
+    `ADLC gate compaction. Resuming ${r.id} (${rel}) at phase ${r.phase} ${r.phaseName}, gate ${st?.currentPhaseGate ?? r.phaseName},${since}. The vault is the record; the summary is not.`,
+    `Keep verbatim: the gate's options and MY READ; open finding ids (${ids.join(', ') || 'none'}); the task list and status (${tasks.join(', ') || 'none'}); the user's own words from this phase's rounds${words.length ? ` (${words.join(' ')})` : ''}.`,
+    'Drop: tool output, file contents, reviewer narratives — all on disk.',
+    'After compaction, re-read in full before acting:',
+    `  $TOOLKIT_PATH/core/skills/${skill}.md`,
+    '  $TOOLKIT_PATH/core/GATE-PROTOCOL.md',
+    `  .adlc/${rel}/pipeline-state.json`,
+    `  .adlc/${rel}/.awaiting-approval`,
+    ...files,
+  ]
+  let s = lines.join('\n')
+  // Over budget: the quoted words go first, then the task list shortens; the re-read list is never cut.
+  if (s.length > 1200 && words.length) { lines[1] = (lines[1] ?? '').replace(/ \(“.*”\)\.$/, '.'); s = lines.join('\n') }
+  if (s.length > 1200) { lines[1] = (lines[1] ?? '').replace(/\(TASK-[^)]*\)/, `(${tasks.slice(0, 4).join(', ')}${tasks.length > 4 ? ', …' : ''})`); s = lines.join('\n') }
+  return s.length > 1200 ? s.slice(0, 1199) + '…' : s
 }
 
 export const dateOf = (ms: number) => new Date(ms).toISOString().slice(0, 10)

@@ -1,6 +1,6 @@
 # Codex custom agent. Verify key names against your Codex version's schema.
 name = "reflector"
-description = "Self-review against captured lessons. Read-only."
+description = "Self-review against the captured knowledge vault. Checks whether the new code repeats any known mistake (lessons), respects any codebase quirk (gotchas), and conflicts with any accepted decision (ADRs), and sweeps user-facing repo docs for staleness against the change. Read-only — reports findings. Dispatched by /review during Phase 4."
 model = "gpt-5.3-codex"
 model_reasoning_effort = "medium"
 read_only = false

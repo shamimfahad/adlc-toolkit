@@ -55,7 +55,8 @@ export type FlightSince = Record<string, { phase: string; at: number }>
 // ---------- the cockpit: what the pane shows ----------
 
 /** A phase number, or one of the two fixed tabs. */
-export type FlightTab = 1 | 2 | 3 | 4 | 5 | 'history' | 'settings'
+/** A phase number, or one of the fixed views: history, settings, and the in-flight list `+n more` opens. */
+export type FlightTab = 1 | 2 | 3 | 4 | 5 | 'history' | 'settings' | 'reqs'
 
 /** What the phase page is showing below the tab row: the page, or one thing opened from it. */
 export type FlightSub =
@@ -66,7 +67,15 @@ export type FlightSub =
   | { kind: 'diff'; path: string }
   | { kind: 'mermaid'; n: number }
 
-export type FlightView = { req: string | null; tab: FlightTab; sub: FlightSub }
+export type FlightView = {
+  req: string | null
+  tab: FlightTab
+  sub: FlightSub
+  /** Narrow mode: the list home (one row per phase) is showing instead of a phase page. Ignored when wide; absent on a view 0.5.0 stored. */
+  home?: boolean
+  /** History: the row whose first or last state is unfolded. */
+  hist?: { id: string; which: 'first' | 'last' } | null
+}
 
 /** One row of the History tab: a folder in flight, a kept folder, or a record of finished work. */
 export type FlightItem = {
@@ -87,15 +96,29 @@ export type FlightSettings = {
   openOnStart: boolean
   band: boolean
   cards: boolean
-  /** Body columns the pane asks for when docked; 0 = the engine's share. */
-  columns: number
+  /** Body columns below which the cockpit turns narrow: chips shrink and the tab row becomes the list home. */
+  narrowAt: number
+  /** The REQ strip and the band's counts take every unshipped REQ, not only the in-flight ones. */
+  showAll: boolean
   history: 'all' | 'flying' | 'done'
   /** The editor link template: `{path}`, `{line}`, `{col}` substituted. */
   editorUri: string
+  /** Compaction at an open gate: a button, a button highlighted past `compactAt`, or not offered. */
+  compact: 'button' | 'suggest' | 'never'
+  /** Context-window percent from which `suggest` highlights the compact buttons. */
+  compactAt: number
 }
 
 /** A gate round the mod saw: what was chosen, what was typed. */
-export type FlightRound = { at: number; decision: string; note: string; /** `4/7`: files viewed of files touched when the answer landed. */ viewed?: string }
+export type FlightRound = {
+  at: number
+  decision: string
+  note: string
+  /** `4/7`: files viewed of files touched when the answer landed. */
+  viewed?: string
+  /** Sent from the pane's action bar, or typed in the prompt. */
+  via?: 'pane' | 'typed'
+}
 
 /** A subagent that landed, with its last line. */
 export type FlightRun = {
@@ -133,6 +156,10 @@ export type FlightGit = {
   authors: Record<string, string>
   me: string | null
   error: string | null
+  /** What the tree is diffed to: the REQ's branch when it resolves, else `HEAD`. */
+  tip: string
+  /** True when `tip` is what the work path has checked out; false means the matrix is committed-only. */
+  checkedOut: boolean
 }
 
 /** viewed[req][path] = the blob hash when it was marked; a hash that moved on clears the mark. */
@@ -140,6 +167,36 @@ export type FlightViewed = Record<string, Record<string, string>>
 
 /** picks[req][findingId] = what the grid composes into the gate reply. */
 export type FlightPicks = Record<string, Record<string, 'fix' | 'accept' | 'defer'>>
+
+/** One option of an open gate, from the marker (1.12) or the card's Decision line (1.11). */
+export type FlightOption = { label: string; consequence: string; needsArg: boolean; recommended: boolean }
+export type FlightGateAsk = {
+  phase: string
+  req: string
+  ask: string
+  options: FlightOption[]
+  /** The marker's `Files:` entries, as written (vault-relative). */
+  files: string[]
+  source: 'marker' | 'card'
+}
+
+/** One chip of the REQ strip: an in-flight REQ, or a sprint member (`here` false when it has no folder on this machine). */
+export type FlightStripEntry = {
+  id: string; phase: number; phaseName: string; waiting: boolean; sprint: string | null; here: boolean
+  /** 0.7.0: a sprint member that has finished here (merged or cancelled) still rides the strip while its sprint runs. */
+  ended?: 'merged' | 'cancelled'
+}
+
+/** The cockpit lives in the above-prompt band: one row, a 14-row tree, or the whole tree (the engine caps it at half the terminal). */
+export type FlightHeight = 'band' | 'open' | 'max'
+
+export type FlightLayout = {
+  height: FlightHeight
+  /** body columns below `settings.narrowAt` */
+  narrow: boolean
+  /** The gate's `[⟳ compact first]` toggle: the next option sent compacts first. */
+  compactFirst?: boolean
+}
 
 declare module 'claude-code' {
   interface PluginState {
@@ -158,6 +215,10 @@ declare module 'claude-code' {
       git: Record<string, FlightGit>
       viewed: FlightViewed
       picks: FlightPicks
+      gate: Record<string, FlightGateAsk>
+      strip: FlightStripEntry[]
+      layout: FlightLayout
+      pending: { req: string; at: number } | null
     }
   }
 }

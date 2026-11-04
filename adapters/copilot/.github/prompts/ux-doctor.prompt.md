@@ -1,5 +1,5 @@
 ---
-description: "Standalone UX & design-system audit — static source pass + runtime browser pass, consolidated."
+description: "Standalone UX & design-system audit of the whole app or a chosen part of it. Sizes the UI surface first — small apps get one pass; large apps get a gated segment plan run in phases (system pass → per-segment passes → cross-segment consolidation) with durable progress that survives sessions (/ux-doctor resume). Dispatches the design-system-auditor (static pass over the UI source) and the ui-reviewer in standalone-audit mode (runtime pass in a browser) in parallel, consolidates their findings into a dated severity-by-effort report in .adlc/audits/, and maintains .adlc/context/design-system.md. No pipeline state, no gates; fixes route to /task or /spec."
 ---
 
 Toolkit root: .adlc-toolkit

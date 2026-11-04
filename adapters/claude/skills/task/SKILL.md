@@ -1,6 +1,6 @@
 ---
 name: task
-description: "Slim self-triaging pipeline for small changes; escalates to /proceed when large."
+description: "Slim ADLC pipeline for small changes — a tweak, a small feature, a contained refactor that's too small for /proceed's five phases but should still live in the vault. Triage → plan (gate) → implement → review + ship (gate). Self-triaging: recommends /proceed if the work is actually large, up front or mid-flight, without losing the REQ folder it created. Use instead of doing small work ad-hoc, so the vault still captures it."
 ---
 
 Toolkit root: .adlc-toolkit

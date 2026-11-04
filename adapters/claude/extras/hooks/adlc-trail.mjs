@@ -34,6 +34,18 @@ const HEAD_BYTES = 65_536;
 
 // ---------- vault and REQ resolution ----------
 
+// A work-item ID as every req.id_scheme mints it: REQ-042 (sequential, ticket), REQ-sf-042
+// (prefixed), BUG-017. Grammar: core/VAULT-LAYOUT.md → "Work-item IDs" — keep this in step with
+// it and with ID_SRC in the flightdeck mod (hooks/model.ts). The prefix starts with a letter, so a
+// slug that starts with a digit (REQ-042-2fa-login) never reads as one. Not preceded by a word
+// char or a hyphen, so a lesson id (L-REQ-035-1) never yields REQ-035.
+const ID_SRC = '(?:REQ|BUG)-(?:[a-z][a-z0-9]{0,7}-)?\\d+';
+const ID_IN_TEXT = new RegExp(`(?<![\\w-])(${ID_SRC})`);
+const ID_AT_START = new RegExp(`^(${ID_SRC})(?![\\w])`);
+const idOf = (s) => ID_IN_TEXT.exec(s ?? '')?.[1] ?? null;
+/** A work folder or record name: `REQ-042-slug`, `REQ-sf-042-slug`, `BUG-017-slug` (with `.md` for records). */
+const isWorkName = (name) => ID_AT_START.test(name);
+
 function findVault(start) {
   let dir = resolve(start);
   for (let i = 0; i < 8; i++) {
@@ -54,7 +66,7 @@ function folders(vault) {
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       const p = join(dir, e.name);
-      if (/^(REQ|BUG)-\d+/.test(e.name)) out.push(p);
+      if (isWorkName(e.name)) out.push(p);
       else if (depth < MAX_DEPTH && e.name !== '_archive') walk(p, depth + 1);
     }
   };
@@ -72,7 +84,7 @@ const isTerminal = (st) => !st || st.prState === 'merged' || st.aborted === true
 function resolveReq(vault, hint) {
   const all = folders(vault);
   if (hint) {
-    const id = /\b((?:REQ|BUG)-\d+)/.exec(hint)?.[1];
+    const id = idOf(hint);
     const hit = all.find((f) => basename(f) === hint || basename(f) === basename(hint)) ?? (id && all.find((f) => basename(f).startsWith(id + '-') || basename(f) === id));
     if (hit) return hit;
     if (existsSync(join(resolve(hint), 'pipeline-state.json'))) return resolve(hint);
@@ -138,7 +150,7 @@ function transcriptHead(path) {
     let n = 0;
     try { n = readSync(fd, buf, 0, buf.length, 0); } finally { closeSync(fd); }
     const head = buf.toString('utf8', 0, n);
-    return { req: /\b((?:REQ|BUG)-\d+)/.exec(head)?.[1] ?? null, task: /\b(TASK-\d+)/.exec(head)?.[1] ?? null };
+    return { req: idOf(head), task: /\b(TASK-\d+)/.exec(head)?.[1] ?? null };
   } catch { return { req: null, task: null }; }
 }
 
@@ -285,8 +297,8 @@ function records(vault) {
     try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       const p = join(dir, e.name);
-      if (e.isFile() && /^(REQ|BUG)-\d+.*\.md$/.test(e.name)) out.push(p);
-      else if (e.isDirectory() && !/^(REQ|BUG)-\d+/.test(e.name) && depth < MAX_DEPTH) walk(p, depth + 1);
+      if (e.isFile() && isWorkName(e.name) && e.name.endsWith('.md')) out.push(p);
+      else if (e.isDirectory() && !isWorkName(e.name) && depth < MAX_DEPTH) walk(p, depth + 1);
     }
   };
   for (const shelf of ['specs', 'bugs']) walk(join(vault, shelf), 1);
@@ -306,7 +318,7 @@ const pct = (x) => (x === null ? '—' : `${Math.round(x * 100)}%`);
 
 /** One item's evidence facts, from its working set (pipeline-state.phases + files) or its record (## Trail). */
 function evidenceOf(folder, recordPath) {
-  const id = /^((?:REQ|BUG)-\d+)/.exec(basename(folder ?? recordPath))?.[1] ?? basename(folder ?? recordPath);
+  const id = ID_AT_START.exec(basename(folder ?? recordPath))?.[1] ?? basename(folder ?? recordPath);
   const f = { id, source: folder ? 'folder' : 'record', phase: 0, answers: [], predict: null, summary: null, architect: false, ship: false, noWhere: [], behaviour: null };
   if (folder) {
     const st = readState(folder);

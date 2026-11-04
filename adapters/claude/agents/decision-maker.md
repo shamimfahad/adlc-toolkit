@@ -1,6 +1,6 @@
 ---
 name: decision-maker
-description: "Decides one pipeline gate during an autonomous run (/autopilot, or /sprint’s adjudicated queue) — APPROVE / REWORK / HALT with confidence + cited evidence. Conservative by default; escalates on doubt."
+description: "Decides a single pipeline gate during an autonomous run — /autopilot, or /sprint adjudicating its gate queue (autonomy.gates set to assisted or auto). Reads the gate's evidence packet and returns one verdict — APPROVE, REWORK, or HALT — with a confidence score and cited evidence. Read-only on source; writes only its verdict to gate-decisions.md. Cautious by default: hands anything doubtful back to the human. Dispatched by /autopilot and the /sprint orchestrator for gates that are neither clearly fine nor clearly broken."
 model: opus
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---

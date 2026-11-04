@@ -1,5 +1,5 @@
 ---
-description: "Parallel multi-REQ orchestrator (gate-pause; queue adjudication via autonomy.gates)."
+description: "Parallel multi-REQ orchestrator. Launches one pipeline-runner agent per REQ in an isolated worktree. Each runner pauses at its first gate; the orchestrator maintains a unified queue of waiting gates across all REQs. Who clears that queue follows the autonomy.gates dial — the user (manual, default), the user with a decision-maker recommendation attached (assisted), or the decision-maker itself with only exceptions surfacing (auto)."
 ---
 
 Toolkit root: .adlc-toolkit

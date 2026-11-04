@@ -3,10 +3,11 @@ import { describe, expect, test, type TestBody } from 'claude-code/testing'
 
 import type { FlightDeck, FlightGit, FlightItem, FlightTrail } from '../types'
 import {
-  acCheckOf, acceptanceOf, asFuelRow, behaviourOf, blastRadius, consequences, editorHref, findingsOf, hasPointer,
-  knowledgeHits, mergeTouched, mermaidFences, parseNameStatus, parseNumstat, parsePorcelain, parseTask, planVsActual,
-  pointerSpans, rails, roundOf, summaryGaps, tiersOf,
+  acCheckOf, acceptanceOf, asFuelRow, behaviourOf, blastRadius, consequences, editorHref, findingsOf, gitPlan, hasPointer,
+  knowledgeHits, mergeTouched, mermaidFences, parseLsTree, parseNameStatus, parseNumstat, parsePorcelain, parseTask, planVsActual,
+  pointerSpans, rails, roundOf, summaryGaps, tiersOf, checklist, criterionTitle, plainMd,
 } from '../hooks/evidence'
+import { parseMarker, standardOptions } from '../hooks/vault'
 import { buildReq } from '../hooks/model'
 
 const ARCH = [
@@ -63,6 +64,11 @@ describe('evidence: markdown', () => {
     expect(knowledgeHits(ARCH).map(h => h.id)).toEqual(['L-REQ-031-2', 'ADR-009'])
   })
 
+  test('knowledge hits: lessons on every id scheme (sequential, prefixed, bug)', () => {
+    const md = ['## Related', '', '- L-REQ-sf-031-2 — prefixed', '- LESSON-REQ-sf-7-1 — long form', '- L-BUG-017-1 — bug', '- L-REQ-042-1 — sequential', ''].join('\n')
+    expect(knowledgeHits(md).map(h => h.id)).toEqual(['L-REQ-sf-031-2', 'LESSON-REQ-sf-7-1', 'L-BUG-017-1', 'L-REQ-042-1'])
+  })
+
   test('task files: fields, files, acceptance; tiers and rails', () => {
     const t1 = parseTask(TASK('TASK-001', '—', 'src/pay/RetryPolicy.cs,tests/pay/RetryPolicyTests.cs'))
     const t2 = parseTask(TASK('TASK-002', 'TASK-001', 'src/pay/Gateway.cs').replace('| Tier | 0 |', '| Tier | 1 |'))
@@ -99,6 +105,38 @@ describe('evidence: markdown', () => {
   })
 })
 
+describe('readers the flightdeck pages lean on', () => {
+  test('task paths in backticks match git\'s paths', () => {
+    const t = parseTask(TASK('TASK-001', '—', 'src/pay/RetryPolicy.cs'))
+    expect(planVsActual([], [t], [{ path: 'src/pay/RetryPolicy.cs', status: 'M', add: 1, del: 0 }]).map(r => [r.path, r.tasks, !!r.touched])).toEqual([['src/pay/RetryPolicy.cs', ['TASK-001'], true]])
+  })
+
+  test('a criterion that wraps is one item, drawn by its bold lead', () => {
+    const items = checklist(['- [ ] **1. Opens at its address.** On `pnpm dev`', '      the page loads.', '- [x] plain one'].join('\n'))
+    expect(items.length).toBe(2)
+    expect(items[0]?.text).toMatch(/the page loads\.$/)
+    expect(criterionTitle(items[0]?.text ?? '')).toBe('Opens at its address.')
+    expect(criterionTitle('plain `code` and **bold**')).toBe('plain code and bold')
+    expect(plainMd('[a link](x.md) and _this_')).toBe('a link and this')
+  })
+
+  test('a gate with no Options: block: Awaiting is the ask, and the phase\'s standard options stand in', () => {
+    expect(parseMarker('Phase: verify\nAwaiting: review the findings.').ask).toBe('review the findings.')
+    expect(parseMarker('Awaiting: x\nAsk: the real ask').ask).toBe('the real ask')
+    const review = standardOptions('review', 'fix all — two majors')
+    expect(review.map(o => o.label)).toEqual(['fix all', 'fix <ids|all-major>', 'approve', 'revise <what>', 'abort'])
+    expect(review.find(o => o.recommended)?.label).toBe('fix all')
+    expect(standardOptions('spec', '').map(o => o.label)).toEqual(['approve', 'revise <what>', 'abort'])
+    expect(standardOptions('ship', '').some(o => o.label === 'merged')).toBe(true)
+  })
+
+  test('the current phase listed as completed while its marker is open is still the gate', () => {
+    const r = buildReq('REQ-sf-038-x', { currentPhase: 4, completedPhases: [0, 1, 2, 3, 4], gateState: 'awaiting' }, true, 0, 0)
+    expect(r.phases.map(p => p.state)).toEqual(['done', 'done', 'done', 'gate', 'todo'])
+    expect(buildReq('REQ-1-x', { currentPhase: 4, completedPhases: [1, 2, 3, 4] }, false, null, 0).phases[3]?.state).toBe('done')
+  })
+})
+
 describe('evidence: git', () => {
   test('porcelain, numstat, name-status merge into one row per path', () => {
     const porcelain = parsePorcelain([' M src/pay/RetryPolicy.cs', '?? src/pay/New.cs', 'R  old.cs -> src/pay/Moved.cs', 'D  gone.cs'].join('\n'))
@@ -124,6 +162,11 @@ describe('evidence: git', () => {
     expect(rows[0]?.path).toBe('src/pay/Startup.cs') // surprises first: outside the plan, then planned-untouched
   })
 
+  test('plan vs actual: vault writes are not surprises', () => {
+    const touched = mergeTouched(parsePorcelain(' M .adlc/specs/REQ-042/pipeline-state.json\n?? .adlc/lessons/L-1.md\n M src/pay/Startup.cs\n'), [], [])
+    expect(planVsActual([], [], touched).map(r => r.path)).toEqual(['src/pay/Startup.cs'])
+  })
+
   test('consequences and summary gaps', () => {
     const rows = planVsActual([], [], mergeTouched(parsePorcelain(' M src/pay/RetryPolicy.cs\n M db/migrations/0042_retry.sql\n'), [], []))
     const c = consequences('### 1\ngit commit -m "a"\n### 2\ngit commit -m "b"', 'gh pr create --base release/2.4', null, 'feat/REQ-042', rows)
@@ -134,6 +177,28 @@ describe('evidence: git', () => {
     const gaps = summaryGaps('I changed RetryPolicy to back off with jitter.', rows)
     expect(gaps.mentioned).toEqual(['src/pay/RetryPolicy.cs'])
     expect(gaps.missed).toEqual(['db/migrations/0042_retry.sql'])
+  })
+})
+
+describe('evidence: which tree', () => {
+  test('plan vs actual diffs the REQ\'s branch when another branch is checked out', () => {
+    const away = gitPlan({ branch: 'feat/REQ-sf-033' }, 'feat/REQ-sf-034', true)
+    expect(away.tip).toBe('feat/REQ-sf-033')
+    expect(away.checkedOut).toBe(false)
+    expect(away.mergeBase('main')).toEqual(['merge-base', 'feat/REQ-sf-033', 'main'])
+    expect(away.committed('abc')).toEqual(['diff', '--name-status', 'abc', 'feat/REQ-sf-033'])
+    expect(away.porcelain).toBe(null) // the working tree belongs to the other branch
+    expect(away.numstat('abc')).toEqual(['diff', '--numstat', 'abc', 'feat/REQ-sf-033'])
+    expect(away.hashes(['a.cs'])).toEqual(['ls-tree', '-r', 'feat/REQ-sf-033', '--', 'a.cs'])
+    expect(parseLsTree('100644 blob 9f2c1e\tsrc/A.cs\n')).toEqual({ 'src/a.cs': '9f2c1e' })
+    const home = gitPlan({ branch: 'feat/REQ-sf-033' }, 'feat/REQ-sf-033', true)
+    expect(home.checkedOut).toBe(true)
+    expect(home.porcelain).toEqual(['status', '--porcelain', '--untracked-files=all'])
+    expect(home.numstat('abc')).toEqual(['diff', '--numstat', 'abc'])
+    const gone = gitPlan({ branch: 'feat/deleted' }, 'main', false) // the branch does not resolve: HEAD, as before
+    expect(gone.tip).toBe('HEAD')
+    expect(gone.checkedOut).toBe(true)
+    expect(gone.committed('abc')).toEqual(['diff', '--name-status', 'abc', 'HEAD'])
   })
 })
 
@@ -173,7 +238,7 @@ const items: FlightItem[] = [
 ]
 const gitFacts: Record<string, FlightGit> = {
   'REQ-042': {
-    at: 0, cwd: 'D:/repo', base: 'abc', baseName: 'main', branch: 'feat/REQ-042', me: 'sf', error: null,
+    at: 0, cwd: 'D:/repo', base: 'abc', baseName: 'main', branch: 'feat/REQ-042', me: 'sf', error: null, tip: 'feat/REQ-042', checkedOut: true,
     touched: [
       { path: 'src/pay/RetryPolicy.cs', status: 'M', add: 12, del: 3 },
       { path: 'src/pay/Startup.cs', status: 'M', add: 1, del: 0 },
@@ -188,20 +253,24 @@ const trail: FlightTrail = {
     review: { rounds: [], runs: [], card: null },
   },
 }
-const settings = { openOnStart: false, band: true, cards: true, columns: 0, history: 'all' as const, editorUri: 'vscode://file/{path}:{line}:{col}' }
-const state = (on: On, key: 'deck' | 'lanes' | 'focus' | 'fuel' | 'agents' | 'now' | 'view' | 'items' | 'settings' | 'trail' | 'filters' | 'git' | 'viewed' | 'picks', value: unknown) =>
+const settings = { openOnStart: false, band: true, cards: true, narrowAt: 84, showAll: false, history: 'all' as const, editorUri: 'vscode://file/{path}:{line}:{col}', compact: 'button' as const, compactAt: 70 }
+const state = (on: On, key: 'deck' | 'lanes' | 'focus' | 'fuel' | 'agents' | 'now' | 'view' | 'items' | 'settings' | 'trail' | 'filters' | 'git' | 'viewed' | 'picks' | 'gate' | 'strip' | 'layout' | 'pending', value: unknown) =>
   on('state.get', { plugin: 'adlc-flightdeck', key } as never, async () => ({ value: { value, version: 1 } }) as never)
-const PANE_PROPS = { title: 'ADLC', isFocused: true, bodyColumns: 120, placement: 'dock' as const, scroll: { offset: 0, bodyRows: 40 }, view: {} }
+// 0.7.0: the cockpit is the above-prompt band at full height (`max`); no pane.
+const PANE_PROPS = { hasSurvey: false, isWorking: false, maxRows: 400, bodyColumns: 120, scroll: { offset: 0, bodyRows: 399 }, view: {} }
 export const mountPane = ($: Parameters<TestBody>[0], surface: 'terminal' | 'desktop') =>
-  $.ui.mount({ plugin: 'adlc-flightdeck', surface, component: 'Pane', requestId: 'adlc-flight', props: PANE_PROPS, viewport: { columns: 124, rows: 50 } })
-export const common = (on: On, tab: number, viewed: unknown = {}) => {
+  $.ui.mount({ plugin: 'adlc-flightdeck', surface, component: 'AbovePrompt', props: PANE_PROPS, viewport: { columns: 124, rows: 800 } })
+/** The same REQ standing at another phase's open gate. */
+const deckAt = (phase: number): FlightDeck => ({ ...deck, reqs: [buildReq('REQ-042-payment-retries', { currentPhase: phase, gateState: 'awaiting', workPath: 'D:/repo', branch: 'feat/REQ-042', taskStatus: { 'TASK-001': 'complete' } }, true, 0, 0)] })
+export const common = (on: On, tab: number, viewed: unknown = {}, d: FlightDeck = deck) => {
   on('clock.now', async () => ({ value: 5000 }))
-  state(on, 'deck', deck)
+  state(on, 'deck', d)
   state(on, 'focus', 'REQ-042')
   state(on, 'lanes', [])
   state(on, 'items', items)
   state(on, 'trail', trail)
   state(on, 'settings', settings)
+  state(on, 'layout', { height: 'max', narrow: false })
   state(on, 'git', gitFacts)
   state(on, 'viewed', viewed)
   state(on, 'picks', {})
@@ -212,53 +281,65 @@ export const common = (on: On, tab: number, viewed: unknown = {}) => {
 describe('evidence pages', () => {
   // The test host has no filesystem beneath the plugin, so the pages draw from state here:
   // git facts, the trail, fuel. The markdown-fed parts are covered above and by the live check.
-  test('implement: plan vs actual names the surprise, the matrix links every file, viewed count in the header', async ($, on) => {
+  test('implement at its gate: GATE first with the options, then FILES — every changed file a link, a mark and a diff', async ($, on) => {
     common(on, 3, { 'REQ-042': { 'src/pay/retrypolicy.cs': 'h1' } })
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await mountPane($, surface)
-      expect(await ui.find({ type: 'Text', text: /PLAN VS ACTUAL/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /2 touched/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /outside the plan/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /awaiting — implement · round 2/ })).toBeDefined()
+      expect(await ui.find({ key: 'opt-approve' })).toBeDefined() // no marker, no card: the phase's standard options
+      expect(await ui.find({ type: 'Text', text: /standard options/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /1 of 2 changed files not viewed/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^FILES$/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /viewed 1\/2/ })).toBeDefined()
       expect(await ui.find({ key: 'seen-src/pay/startup.cs' })).toBeDefined()
       expect(await ui.find({ key: 'diff-src/pay/retrypolicy.cs' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /not yours lately/ })).toBeDefined() // Startup.cs: jd, 7 months ago
       if (surface === 'terminal') expect(await ui.find({ type: 'Link' })).toBeDefined()
       else expect(await ui.find({ type: 'Link' })).toBeUndefined() // https-only there: buttons instead
-      expect(await ui.find({ type: 'Text', text: /context re-read/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /20\.8M/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /· 48k tok/ })).toBeDefined() // the header: fresh, not the flood
-      expect(await ui.find({ key: 'resume-REQ-042' })).toBeDefined() // the decision is last
+      expect(await ui.find({ type: 'Text', text: /PLAN VS ACTUAL|AGENTS|context re-read|RECORD/ })).toBeUndefined() // the mockup's page, nothing piled under it
+      expect(await ui.find({ key: 'resume-REQ-042' })).toBeUndefined()
       await ui.unmount()
     }
   })
 
-  test('the gate round carries what was viewed when it was answered', async ($, on) => {
-    common(on, 3)
+  test('a cleared gate says what was chosen, in which round, and how much had been viewed', async ($, on) => {
+    common(on, 3, {}, deckAt(4))
     const ui = await mountPane($, 'terminal')
-    expect(await ui.find({ type: 'Text', text: /viewed 1\/2/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^approve$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /cleared · approve · round 1 · .* · viewed 1\/2/ })).toBeDefined()
     await ui.unmount()
   })
 
-  test('review without a verification.md still shows the tree and says what is missing', async ($, on) => {
+  test('review at its gate: findings, acceptance and plan vs actual, each saying what is missing', async ($, on) => {
+    common(on, 4, {}, deckAt(4))
+    const ui = await mountPane($, 'terminal')
+    expect(await ui.find({ type: 'Text', text: /awaiting — review/ })).toBeDefined()
+    expect(await ui.find({ key: 'opt-fix all' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /no verification\.md yet/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /no acceptance check/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^PLAN VS ACTUAL$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /2 touched/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^surprise$/ })).toBeDefined() // touched, never planned
+    expect(await ui.find({ key: 'compose' })).toBeUndefined() // nothing picked
+    await ui.unmount()
+  })
+
+  test('a phase not reached says when it opens, and nothing else', async ($, on) => {
     common(on, 4)
     const ui = await mountPane($, 'terminal')
-    expect(await ui.find({ type: 'Text', text: /FINDINGS · 0/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /no verification\.md yet/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /PLAN VS ACTUAL/ })).toBeDefined()
-    expect(await ui.find({ key: 'compose' })).toBeUndefined() // nothing to compose
+    expect(await ui.find({ type: 'Text', text: /not reached — opens after implement clears/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /This page fills in when implement clears/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^FINDINGS$/ })).toBeUndefined()
     await ui.unmount()
   })
 
-  test('ship: consequences lead, diffstat follows, every file a diff', async ($, on) => {
-    common(on, 5)
+  test('ship: what approving sets in motion leads, the diffstat follows, every file a diff', async ($, on) => {
+    common(on, 5, {}, deckAt(5))
     const ui = await mountPane($, 'terminal')
-    expect(await ui.find({ type: 'Text', text: /WHAT APPROVING SETS IN MOTION/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^WHAT APPROVING SETS IN MOTION$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /2 files outside the plan/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /DIFFSTAT · 2 files/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /\+13/ })).toBeDefined()
-    expect(await ui.find({ key: 'diff-src/pay/startup.cs' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^DIFFSTAT$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /2 files · \+13 −3/ })).toBeDefined()
+    expect(await ui.find({ key: 'bar-src/pay/startup.cs' })).toBeDefined()
+    expect(await ui.find({ key: 'opt-merged' })).toBeDefined()
     await ui.unmount()
   })
 
