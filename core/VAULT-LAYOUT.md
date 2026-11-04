@@ -129,6 +129,34 @@ For an explicit ID supplied by the user, run the same scan and collision-check a
 
 `~/.adlc/.global-next-req` (the cross-project counter `/sprint` uses) is outside this file's scope and unchanged.
 
+## Work-item IDs — the one pattern code matches
+
+Every scheme above yields an ID of this shape, and every tool that recognises a work item by name matches **this**, never a narrower form:
+
+```
+(?:REQ|BUG)-(?:[a-z][a-z0-9]{0,7}-)?\d+
+```
+
+| Scheme | ID | Folder / record |
+|---|---|---|
+| `sequential` | `REQ-042` | `REQ-042-payment-retries`, `REQ-042-payment-retries.md` |
+| `prefixed` | `REQ-sf-042` | `REQ-sf-042-gate-turn` |
+| `ticket` (bare number) | `REQ-842` | `REQ-842-…` |
+| bugs | `BUG-017`, `BUG-sf-017` | `BUG-017-…` |
+
+- The optional prefix is `req.prefix`: lowercase, starts with a letter, at most 8 characters. Starting with a letter is what keeps a slug that begins with a digit (`REQ-042-2fa-login`) from reading as a prefix.
+- Matching an ID inside free text (a transcript, a hint, a `## Related` line), require that it is **not preceded by a word character or a hyphen**, so a lesson ID (`L-REQ-035-1`) never yields `REQ-035`.
+- `REQ-\d+` alone is the regression this section exists to stop: it makes every `prefixed` vault invisible. Telling a work folder from a bucket by `^(REQ|BUG)-` (no digits) stays fine.
+- A `ticket` native key (`PROJ-842`) is not covered by this pattern, nor by the `REQ-*` scans in `mint` and `resolve`. Supporting it is one change across all of them, not a per-tool patch.
+
+The pattern lives as a constant in each tool that runs without the toolkit beside it: `adlc-trail.mjs` (`ID_SRC`), `scripts/vault-gen.mjs` (`WORK_ID_SRC`), the flightdeck mod's `hooks/model.ts` (`ID_SRC`), and `core/manifest.json` → `layout.idPattern`. Change them together. Proof that no narrower copy has crept back:
+
+```sh
+grep -rnE "(REQ|BUG)\)?-(\\\\d|\[0-9\])" core scripts --include='*.mjs' --include='*.ts' --include='*.tsx' --include='*.js'
+```
+
+Clean means every matcher takes the prefix.
+
 ## `mint(lesson)` → new lesson ID
 
 Lessons are namespaced under the work item that produced them. There is no vault-wide lesson counter.

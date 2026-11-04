@@ -33,6 +33,15 @@ const MAX_DEPTH = 5;
 const SEV_ORDER = ['critical', 'trap', 'guideline', 'nice-to-know'];
 
 // ---- fs helpers ---------------------------------------------------------------
+// A work-item ID as every req.id_scheme mints it: REQ-042 (sequential, ticket), REQ-sf-042
+// (prefixed), BUG-017. Grammar: core/VAULT-LAYOUT.md → "Work-item IDs" (also adlc-trail.mjs and the
+// flightdeck mod's ID_SRC). The prefix starts with a letter so a digit-led slug never reads as one.
+const WORK_ID_SRC = '(?:REQ|BUG)-(?:[a-z][a-z0-9]{0,7}-)?\\d+';
+/** `REQ-sf-042-gate-turn` → $1 `REQ-sf-042`, $2 `gate-turn`. */
+const WORK_FOLDER = new RegExp(`^(${WORK_ID_SRC})-(.*)$`);
+/** A record's H1: `# REQ-sf-042 — title` → $1 id, $2 title. The id is matched whole first (a lazy
+ *  `[A-Za-z0-9-]+?` stopped at `REQ-sf`, the `-` read as the separator); a ticket key (`PROJ-842`) after. */
+const RECORD_H1 = new RegExp(`^#\\s*(${WORK_ID_SRC}|[A-Z][A-Z0-9]*-\\d+)\\s*[—–:-]\\s*(.*)$`);
 const norm = (p) => p.replace(/\\/g, '/');
 function findVault(start) {
   let dir = resolve(start);
@@ -100,7 +109,7 @@ function parseLesson(file) {
   const title = h1.replace(/^#\s*/, '').replace(/\s*\^L-[A-Za-z0-9-]+\s*$/, '').trim();
   let id = row(lines, 'ID');
   if (!id && anchor) id = anchor.replace(/^L-/, 'LESSON-');
-  if (!id) id = basename(file).replace(/\.md$/, '').replace(/^(LESSON-[A-Za-z0-9]+(?:-\d+)+)-.*$/, '$1');
+  if (!id) id = basename(file).replace(/\.md$/, '').replace(new RegExp(`^(LESSON-(?:${WORK_ID_SRC}|[A-Z][A-Z0-9]*-\\d+)-\\d+)-.*$`), '$1');
   const short = id.replace(/^LESSON-/, 'L-');
   const supersededBanner = lines.slice(0, 6).find((l) => /STATUS:\s*superseded by/i.test(l));
   const supersededBy = supersededBanner ? ((supersededBanner.match(/(LESSON-[A-Za-z0-9-]+|L-[A-Za-z0-9-]+)/) || [])[1] || '?').replace(/^LESSON-/, 'L-') : null;
@@ -171,8 +180,8 @@ function genLessons(vault, report) {
 function parseRecord(file, vault) {
   const lines = head(file, 25);
   const h1 = lines.find((l) => l.startsWith('# ')) || '';
-  const m = h1.match(/^#\s*((?:REQ|BUG|[A-Z]+)-[A-Za-z0-9-]+?)\s*[—-]\s*(.*)$/);
-  const id = m ? m[1] : basename(file).replace(/\.md$/, '').replace(/^((?:REQ|BUG)-[A-Za-z0-9]+)-.*$/, '$1');
+  const m = h1.match(RECORD_H1);
+  const id = m ? m[1] : basename(file).replace(/\.md$/, '').replace(WORK_FOLDER, '$1');
   return {
     id, title: m ? m[2].trim() : basename(file, '.md'),
     status: row(lines, 'Status').split(/\s*\\?\|\s*/)[0] || 'merged',
@@ -192,7 +201,7 @@ function folderTitle(folder) {
     const h = head(join(folder, f), 5).find((l) => l.startsWith('# '));
     if (h) return h.replace(/^#\s*/, '').replace(/^(REQ|BUG)-[A-Za-z0-9-]+\s*[—:-]\s*/, '').trim();
   }
-  return basename(folder).replace(/^(REQ|BUG)-[A-Za-z0-9]+-/, '').replace(/-/g, ' ');
+  return basename(folder).replace(WORK_FOLDER, '$2').replace(/-/g, ' ');
 }
 function collectWork(vault, tree, prefix) {
   const root = join(vault, tree);
@@ -205,7 +214,7 @@ function collectWork(vault, tree, prefix) {
       if (!e.isDirectory() || e.name === '_archive') continue;
       const p = join(dir, e.name);
       if (new RegExp(`^${prefix}-`).test(e.name)) {
-        const id = (e.name.match(new RegExp(`^(${prefix}-[A-Za-z0-9]+(?:-\\d+)?)`)) || [])[1] || e.name;
+        const id = (e.name.match(WORK_FOLDER) || e.name.match(new RegExp(`^(${WORK_ID_SRC})$`)) || [])[1] || e.name;
         if (!have.has(id)) folders.push({ id, title: folderTitle(p), status: readState(p), kind: '', merged: '', path: norm(relative(vault, p)) + '/' });
       } else w(p, depth + 1);
     }

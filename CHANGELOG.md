@@ -4,6 +4,18 @@ All notable changes to the ADLC toolkit. The toolkit version lives in `core/mani
 
 Labels used below: **[breaking]** needs action on update, **[protocol]** changes how a skill behaves, **[vault-format]** changes on-disk vault layout, **[tooling]** install/build only.
 
+## [Unreleased]
+
+### Fix: prefixed IDs (`REQ-sf-042`) were invisible to the trail and the vault generator **[tooling]**
+
+Tools matched work items with `REQ-\d+`, so in a `req.id_scheme: prefixed` vault the trail hook never found a REQ: `trail gate --req REQ-sf-042` exited 2, hook stamps went to the wrong item or nowhere, and `trail stats` counted nothing. One pattern now covers every scheme: `(?:REQ|BUG)-(?:[a-z][a-z0-9]{0,7}-)?\d+`.
+
+- **`core/VAULT-LAYOUT.md` → Work-item IDs**: the pattern written down once, with the rule for matching inside text (not after a word char or `-`, so `L-REQ-035-1` never yields `REQ-035`) and a grep that catches a narrower copy creeping back. `core/manifest.json` → `layout.idPattern` carries the same string.
+- **`adlc-trail.mjs`**: folder and record discovery, `--req` resolution, the subagent transcript's REQ, and `stats` ids all use it.
+- **`scripts/vault-gen.mjs`**: the index no longer lists a prefixed record as `REQ-sf` (from its `# REQ-sf-042 — title` heading or, without one, its file name) or titles a folder `008 band ctx`; lesson ids from file names keep the full work id (`L-REQ-sf-008-1`), and a digit-led slug (`REQ-042-2fa-login`) no longer becomes `REQ-042-2`.
+- **`adlc-flightdeck`**: architecture `## Related` lines naming a prefixed lesson (`L-REQ-sf-031-2`) now count as knowledge hits. Test added.
+- Not covered: a `ticket` native key (`PROJ-842`) is still outside every `REQ-*` scan; see VAULT-LAYOUT.
+
 ## [1.11.0] — 2026-10-24
 
 ### The gate as evidence — the pane shows what a developer must have seen, and the recommendation last **[tooling]**

@@ -12,6 +12,8 @@
     "flat": ["audits", "knowledge", "architecture", "context"],
     "monthFormat": "YYYY-MM",
     "maxDepth": 4,
+    "idPattern": "(?:REQ|BUG)-(?:[a-z][a-z0-9]{0,7}-)?\\d+",
+    "$idPatternComment": "Every work-item ID scheme (sequential REQ-042, prefixed REQ-sf-042, ticket REQ-842, BUG-…). Copies live in adlc-trail.mjs, scripts/vault-gen.mjs and the flightdeck mod's model.ts; grammar and drift check in core/VAULT-LAYOUT.md → Work-item IDs.",
     "record": "<REQ_PATH>.md",
     "$recordComment": "1.9.0: one committed record file beside each work folder; the folder itself is the local working set (gitignored). Grammar in core/VAULT-LAYOUT.md → record(ID)."
   },
