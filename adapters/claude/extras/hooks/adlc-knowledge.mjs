@@ -23,8 +23,10 @@
 //   SubagentStart task-implementer|pipeline-runner: inject every `critical`
 //                                            lesson (always-read), ≤10.
 //   SessionStart source=compact             re-inject a recomputed working-state
-//                                            snapshot: active REQ, phase, gate
-//                                            marker, git status head, verify cmds.
+//                                            snapshot: active REQ (the one at a
+//                                            gate first), phase, gate marker, the
+//                                            files to re-read by path, git status
+//                                            head, verify cmds.
 //   PostToolUse  Bash                        once per session: a search piped to
 //                                            head/tail or -m is not evidence of
 //                                            absence.
@@ -39,6 +41,7 @@
 import { readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync, statSync } from 'node:fs';
 import { join, dirname, relative, posix } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 
 const MAX_LINES = 8;          // knowledge lines per injection
@@ -233,8 +236,8 @@ function sessionStartCompact(ev, vault) {
   if (ev.source !== 'compact') return;
   const repo = dirname(vault);
   const sh = (cmd) => { try { return execSync(cmd, { cwd: repo, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return ''; } };
-  // active REQ: newest non-terminal pipeline-state.json
-  let active = null;
+  // active REQ: the non-terminal one holding the newest .awaiting-approval (the trail hook's rule), else the newest pipeline-state.json
+  let active = null, atGate = null;
   const walk = (dir, depth) => {
     if (depth > 5 || !existsSync(dir)) return;
     for (const n of readdirSync(dir, { withFileTypes: true })) {
@@ -245,17 +248,27 @@ function sessionStartCompact(ev, vault) {
           const s = JSON.parse(readFileSync(p, 'utf8'));
           if (s.prState === 'merged' || s.status === 'cancelled') continue;
           const m = statSync(p).mtimeMs;
-          if (!active || m > active.m) active = { m, dir: norm(relative(vault, dirname(p))), phase: s.currentPhase, gate: s.gateState, branch: s.branch };
+          const item = { m, dir: norm(relative(vault, dirname(p))), phase: s.currentPhase, gate: s.gateState, branch: s.branch, kind: s.kind };
+          if (!active || m > active.m) active = item;
+          const marker = join(dirname(p), '.awaiting-approval');
+          if (existsSync(marker)) { const g = statSync(marker).mtimeMs; if (!atGate || g > atGate.g) atGate = { ...item, g }; }
         } catch {}
       }
     }
   };
   walk(join(vault, 'specs'), 0); walk(join(vault, 'bugs'), 0);
+  if (atGate) active = atGate;
   const lines = ['## ADLC working state recovered after compaction', 'Recomputed from the vault and git, not from the summary. Re-read files by path rather than trusting any paraphrase.'];
   if (active) {
     const awaiting = existsSync(join(vault, active.dir, '.awaiting-approval'));
     lines.push(`- **Active work item:** \`.adlc/${active.dir}/\` — phase ${active.phase}, gate ${active.gate}${awaiting ? ' — **.awaiting-approval present: a gate is waiting for the user**' : ''}${active.branch ? `, branch \`${active.branch}\`` : ''}`);
     lines.push(`- Re-read \`.adlc/${active.dir}/pipeline-state.json\` for the exact state; the task files under \`tasks/\` say which are done.`);
+    // A skill comes back from compaction cut at ~5,000 tokens and the cut half holds the gate: name the files by absolute path.
+    const n = Number(active.phase) || 1;
+    const live = awaiting || active.gate !== 'cleared' ? n : Math.min(5, n + 1);
+    const skill = active.kind === 'bugfix' ? 'bugfix' : active.kind === 'task' ? 'task' : { 1: 'spec', 2: 'architect', 3: 'implement', 4: 'review', 5: 'wrapup' }[live];
+    const kit = posix.join(norm(dirname(fileURLToPath(import.meta.url))), '../../../..');
+    lines.push(`- **Re-read before acting** (a skill comes back from compaction cut at ~5,000 tokens): ${skill ? `\`${kit}/core/skills/${skill}.md\`, ` : ''}\`${kit}/core/GATE-PROTOCOL.md\`${awaiting ? `, and the marker \`.adlc/${active.dir}/.awaiting-approval\` — it lists the gate's options` : ''}.`);
   } else lines.push('- No non-terminal work item found in `.adlc/specs` or `.adlc/bugs`.');
   const st = sh('git status --porcelain').split('\n').filter(Boolean);
   lines.push(st.length ? `- **Uncommitted changes (${st.length}):**\n${st.slice(0, 30).map(s => '  ' + s).join('\n')}${st.length > 30 ? '\n  … run `git status` for the rest' : ''}` : '- **Uncommitted changes:** none.');
@@ -264,7 +277,7 @@ function sessionStartCompact(ev, vault) {
   const cfg = existsSync(join(vault, 'config.yml')) ? readFileSync(join(vault, 'config.yml'), 'utf8') : '';
   const runs = [...cfg.matchAll(/^\s{2,}(format|lint|typecheck|test):\s*\n\s+run:\s*(.+)$/gm)].map(m => `${m[1]}: \`${m[2].replace(/\s+#.*$/, '').trim()}\``);
   if (runs.length) lines.push(`- **Verify before declaring done:** ${runs.join(' · ')}`);
-  lines.push('- **Preserve verbatim:** the task file path you were working, the exact function/type signatures the remaining work depends on, and the gate protocol — quote, do not paraphrase.');
+  lines.push('- **Preserve verbatim:** the task file path you were working, the exact function/type signatures the remaining work depends on, the gate protocol, the gate\'s options and the user\'s last reply — quote, do not paraphrase.');
   emit('SessionStart', lines.join('\n'));
 }
 
