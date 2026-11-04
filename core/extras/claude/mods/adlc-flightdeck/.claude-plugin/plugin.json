@@ -1,7 +1,7 @@
 {
   "name": "adlc-flightdeck",
-  "version": "0.5.0",
-  "description": "ADLC cockpit: the REQ you are flying, phase by phase — the plan against the tree, every file a link and a diff, findings as a grid, what approving sets in motion; history and settings; gate cards",
+  "version": "0.8.0",
+  "description": "ADLC flightdeck above the prompt: the REQs in flight, phase by phase — the plan against the tree, every file a link and a diff, findings as a grid, what approving sets in motion; history and settings; gate cards; answer a gate in place",
   "author": { "name": "ADLC toolkit" },
   "types": "./types/index.d.ts"
 }

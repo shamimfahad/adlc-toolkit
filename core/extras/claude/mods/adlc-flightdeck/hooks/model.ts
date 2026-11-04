@@ -9,6 +9,15 @@ const GATE_TO_PHASE: Record<string, number> = {
   spec: 1, report: 1, architect: 2, plan: 2, implement: 3, fix: 3, review: 4, verify: 4, ship: 5,
 }
 
+/** A work item id as a skill mints it: REQ-042, REQ-sf-033, BUG-7.
+ *  The prefix (req.prefix) starts with a letter so a slug that starts with
+ *  a digit never reads as one. Not preceded by a word char or a hyphen, so
+ *  L-REQ-035-1 (a lesson) never yields REQ-035. */
+export const ID_SRC = '(?:REQ|BUG)-(?:[a-z][a-z0-9]{0,7}-)?\\d+'
+export const ID = new RegExp(`(?<![\\w-])(${ID_SRC})`)
+export const idOf = (s: string) => ID.exec(s)?.[1] ?? null
+const FOLDER = new RegExp(`^(${ID_SRC})-?(.*)$`)
+
 export type PipelineState = {
   currentPhase?: number
   currentPhaseGate?: string
@@ -27,11 +36,11 @@ export type PipelineState = {
 
 export const isLanded = (status: string) => /^(complete|done)/.test(status)
 
-/** The REQ/BUG folder name → `{ id, title, kind }`. `REQ-042-payment-retries` → id `REQ-042`. */
+/** The REQ/BUG folder name → `{ id, title, kind }`. `REQ-042-payment-retries` → id `REQ-042`; `REQ-sf-033-gate-turn` → `REQ-sf-033`. */
 export function splitFolder(name: string): { id: string; title: string; kind: 'req' | 'bug' } {
-  const m = /^((REQ|BUG)-\d+)-?(.*)$/.exec(name)
+  const m = FOLDER.exec(name)
   if (!m) return { id: name, title: '', kind: 'req' }
-  return { id: m[1] ?? name, title: (m[3] ?? '').replace(/-/g, ' '), kind: m[2] === 'BUG' ? 'bug' : 'req' }
+  return { id: m[1] ?? name, title: (m[2] ?? '').replace(/-/g, ' '), kind: (m[1] ?? '').slice(0, 3) === 'BUG' ? 'bug' : 'req' }
 }
 
 /** Builds the phase rail from pipeline-state.json. A cleared gate means the next phase is live. */
@@ -51,7 +60,8 @@ export function buildReq(
   const phases: FlightPhase[] = names.map((name, i) => {
     const n = i + 1
     let state: FlightPhase['state'] = 'todo'
-    if (n < current || done.has(n) || (n === current && cleared)) state = 'done'
+    // A skill may list the current phase as completed while its gate is still open: the marker wins.
+    if (n < current || (n === current && cleared) || (done.has(n) && !(n === current && waiting))) state = 'done'
     else if (n === current) state = waiting ? 'gate' : 'now'
     if (cleared && n === current + 1) state = waiting ? 'gate' : 'now'
     return { n, name, state }
@@ -74,7 +84,7 @@ export function isActive(st: PipelineState): boolean {
 
 /** First REQ/BUG id and first TASK id mentioned in a dispatch prompt. */
 export function parseDispatch(text: string): { req: string | null; task: string | null } {
-  const req = /\b((?:REQ|BUG)-\d+)/.exec(text)?.[1] ?? null
+  const req = idOf(text)
   const task = /\b(TASK-\d+)/.exec(text)?.[1] ?? null
   return { req, task }
 }
@@ -90,14 +100,17 @@ export function kindOf(tool: string): FlightKind {
   return 'read'
 }
 
-/** What an agent is doing, short: `Edit RetryPolicy.cs`, `$ dotnet test`. */
+/**
+ * What an agent is doing, short: `Edit RetryPolicy.cs`, `Run the payment tests`. A shell call
+ * reads as its own plain-words `description`; without one, as `$ dotnet test`.
+ */
 export function describeTool(tool: string, args: Record<string, unknown>): string {
   const s = (k: string) => (typeof args[k] === 'string' ? (args[k] as string) : '')
   switch (tool) {
     case 'Read': case 'Write': case 'Edit': case 'MultiEdit': case 'NotebookEdit':
       return `${tool} ${base(s('file_path') || s('notebook_path'))}`
     case 'Bash': case 'PowerShell':
-      return `$ ${s('command').replace(/\s+/g, ' ').trim()}`
+      return s('description').replace(/\s+/g, ' ').trim() || `$ ${s('command').replace(/\s+/g, ' ').trim()}`
     case 'Grep': return `Grep ${s('pattern')}`
     case 'Glob': return `Glob ${s('pattern')}`
     case 'Agent': case 'Task': return `→ ${s('description') || s('subagent_type')}`
@@ -244,7 +257,7 @@ export type GateCard = {
   after: string
 }
 
-const HEADER = /^[ \t]*(?:#+\s*|\*\*)?GATE (\d+)\/(\d+) · ([^·\n]+?) · ((?:REQ|BUG)-\d+)([\w-]*)(?:\s+[—–-]\s+(.*?))?(?:\*\*)?[ \t]*$/m
+const HEADER = new RegExp(`^[ \\t]*(?:#+\\s*|\\*\\*)?GATE (\\d+)\\/(\\d+) · ([^·\\n]+?) · (${ID_SRC})([\\w-]*)(?:\\s+[—–-]\\s+(.*?))?(?:\\*\\*)?[ \\t]*$`, 'm')
 const SECTION = /^([A-Z][A-Z'’ ]{1,22}[A-Z])(?:\s{2,}|\s*$)(.*)$/
 const DECISION = /^Decision\s*(?:→|->|:)\s*(.*)$/i
 

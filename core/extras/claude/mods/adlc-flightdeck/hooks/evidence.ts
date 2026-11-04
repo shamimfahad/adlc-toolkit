@@ -2,12 +2,13 @@
 // task files, findings, acceptance criteria), git's plain-text answers (porcelain, numstat),
 // and the derivations the pages draw — plan vs actual, task tiers as rails, path pointers as
 // links, the ship gate's consequences. No `$`, no state; everything here is unit-tested.
+import { ID_SRC } from './model'
 import { sectionOf } from './vault'
 
 // ---------- paths ----------
 
 /** Forward slashes, no leading `./`, no trailing slash. Keeps case: the display path. */
-export const normPath = (p: string) => p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '').trim()
+export const normPath = (p: string) => p.replace(/`/g, '').trim().replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '').trim()
 /** The key two paths are compared on: normalised and lower-cased (Windows checkouts mix case). */
 export const pathKey = (p: string) => normPath(p).toLowerCase()
 export const baseName = (p: string) => normPath(p).split('/').pop() ?? p
@@ -81,13 +82,16 @@ export function mermaidFences(md: string | null): string[] {
   return out
 }
 
+/** A `## Related` line's leading knowledge id: a lesson on any work-item id scheme (`L-REQ-042-1`, `LESSON-REQ-sf-042-2`), a legacy `L12`, an ADR, a gotcha or a wiki link. */
+const KNOWLEDGE_ID = new RegExp(`^((?:L-|LESSON-)?${ID_SRC}-\\d+|L\\d+|ADR-\\d+|g\\d+|G-\\d+|\\[\\[[^\\]]+\\]\\])`, 'i')
+
 /** `## Related` lines that name a lesson, gotcha, ADR or concept: `L-REQ-042-1 — why`, `ADR-009 …`. */
 export function knowledgeHits(archMd: string | null): { id: string; text: string }[] {
   const body = sectionOf(archMd ?? '', 'Related') ?? ''
   const out: { id: string; text: string }[] = []
   for (const raw of body.split('\n')) {
     const l = raw.replace(/^\s*[-*]\s*/, '').trim()
-    const m = /^((?:L-|LESSON-)?(?:REQ|BUG)-\d+-\d+|L\d+|ADR-\d+|g\d+|G-\d+|\[\[[^\]]+\]\])/i.exec(l)
+    const m = KNOWLEDGE_ID.exec(l)
     if (m) out.push({ id: (m[1] ?? '').replace(/^\[\[|\]\]$/g, ''), text: l })
   }
   return out
@@ -133,14 +137,31 @@ export function parseTask(md: string, fallbackId = ''): TaskDoc {
 export function checklist(body: string | null): { text: string; done: boolean }[] {
   if (!body) return []
   const out: { text: string; done: boolean }[] = []
+  let open = false // an item wraps onto indented lines below it
   for (const raw of body.split('\n')) {
     const m = /^\s*[-*]\s*(?:\[([ xX])\]\s*)?(.+)$/.exec(raw)
-    if (!m) continue
+    if (!m) {
+      const last = out[out.length - 1]
+      if (open && last && /^\s{2,}\S/.test(raw)) last.text += ` ${raw.trim()}`
+      else open = false
+      continue
+    }
     const text = (m[2] ?? '').trim()
+    open = false
     if (!text || /^Criterion \d$/.test(text)) continue
     out.push({ text, done: /[xX]/.test(m[1] ?? '') })
+    open = true
   }
   return out
+}
+
+/** Markdown emphasis and code ticks out, for prose drawn as plain text. */
+export const plainMd = (s: string) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/(^|\W)[*_](\S.*?\S|\S)[*_](?=\W|$)/g, '$1$2').replace(/`([^`]*)`/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+
+/** A criterion's headline: its bold lead (`**1. Opens at its address.** On …` → `Opens at its address.`), else the plain text. */
+export function criterionTitle(text: string): string {
+  const bold = /^\*\*(.+?)\*\*/.exec(text.trim())
+  return plainMd(bold ? (bold[1] ?? '') : text).replace(/^\d+[.)]\s+/, '').trim()
 }
 
 /** Tasks in dependency tiers: tier 0 depends on nothing; a task sits one past its deepest dependency. The `Tier` field wins when present. */
@@ -323,9 +344,13 @@ export function mergeTouched(porcelain: Touched[], committed: Touched[], numstat
 
 export type PlanRow = { path: string; planned: boolean; touched: Touched | null; why: string; tasks: string[] }
 
+/** Vault writes (`.adlc/…`) are the pipeline's own bookkeeping, never a surprise. */
+const isVault = (key: string) => /(^|\/)\.adlc\//.test(key)
+
 /**
  * One row per path the plan or the tree names. `planned && !touched` and `!planned && touched`
- * are the two kinds of surprise the implement and review pages colour.
+ * are the two kinds of surprise the implement and review pages colour. Unplanned vault files
+ * are left out.
  */
 export function planVsActual(planned: Planned[], tasks: TaskDoc[], touched: Touched[]): PlanRow[] {
   const rows = new Map<string, PlanRow>()
@@ -345,7 +370,7 @@ export function planVsActual(planned: Planned[], tasks: TaskDoc[], touched: Touc
     const k = pathKey(t.path)
     const have = rows.get(k)
     if (have) have.touched = t
-    else rows.set(k, { path: t.path, planned: false, touched: t, why: '', tasks: [] })
+    else if (!isVault(k)) rows.set(k, { path: t.path, planned: false, touched: t, why: '', tasks: [] })
   }
   const rank = (r: PlanRow) => (!r.planned ? 0 : !r.touched ? 1 : 2)
   return [...rows.values()].sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path))
@@ -427,6 +452,50 @@ export function roundOf(rounds: readonly { decision: string; note: string }[], k
   return r?.note?.trim() || null
 }
 
+// ---------- git: which tree plan vs actual describes ----------
+
+/**
+ * The git calls `refreshGit` makes for one REQ, as argument lists: diffs run to the REQ's
+ * own branch tip (`st.branch` when it resolves, else HEAD), never to whatever HEAD the
+ * work path happens to sit on. The working tree (porcelain, uncommitted numstat, file
+ * hashes from disk) counts only when that branch is what is checked out there.
+ */
+export type GitPlan = {
+  tip: string
+  checkedOut: boolean
+  mergeBase: (cand: string) => string[]
+  committed: (base: string) => string[]
+  porcelain: string[] | null
+  numstat: (base: string | null) => string[] | null
+  /** Blob hashes for the viewed marks: from disk when checked out, else from the tip's tree. */
+  hashes: (paths: string[]) => string[]
+  diff: (base: string | null, path: string) => string[]
+}
+export function gitPlan(st: { branch?: string | null }, head: string | null, branchResolves: boolean): GitPlan {
+  const branch = (st.branch ?? '').trim()
+  const tip = branch && branchResolves ? branch : 'HEAD'
+  const checkedOut = tip === 'HEAD' || (!!head && head.trim() === tip)
+  return {
+    tip, checkedOut,
+    mergeBase: cand => ['merge-base', tip, cand],
+    committed: base => ['diff', '--name-status', base, tip],
+    porcelain: checkedOut ? ['status', '--porcelain', '--untracked-files=all'] : null,
+    numstat: base => (checkedOut ? ['diff', '--numstat', base ?? 'HEAD'] : base ? ['diff', '--numstat', base, tip] : null),
+    hashes: paths => (checkedOut ? ['hash-object', '--stdin-paths'] : ['ls-tree', '-r', tip, '--', ...paths]),
+    diff: (base, path) => (checkedOut ? ['diff', base ?? 'HEAD', '--', path] : ['diff', base ?? tip, tip, '--', path]),
+  }
+}
+
+/** `git ls-tree -r` lines → path key → blob hash. */
+export function parseLsTree(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const l of text.split('\n')) {
+    const m = /^\d+\s+blob\s+([0-9a-f]+)\t(.+)$/.exec(l.trim())
+    if (m) out[pathKey(m[2] ?? '')] = m[1] ?? ''
+  }
+  return out
+}
+
 // ---------- numbers for the pages ----------
 
 export type FuelRow = { fresh: number; read: number; wrote: number }
@@ -439,6 +508,6 @@ export const asFuelRow = (v: unknown): FuelRow =>
     : v && typeof v === 'object' ? { fresh: Number((v as FuelRow).fresh) || 0, read: Number((v as FuelRow).read) || 0, wrote: Number((v as FuelRow).wrote) || 0 }
     : { ...ZERO }
 
-/** The AskUserQuestion result trailer the mod appends so the skill can record `--viewed`; stripped from the user's own words. */
+/** The trailer the pane appends to a gate reply it sends at implement and review, so `trail gate` can record `viewed`; stripped from the user's own words. */
 export const VIEWED_TRAILER = /\s*\[flightdeck\] viewed \d+\/\d+ files?\s*$/
 export const viewedTrailer = (n: number, m: number) => `\n\n[flightdeck] viewed ${n}/${m} files`
