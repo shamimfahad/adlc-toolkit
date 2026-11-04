@@ -388,11 +388,13 @@ export function sprintMembers(json: string): { id: string; sprint: string }[] {
 }
 
 /**
- * 0.7.0 — which REQs are in flight: started (past phase 0) and not yet at their last phase. A REQ that has not
- * begun, or has reached ship (wrapup), is history, whatever markers or registries it still carries.
+ * Which REQs are in flight: started (past phase 0) and not merged or aborted (the deck holds only those), and
+ * either not yet at their last phase or waiting at a gate. 0.8.1: a REQ waiting at the ship gate is in flight —
+ * it is the one gate left to answer; 0.7.0 dropped it, and with it the band. A REQ at ship with no marker, or
+ * one that has not begun, is history.
  */
 export function inFlight(reqs: readonly FlightReq[]): FlightReq[] {
-  return reqs.filter(r => r.phase >= 1 && r.phase < r.phases.length)
+  return reqs.filter(r => r.phase >= 1 && (r.phase < r.phases.length || r.waiting))
 }
 
 /**

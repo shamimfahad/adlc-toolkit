@@ -12,16 +12,20 @@ draws it (0.8.0): GATE first, then the phase's evidence, one titled block each. 
 Code docks a pane beside the transcript from 110 columns and its placement is the engine's,
 so a pane could never sit above the prompt on a wide terminal. The band always does.
 
+The band exists in the terminal and the desktop app only; no other surface draws it. What other
+mods draw in the band stays: the flightdeck draws first and theirs follows under it.
+
 ## The band: three heights
 
 **band** — one row about the REQ you are flying:
 
 ```
-✈ REQ-sf-034 · review · gate: fix all? · 2 in flight · 1 at gate                         ⤢ ×
+✈ REQ-sf-034 · review · gate: fix all? · 2 in flight · 1 at gate                         ⤢ [-]
 ```
 
 Clicking the text or `⤢` opens the flightdeck. `resume` appears before `⤢` only for a gate this
 session has no card for (opened in another session): it runs `/proceed <id>`, which re-emits it.
+`[-]` is the engine's own mark (ctrl+x ctrl+a): it collapses the band.
 
 **open** — the summary: the header, the tabs and the GATE card, with a `⤢ FINDINGS · …` line naming
 what the phase page holds. **max** — the summary and the evidence. The band can never grow past the
@@ -47,8 +51,10 @@ hints in either header.
 
 ### In flight
 
-A REQ is in flight when it has started (past phase 0) and has not reached its last phase (ship, or a
-BUG's last). Everything else is History, whatever markers or sprint registries it still carries.
+A REQ is in flight when it has started (past phase 0), is not merged or aborted, and either has not
+reached its last phase (ship, or a BUG's last) or is waiting at a gate — so a REQ at the ship gate stays
+on the strip, and the band stays up for it. Everything else is History, whatever sprint registries it
+still carries.
 `k at gate` counts in-flight REQs with a marker. Chips never shrink: as many as fit the width, the
 selected one always among them, then `+n more ▾`, which opens the whole list — every REQ in flight by
 ID, the one shown marked `▸`, scrolled into view; a row opens that REQ's phases. Settings → *show all
@@ -63,7 +69,7 @@ history` / `settings` open those views.
 ### A phase tab
 
 Every tab opens with **GATE**: `● awaiting — review · round 2` with, under it, the summary (findings that
-need a call, files not viewed, the marker's ask), the options inline (`1: fix all (recommended)  2: …`),
+need a call, files not viewed, the marker's ask), the options inline (`a: fix all (recommended)  b: …`),
 the consequence of the recommended one, and `[⟳ compact first]` with the context fill. A cleared gate is one
 line (`✓ cleared · approve · round 1 · 10-22 14:05 · viewed 4/7`), a phase in progress says so and lists the
 agents flying for it under **SO FAR**, and a phase not reached says when it opens and shows nothing else.
@@ -85,8 +91,9 @@ Then the evidence, built from the files the templates already mandate plus git:
 The gate is the turn: the skill writes the marker, emits the card and ends its turn, and your
 next message is the answer. Type it in the prompt as always, or pick it on the action bar under
 the open gate's GATE line: one row per option with its consequence, the one `MY READ` recommends
-first, marked `▸`. Digits `1`…`6` press them from an empty prompt while they are on screen — the
-engine arms only Buttons inside the band's visible window, which is why the bar sits at the top.
+first, marked `▸`. Once the band has focus (a click, or ctrl+x tab) the letters `a b d e f g i j`
+press them in order. There are no digit keys: the engine presses a band Button keyed with a digit
+typed into an empty prompt, so a digit there would answer a gate by accident.
 
 - A button sends the option as **your own message** (`$.prompt.submit` with `asUser`). At the
   implement and review gates it carries `[flightdeck] viewed 4/7 files` on its last line, in
@@ -125,8 +132,8 @@ Below 84 band columns (Settings → *narrow below*) the chips shrink to their nu
 `history` / `settings` to `h` / `s`, and the tab row becomes a **list home**: one row per phase —
 its state, the last decision and rounds, findings that need a call at review, the viewed count at
 implement and review, predict / summary answered. The open gate's row takes the focus. A row opens
-its page in the list's place with `‹ back` at its top left — the only back control there is
-(digits `1`–`5` open a row while no action bar is on screen).
+its page in the list's place with `‹ back` at its top left — the only back control there is.
+The rows have no key; click them, or Tab / Enter once the band has focus.
 
 IDs are read whole: `REQ-sf-033` (a `prefixed` vault) is never `REQ-033`, and `L-REQ-035-1` (a
 lesson) is not `REQ-035`. A prompt that names an id the vault does not hold leaves the focus alone.
@@ -171,9 +178,10 @@ session is flying.
 
 No header control has a key: the terminal draws a plain Button that has a hotkey as `k: label`, so a
 key there would put its hint in the header. Headers are click, or ctrl+x tab then Tab / Enter. Keys
-live in the page body: digits `1`…`6` on the gate's options and `1`–`5` on the narrow list's rows —
-a digit also presses from an empty prompt, for Buttons on screen — `c` sends the composed findings
-reply, `m` opens a diagram's source. Every key is in one constant, `KEYS`, in `hooks/register.tsx`.
+live in the page body and are letters only, which fire once the band has focus: `a b d e f g i j` on
+the gate's options by position (they skip `c`, `m`, `h` and `s`, so nothing in one view shares a key),
+`c` sends the composed findings reply, `m` opens a diagram's source. No band Button has a digit: the
+engine presses one from an empty prompt. The keys are `KEYS` and `OPTION_KEYS` in `hooks/register.tsx`.
 
 ### Settings
 
@@ -186,9 +194,9 @@ sits on the History view. `/flight band` hides or shows the whole flightdeck.
 ## Links
 
 Paths are OSC 8 hyperlinks built from the editor template; VS Code's terminal and Windows
-Terminal open them with Ctrl+click. On a surface whose links are https-only (the VS Code
-panel) the same cell is a button that runs `code -g path:line`. The in-flightdeck reader is the
-floor wherever links do not land.
+Terminal open them with Ctrl+click. In the desktop app, whose links are https-only, the same cell is
+a button that runs `code -g path:line`; that needs `$.process`, which the CLI has, so where it is not
+available the button does nothing. The in-flightdeck reader is the floor wherever links do not land.
 
 ## Diagrams
 

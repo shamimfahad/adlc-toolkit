@@ -1,5 +1,5 @@
 import type { On } from 'claude-code'
-import { describe, expect, test, type TestBody } from 'claude-code/testing'
+import { describe, expect, mock, test, type TestBody } from 'claude-code/testing'
 
 import type { FlightDeck, FlightGateAsk, FlightGit, FlightItem, FlightLane, FlightTrail } from '../types'
 import {
@@ -532,7 +532,7 @@ describe('0.6.0', () => {
     const sent: { text: string; asUser: boolean }[] = []
     on('prompt.submit', async ($, e) => { sent.push({ text: e.text, asUser: e.origin.kind === 'plugin' && e.origin.asUser === true }); return { text: e.text } })
     const ui = await mountPane($, 'terminal')
-    expect((await ui.find({ key: 'opt-approve' }))?.props.hotkey).toBe('1')
+    expect((await ui.find({ key: 'opt-approve' }))?.props.hotkey).toBe('a') // 0.8.1: a letter, never a digit
     expect(await ui.find({ type: 'Text', text: /1 of 2 changed files not viewed/ })).toBeDefined()
     await ui.press({ key: 'opt-approve' })
     await settle(() => sent.length > 0)
@@ -618,7 +618,7 @@ const bandAt = (cols: number, rows = 24) => ({
 })
 
 describe('0.7.0', () => {
-  test('in flight: started and not yet at the last phase — phase 0 and ship are history, markers or not', () => {
+  test('in flight: started and not yet at the last phase, or waiting at its gate — phase 0 and an unmarked ship are history', () => {
     const at = (name: string, st: Parameters<typeof buildReq>[1], waiting = false) => buildReq(name, st, waiting, waiting ? 1 : null, 0)
     const reqs = [
       at('REQ-sf-001-unstarted', { currentPhase: 0 }),
@@ -628,8 +628,9 @@ describe('0.7.0', () => {
       at('REQ-sf-005-ship', { currentPhase: 5 }),
       at('REQ-sf-006-review-cleared', { currentPhase: 4, gateState: 'cleared' }), // cleared review → ship
       at('BUG-sf-7-fix', { currentPhase: 2 }),
+      at('REQ-sf-008-ship-gate', { currentPhase: 5, gateState: 'awaiting' }, true), // 0.8.1: the ship gate is still a gate to answer
     ]
-    expect(inFlight(reqs).map(r => r.id)).toEqual(['REQ-sf-002', 'REQ-sf-003', 'REQ-sf-004', 'BUG-sf-7'])
+    expect(inFlight(reqs).map(r => r.id)).toEqual(['REQ-sf-002', 'REQ-sf-003', 'REQ-sf-004', 'BUG-sf-7', 'REQ-sf-008'])
   })
 
   test('chips never shrink: thirty REQs in 120 columns show the ones that fit, the selected one among them, then +n', async ($, on) => {
@@ -657,7 +658,7 @@ describe('0.7.0', () => {
         expect((await ui.find({ key: k }))?.props.hotkey).toBeUndefined()
       }
       const letters = (await ui.findAll({ type: 'Button' })).filter(b => typeof b.props.hotkey === 'string' && /^[a-z]$/.test(b.props.hotkey as string))
-      expect(letters.map(b => b.key).filter(k => !/^(compose|mermaid-src)$/.test(k ?? ''))).toEqual([])
+      expect(letters.map(b => b.key).filter(k => !/^(compose|mermaid-src|opt-.*)$/.test(k ?? ''))).toEqual([]) // 0.8.1: the gate's options are lettered
       await ui.unmount()
     }
   })
@@ -669,7 +670,7 @@ describe('0.7.0', () => {
     expect(strip.map(s => [s.id, s.ended ?? ''])).toEqual([['REQ-sf-033', ''], ['REQ-042', ''], ['REQ-sf-032', 'merged']])
   })
 
-  test('band: one row — REQ · phase · gate: ask · n in flight · k at gate, ⤢ and ×, no key hints', async ($, on) => {
+  test('band: one row — REQ · phase · gate: ask · n in flight · k at gate, ⤢ (the engine draws [-]), no key hints', async ($, on) => {
     on('clock.now', async () => ({ value: 5000 }))
     const deck2 = twoReqs()
     state(on, 'deck', deck2)
@@ -680,7 +681,7 @@ describe('0.7.0', () => {
     const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(120) })
     expect((await ui.find({ key: 'band-open' }))?.text).toMatch(/✈ REQ-sf-033 · review · gate: approve\? · 2 in flight · 1 at gate/) // the recommended option, asked
     expect(await ui.find({ key: 'expand' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /×/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /×/ })).toBeUndefined() // 0.8.1: the dead `×` is gone; the engine's own [-] collapses the band
     expect(await ui.find({ type: 'Text', text: /\bp\b.*cockpit|esc →|j \/ k/ })).toBeUndefined()
     await ui.unmount()
   })
@@ -852,5 +853,149 @@ describe('0.8.0', () => {
     expect(rows).toEqual(['REQ-007', 'REQ-042', 'BUG-016'])
     expect((await ui.find({ key: 'hist-REQ-042' }))?.text).toMatch(/▸/)
     await ui.unmount()
+  })
+})
+
+// ---------- 0.8.1: make the record true ----------
+
+/** Every value the drawing reads, counted; registered before the stubs so it sees each read. */
+const countReads = (on: On) => {
+  const reads: Record<string, number> = {}
+  on('state.get', async ($, e, next) => { const k = String((e as { key: string }).key); reads[k] = (reads[k] ?? 0) + 1; return next(e) })
+  return reads
+}
+/** Every child process a hook ran: its argv after `git --no-optional-locks`, answered with `stdout`. */
+const countRuns = (on: On, stdout = '') => {
+  const runs: string[][] = []
+  on('process.run', async ($, e) => {
+    runs.push([...(e as { argv: readonly string[] }).argv])
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } } as never
+  })
+  return runs
+}
+const DIFF = 'diff --git a/src/pay/Startup.cs b/src/pay/Startup.cs\n--- a/src/pay/Startup.cs\n+++ b/src/pay/Startup.cs\n@@ -1,1 +1,2 @@\n line\n+services.AddRetry();\n'
+
+describe('0.8.1', () => {
+  // A write made while drawing is refused, and the `update` helper reads its value again before it writes: so a
+  // drawing that tried one shows as a second read of that value. Each value is read once — settings, deck and
+  // layout twice (the band's hook, then the cockpit) — and no child process runs.
+  const pure = [
+    { name: 'narrow while layout says wide', cols: 80, extra: { view: { req: 'REQ-042', tab: 3, sub: { kind: 'page' }, home: false } } },
+    { name: 'no git facts yet for the REQ shown', cols: 120, extra: { git: {} } },
+    { name: 'a diff open', cols: 120, extra: { view: { req: 'REQ-042', tab: 3, sub: { kind: 'diff', path: 'src/pay/Startup.cs' }, home: false } } },
+  ]
+  for (const v of pure) test(`a render only reads, no write and no git: ${v.name}`, async ($, on) => {
+    {
+      const reads = countReads(on)
+      const runs = countRuns(on)
+      atGate(on, v.extra as never)
+      const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(v.cols, 400) })
+      await settle(() => false)
+      for (const [k, n] of Object.entries(reads)) expect(`${k} ×${n}`).toBe(`${k} ×${['settings', 'deck', 'layout'].includes(k) ? Math.min(n, 2) : 1}`)
+      expect(runs).toEqual([])
+      if ((v.extra as { view?: { sub: { kind: string } } }).view?.sub.kind === 'diff') expect(await ui.find({ type: 'Text', text: /reading the diff/ })).toBeDefined()
+      await ui.unmount()
+    }
+  })
+
+  test('opening a diff: git is asked and the viewed mark lands from the press, not the draw', async ($, on) => {
+    const runs = countRuns(on, DIFF)
+    const sets: { key: string; value: unknown }[] = []
+    on('state.set', async ($, e, next) => { sets.push({ key: String((e as { key: string }).key), value: (e as { value: unknown }).value }); return next(e) })
+    atGate(on, { view: undefined, viewed: undefined }) // view and viewed left to the real state, so the press's writes land
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(120, 400) })
+    await ui.press({ key: 'tab-3' })
+    expect(sets.filter(x => x.key === 'viewed')).toEqual([])
+    expect(runs).toEqual([])
+    await ui.press({ key: 'diff-src/pay/startup.cs' })
+    expect(runs.map(r => r.slice(2, 3))).toEqual([['diff']])
+    expect(sets.filter(x => x.key === 'viewed').map(x => x.value)).toEqual([{ 'REQ-042': { 'src/pay/startup.cs': 'h2' } }])
+    expect(await ui.find({ type: 'Text', text: /◉ viewed/ })).toBeDefined()
+    expect(await ui.find({ type: 'Code' })).toBeDefined()
+    expect(runs.length).toBe(1) // the redraws after it ask nothing
+    await ui.unmount()
+  })
+
+  test('a REQ waiting at the ship gate stays in flight: on the band, with its gate', async ($, on) => {
+    on('clock.now', async () => ({ value: 5000 }))
+    const shipping: FlightDeck = { vault: 'D:/repo/.adlc', scannedAt: 0, reqs: [buildReq('REQ-sf-005-ship', { currentPhase: 5, gateState: 'awaiting' }, true, 100, 100)] }
+    expect(inFlight(shipping.reqs).map(r => r.id)).toEqual(['REQ-sf-005'])
+    state(on, 'deck', shipping)
+    state(on, 'focus', 'REQ-sf-005')
+    state(on, 'lanes', [])
+    state(on, 'strip', stripOf(inFlight(shipping.reqs), [], () => null))
+    on('ui.render', { component: 'AbovePrompt' }, async ($, e) => { const { Text } = $.ui.resolve(e); return <Text>engine</Text> })
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(120) })
+    expect((await ui.find({ key: 'band-open' }))?.text).toMatch(/✈ REQ-sf-005 · ship · gate: .* · 1 in flight · 1 at gate/)
+    await ui.unmount()
+  })
+
+  const reviewDeck: FlightDeck = { vault: 'D:/repo/.adlc', scannedAt: 0, reqs: [buildReq('REQ-042-payment-retries', { currentPhase: 4, gateState: 'awaiting' }, true, 0, 0)] }
+  const keyViews: { name: string; cols: number; extra: Partial<Record<Key, unknown>> }[] = [
+    { name: 'the implement gate, wide', cols: 120, extra: {} },
+    { name: 'the narrow list home', cols: 80, extra: { view: { req: 'REQ-042', tab: 3, sub: { kind: 'page' }, home: true } } },
+    { name: 'narrow, on the gate\'s page', cols: 80, extra: { view: { req: 'REQ-042', tab: 3, sub: { kind: 'page' }, home: false } } },
+    { name: 'review: five options and compose', cols: 120, extra: { deck: reviewDeck, gate: { 'REQ-042': parseMarker(MARKER) }, picks: { 'REQ-042': { C1: 'fix' } }, view: { req: 'REQ-042', tab: 4, sub: { kind: 'page' }, home: false } } },
+  ]
+  for (const v of keyViews) test(`no digit on any band Button; the gate's options take letters, never twice in a view: ${v.name}`, async ($, on) => {
+    {
+      atGate(on, v.extra)
+      const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(v.cols, 400) })
+      const keyed = (await ui.findAll({ type: 'Button' })).filter(b => typeof b.props.hotkey === 'string')
+      const hotkeys = keyed.map(b => b.props.hotkey as string)
+      expect(hotkeys.filter(h => /^\d$/.test(h))).toEqual([])
+      expect(new Set(hotkeys).size).toBe(hotkeys.length)
+      const opts = keyed.filter(b => /^opt-/.test(b.key ?? ''))
+      if (v.extra.view && (v.extra.view as { home?: boolean }).home) expect(opts).toEqual([]) // the list home: the options are not on screen
+      else expect(opts.map(b => b.props.hotkey)).toEqual(['a', 'b', 'd', 'e', 'f', 'g', 'i', 'j'].slice(0, opts.length))
+      if (v.extra.deck === reviewDeck) {
+        expect(opts.length).toBe(5)
+        expect((await ui.find({ key: 'compose' }))?.props.hotkey).toBe('c')
+      }
+      expect((await ui.findAll({ type: 'Button' })).filter(b => /^home-/.test(b.key ?? '') && b.props.hotkey !== undefined)).toEqual([])
+      await ui.unmount()
+    }
+  })
+
+  test('heartbeat: 4 Hz only while an agent lane runs; gates alone move the clock at most once a minute', async ($, on) => {
+    const clock = mock.clock(on, { now: 10_000_000 })
+    mock.store(on)
+    on('command.register', async () => ({ value: { command: 'flight' } }) as never)
+    on('session.start', async ($, e) => ({ cwd: e.cwd }) as never)
+    let lanes: FlightLane[] = []
+    const ticks: number[] = []
+    on('state.set', async ($, e, next) => { if ((e as { key: string }).key === 'now') ticks.push(clock.now()); return next(e) })
+    on('state.get', { plugin: 'adlc-flightdeck', key: 'lanes' } as never, async () => ({ value: { value: lanes, version: 1 } }) as never)
+    // Two gates waiting, one of them for weeks: neither makes the band tick fast.
+    state(on, 'deck', { vault: 'D:/repo/.adlc', scannedAt: 0, reqs: [
+      buildReq('REQ-042-payment-retries', { currentPhase: 3, gateState: 'awaiting' }, true, 9_000_000, 0),
+      buildReq('REQ-sf-002-old', { currentPhase: 2, gateState: 'awaiting' }, true, 10_000_000 - 21 * 86_400_000, 0),
+    ] })
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true } as never)
+    await clock.advance(180_000)
+    await clock.settle()
+    expect(ticks.length).toBeGreaterThanOrEqual(1)
+    expect(ticks.length).toBeLessThanOrEqual(4) // 3 minutes of gates: about one tick a minute, never 720
+    ticks.length = 0
+    lanes = [{ ...lane, startedAt: clock.now() }] // an agent flying
+    await clock.advance(10_000)
+    await clock.settle()
+    expect(ticks.length).toBeGreaterThanOrEqual(30) // 4 Hz while it runs
+  })
+
+  for (const height of ['band', 'max'] as const) test(`band keys unique, and the band keeps what other plugins draw beneath it: ${height}`, async ($, on) => {
+    on('ui.render', { component: 'AbovePrompt' }, async ($, e) => { const { Text } = $.ui.resolve(e); return <Text>another mod</Text> })
+    {
+      atGate(on, { layout: { height } })
+      for (const surface of ['terminal', 'desktop'] as const) {
+        const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface, ...bandAt(120, 400) })
+        expect(await ui.find({ type: 'Text', text: /another mod/ })).toBeDefined()
+        expect(await ui.find({ key: height === 'band' ? 'band-open' : 'tab-3' })).toBeDefined()
+        const keys = (await ui.findAll({ type: 'Button' })).map(b => b.key)
+        expect(keys.filter(k => !k)).toEqual([])
+        expect(keys.filter((k, i) => keys.indexOf(k) !== i)).toEqual([])
+        await ui.unmount()
+      }
+    }
   })
 })

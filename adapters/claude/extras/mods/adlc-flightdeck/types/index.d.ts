@@ -192,11 +192,14 @@ export type FlightHeight = 'band' | 'open' | 'max'
 
 export type FlightLayout = {
   height: FlightHeight
-  /** body columns below `settings.narrowAt` */
-  narrow: boolean
+  /** body columns below `settings.narrowAt`. 0.8.1: no longer written — the cockpit derives it while drawing, and a render never writes. */
+  narrow?: boolean
   /** The gate's `[⟳ compact first]` toggle: the next option sent compacts first. */
   compactFirst?: boolean
 }
+
+/** 0.8.1: the diff the cockpit shows, read by the press that opened it (git is never asked while drawing). */
+export type FlightDiff = { req: string; path: string; source: string | null; isNew: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
@@ -219,6 +222,7 @@ declare module 'claude-code' {
       strip: FlightStripEntry[]
       layout: FlightLayout
       pending: { req: string; at: number } | null
+      diff: FlightDiff | null
     }
   }
 }
