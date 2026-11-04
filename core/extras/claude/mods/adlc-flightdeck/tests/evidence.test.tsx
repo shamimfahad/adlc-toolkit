@@ -351,3 +351,25 @@ describe('evidence pages', () => {
     await ui.unmount()
   })
 })
+
+describe('0.8.1: keys', () => {
+  // One path stands in two blocks of the review page — a finding's `where` and its plan-vs-actual row — and, off the
+  // terminal, every path is a Button. Each one's key says where it stands, so no two share one.
+  for (const [tab, phase] of [[3, 3], [4, 4], [5, 5]] as const) test(`every Button key is unique and stable on desktop: tab ${tab}`, async ($, on) => {
+    on('fs.stat', async ($, e, next) => (/verification\.md$/.test(e.path) ? { value: { kind: 'file', size: VER.length, mtimeMs: 1, isLink: false } } : next(e)) as never)
+    on('fs.read', async ($, e, next) => (/verification\.md$/.test(e.path) ? { value: VER } : next(e)) as never)
+    common(on, tab, {}, deckAt(phase))
+    state(on, 'picks', { 'REQ-042': { C1: 'fix' } })
+    const keysAt = async () => {
+      const ui = await mountPane($, 'desktop')
+      const keys = (await ui.findAll({ type: 'Button' })).map(b => b.key ?? '')
+      await ui.unmount()
+      return keys
+    }
+    const keys = await keysAt()
+    if (tab === 4) expect(keys.filter(k => /^ref-/.test(k)).length).toBeGreaterThanOrEqual(4) // the findings' and the plan's paths
+    expect(keys.filter(k => !k)).toEqual([])
+    expect(keys.filter((k, i) => keys.indexOf(k) !== i)).toEqual([])
+    expect(await keysAt()).toEqual(keys) // drawn again, the same keys
+  })
+})

@@ -32,11 +32,15 @@
 // band (one row), open (a 14-row tree) and max (the whole tree; the engine caps the band at
 // half the terminal and scrolls the rest). Only REQs in flight ride the strip: a running
 // sprint's members, a gate marker, now.md, this session's stamp, the REQ being flown.
+//
+// 0.8.1 — the record true. A render only reads: git, the diff and the viewed marks are written from the press
+// or the event that asked (a write made while drawing is refused and was lost). A REQ at the ship gate is in
+// flight. No band Button has a digit key. The band composes with what other plugins draw there (`next`).
 import { atom, read, update } from 'claude-code'
 import type { Hook, Register, RenderInput } from 'claude-code'
 
 import type {
-  FlightCount, FlightDeck, FlightFuel, FlightFuelRow, FlightGateAsk, FlightGit, FlightHeight, FlightItem, FlightLane, FlightLayout, FlightOption,
+  FlightCount, FlightDeck, FlightDiff, FlightFuel, FlightFuelRow, FlightGateAsk, FlightGit, FlightHeight, FlightItem, FlightLane, FlightLayout, FlightOption,
   FlightPicks, FlightReq, FlightRound, FlightRun, FlightSettings, FlightSince, FlightStripEntry, FlightSub, FlightTab, FlightTouched,
   FlightTrail, FlightView, FlightViewed,
 } from '../types'
@@ -73,10 +77,12 @@ const viewedA = atom({ plugin: 'adlc-flightdeck', key: 'viewed' } as const, {} a
 const picksA = atom({ plugin: 'adlc-flightdeck', key: 'picks' } as const, {} as FlightPicks)
 const gateA = atom({ plugin: 'adlc-flightdeck', key: 'gate' } as const, {} as Record<string, FlightGateAsk>)
 const stripA = atom({ plugin: 'adlc-flightdeck', key: 'strip' } as const, [] as FlightStripEntry[])
-const layoutA = atom({ plugin: 'adlc-flightdeck', key: 'layout' } as const, { height: 'band', narrow: false } as FlightLayout)
+const layoutA = atom({ plugin: 'adlc-flightdeck', key: 'layout' } as const, { height: 'band' } as FlightLayout)
 const pendingA = atom({ plugin: 'adlc-flightdeck', key: 'pending' } as const, null as { req: string; at: number } | null)
+const diffA = atom({ plugin: 'adlc-flightdeck', key: 'diff' } as const, null as FlightDiff | null)
 
 const LINGER_MS = 9000 // a landed lane stays on the live list this long
+const GATE_TICK_MS = 60_000 // while only gates wait, the clock the band draws moves this often
 const SPAN_MS = 60_000 // the live time axis
 const GIT_EVERY_MS = 8000 // git is asked about a REQ at most this often
 const MAX_DEPTH = 4
@@ -97,9 +103,16 @@ const USAGE_EVERY_MS = 5000
  */
 // Keys live only in the page body. The terminal draws a plain Button that has a hotkey as `k: label`, so a header
 // control with a letter key would carry its hint; headers are click (or ctrl+x tab, then Tab / Enter) only.
-// Digits: the gate's options, and the narrow list's rows — they also press from an empty prompt.
+// 0.8.1: no digit on any band Button. A bare digit typed into an empty prompt presses a band Button keyed with it
+// (live on 2.1.318), so a digit key answers a gate by accident; a letter fires only once the band has focus.
 const KEYS = { mermaid: 'm', compose: 'c' } as const
-const OPTION_KEYS = ['1', '2', '3', '4', '5', '6'] // the action bar's options, on the open gate's page only
+/**
+ * The gate's options, by position on the open gate's page: a b d e f g i j. Positional, so the same option keeps
+ * its key across redraws and two options never share one. It skips every other letter this mod binds or shows in
+ * the same view: `c` (compose, on the review page beside the options), `m` (KEYS.mermaid), `h` / `s` (the narrow
+ * header's history / settings labels, click-only). The narrow list home's rows carry no key.
+ */
+const OPTION_KEYS = ['a', 'b', 'd', 'e', 'f', 'g', 'i', 'j']
 const APPROVE_LIKE = /^(approve|fix|merge|ship|accept all)/i
 
 // One palette, theme keys only, so light and dark themes both hold.
@@ -284,7 +297,7 @@ async function scan($: Dollar): Promise<void> {
   if (pend && (!reqs.some(r => r.id === pend.req && r.waiting) || now - pend.at > 600_000)) await update($, pendingA, () => null)
   const members: { id: string; sprint: string }[] = []
   for (const reg of await sprintFiles($)) { const text = await cached($, reg); if (text) members.push(...sprintMembers(text)) }
-  // 0.7.0: the strip and the band's counts take the REQs in flight — started, not yet at their last phase — not every
+  // 0.7.0: the strip and the band's counts take the REQs in flight — started, not yet at their last phase (0.8.1: or at its gate) — not every
   // unshipped folder; the rest is history. Sprint members ride the strip only when they are in flight themselves.
   const showAll = (await read($, settingsA)).showAll
   const flying = showAll ? reqs : inFlight(reqs)
@@ -489,7 +502,38 @@ async function trailAdd($: Dollar, req: string, phase: string, fn: (t: FlightTra
 async function touch($: Dollar, req: string | null) {
   if (!req) return
   const was = await read($, focusA)
-  if (was !== req) await update($, focusA, () => req)
+  if (was === req) return
+  await update($, focusA, () => req)
+  // First look at a REQ: ask git now, from the event, so the cockpit's render only reads (0.8.1).
+  if ((await read($, deckA)).reqs.some(r => r.id === req)) void refreshGit($, req).catch(() => {})
+}
+
+/**
+ * Opens one file's diff in the cockpit, from the press that asked for it: the view turns to it, git is asked
+ * for the diff here (never in render), and the file is marked viewed once its diff is in — the mark lands
+ * from this handler, so it is never a write made while drawing (0.8.1).
+ */
+async function openDiff($: Dollar, req: string, path: string) {
+  await setView($, v => ({ ...v, sub: { kind: 'diff', path } }))
+  const g = (await read($, gitA))[req]
+  const cwd = g?.cwd || (vault ? parent(vault) : '')
+  const t = g?.touched.find(x => pathKey(x.path) === pathKey(path))
+  let source: string | null = null
+  let isNew = false
+  const detached = !!g && g.checkedOut === false // the REQ's branch is not what this checkout has: read it from git, not disk
+  if (t && (t.status === '?' || t.status === 'A') && !g?.base && !detached) {
+    isNew = true
+    try { source = await $.fs.read(absPath(cwd, path)) } catch { source = null }
+  } else {
+    source = await git($, cwd, gitPlan({ branch: g?.tip }, detached ? null : g?.tip ?? 'HEAD', true).diff(g?.base ?? null, path))
+    if (source !== null && !source.trim() && t?.status === '?') { isNew = true; try { source = await $.fs.read(absPath(cwd, path)) } catch { source = null } }
+  }
+  if (source && source.length > DIFF_MAX) {
+    const cut = source.lastIndexOf('\n@@', DIFF_MAX)
+    source = source.slice(0, cut > 0 ? cut : DIFF_MAX) + '\n'
+  }
+  await update($, diffA, () => ({ req, path, source, isNew }))
+  if (g) await markViewed($, req, path, g.hashes[pathKey(path)])
 }
 
 /**
@@ -614,17 +658,19 @@ export const register: Register = on => {
       const settings = await read($, settingsA)
       if (settings.openOnStart && (await read($, stripA)).some(x => x.here && !x.ended)) void openOn($).catch(() => {})
     }
-    // The heartbeat: 4 Hz while something moves (lanes, a waiting gate), silent otherwise.
-    // A 15 s rescan also catches edits made outside Claude (VS Code, a git checkout).
+    // The heartbeat: 4 Hz only while an agent lane is running (its spinner and clock move). While only
+    // gates wait, `now` moves at most once a minute — enough for a `gate 2h` age; a landed lane is let go
+    // after LINGER_MS, checked once a second. A 15 s rescan also catches edits made outside Claude.
     let beats = 0
     $.clock.every(250, () => {
       beats += 1
       void (async () => {
         const lanes = await read($, lanesA)
-        const deck = await read($, deckA)
-        if (lanes.length > 0 || deck.reqs.some(r => r.waiting)) {
+        const running = lanes.some(l => l.endedAt === null)
+        if (running || beats % 4 === 0) {
           const now = await $.clock.now()
-          await update($, nowA, () => now)
+          const waiting = (await read($, deckA)).reqs.some(r => r.waiting)
+          if (running || (waiting && now - (await read($, nowA)) >= GATE_TICK_MS)) await update($, nowA, () => now)
           if (lanes.some(l => l.endedAt !== null && now - l.endedAt > LINGER_MS)) {
             await update($, lanesA, ls => ls.filter(l => l.endedAt === null || now - l.endedAt <= LINGER_MS))
           }
@@ -771,9 +817,13 @@ export const register: Register = on => {
     if (e.props.hasSurvey || e.props.view.agentId || !(await read($, settingsA)).band) return next(e)
     const deck = await read($, deckA)
     if (!deck.vault) return next(e)
+    // 0.8.1: the band composes. What the other plugins and the engine draw here comes back from `next` and is
+    // drawn last, under the flightdeck: the flightdeck keeps its rows (the gate's options sit near the top of
+    // the engine's window), and nothing another mod contributes to the band is dropped.
+    const below = await next(e).catch(() => null) // nothing beneath (a test with no engine stand-in) draws nothing
     const layout = await read($, layoutA)
-    if (layout.height !== 'band') return cockpit($, e, layout.height)
-    // In flight: the strip's REQs (started, not at their last phase), plus the one this session flies if it is too.
+    if (layout.height !== 'band') return cockpit($, e, layout.height, below)
+    // In flight: the strip's REQs (started, not at their last phase or waiting at a gate), plus the one this session flies if it is too.
     const strip = await read($, stripA)
     const focus = await read($, focusA)
     const flying = strip.filter(x => x.here && !x.ended).map(x => x.id)
@@ -781,7 +831,7 @@ export const register: Register = on => {
     if (focus && !flying.includes(focus) && (showAll ? deck.reqs : inFlight(deck.reqs)).some(r => r.id === focus)) flying.unshift(focus)
     const flyingReqs = flying.map(id => deck.reqs.find(r => r.id === id)).filter((r): r is FlightReq => !!r)
     const r = flyingReqs.find(x => x.id === focus) ?? flyingReqs.find(x => x.waiting) ?? flyingReqs[0]
-    if (!r) return next(e)
+    if (!r) { if (below) return below; const { Box: Empty } = $.ui.resolve(e); return <Empty /> } // nothing beneath, nothing in flight: an empty band
     const lanes = await read($, lanesA)
     const now = (await read($, nowA)) || (await $.clock.now())
     const { Box, Text, Button } = $.ui.resolve(e)
@@ -799,7 +849,7 @@ export const register: Register = on => {
       ? pending?.req === r.id ? 'sent' : `gate: ${rec ? `${optionHead(rec.label)}?` : ask ? clip(ask, 28) : 'waiting on you'}`
       : [r.tasks.length > 0 && r.phase === 3 ? `${done}/${r.tasks.length} tasks` : '', busyLanes ? `${spinFrame(now)} ${busyLanes} flying` : ''].filter(Boolean).join(' · ')
     const open = () => void openOn($).catch(() => {})
-    return (
+    const row = (
       <Box flexDirection="row" justifyContent="space-between" paddingX={1} height={1} overflow="hidden">
         <Box flexDirection="row" flexShrink={1} overflow="hidden">
           <Button key="band-open" plain onPress={open}>
@@ -818,10 +868,10 @@ export const register: Register = on => {
           )}
           <Text> </Text>
           <Button key="expand" plain label="⤢" onPress={open} />
-          <Text dimColor> ×</Text>
         </Box>
       </Box>
     )
+    return below ? <Box flexDirection="column">{row}{below}</Box> : row
   })
 
   // ---------- gate cards: GATE-PROTOCOL's text card, drawn as a card ----------
@@ -971,7 +1021,7 @@ export const register: Register = on => {
 /** The mockup's palette, as theme keys so light and dark themes both hold. */
 const C = { v: 'autoAccept', amber: 'warning', ok: 'success', link: 'suggestion', red: 'error', faint: 'inactive', dim: 'subtle' } as const
 
-async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' | 'max') {
+async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' | 'max', below: unknown = null) {
   const deck = await read($, deckA)
   const items = await read($, itemsA)
   const lanes = await read($, lanesA)
@@ -986,6 +1036,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
   const strip = await read($, stripA)
   const layout = await read($, layoutA)
   const pending = await read($, pendingA)
+  const diffAt = await read($, diffA)
   const now = (await read($, nowA)) || (await $.clock.now())
   const els = $.ui.resolve(e)
   const { Box, Text, Button, Markdown, Code, Link } = els
@@ -997,7 +1048,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
   const narrow = e.props.bodyColumns < (settings.narrowAt || NARROW_AT)
   const statusLines = !narrow && e.props.bodyColumns >= STATUS_AT
   const isTerminal = e.surface === 'terminal'
-  if (layout.narrow !== narrow) void update($, layoutA, l => ({ ...l, narrow })).catch(() => {})
+  // `narrow` is derived here and never written back: a render only reads (0.8.1; `layout.narrow` is no longer kept).
 
   // Which REQ the cockpit shows: the one chosen (a chip, history, /flight), else the one at a gate, else the in-flight one.
   const reqId = view.req ?? strip.find(s => s.here && s.waiting)?.id ?? strip.find(s => s.here && !s.ended)?.id ?? focus ?? null
@@ -1020,11 +1071,10 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
   const pickReq = (id: string) => {
     const r = deck.reqs.find(x => x.id === id)
     void setView($, v => ({ ...v, req: id, tab: (r?.phase ?? (typeof v.tab === 'number' ? v.tab : 1)) as FlightTab, sub: { kind: 'page' }, home: true }))
+    if (r && !gitAll[id]) void refreshGit($, id).catch(() => {}) // first look at it: git is asked from the press, not the draw
   }
-  // The gate's options take the digits whenever an open gate's page is on screen; the narrow list home takes them otherwise.
+  // The gate's options take their letters (OPTION_KEYS) only while the open gate's page is on screen.
   const gateOnScreen = !!live?.waiting && view.sub.kind === 'page' && (view.tab === live.phase) && !(narrow && view.home !== false)
-  // First look at a REQ: ask git once now; the scan (events, 15 s heartbeat) keeps it fresh after that.
-  if (reqId && live && !g) void refreshGit($, reqId).catch(() => {})
   const usagePct = settings.compact !== 'never' && live?.waiting ? await contextPercent($) : null
   const showHome = narrow && view.home !== false && view.sub.kind === 'page' && typeof view.tab === 'number'
   const verification = folder ? await cached($, `${folder}/verification.md`) : null
@@ -1052,22 +1102,23 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     state === 'done' ? { g: '✓', c: C.ok } : state === 'gate' ? { g: '●', c: C.amber } : state === 'now' ? { g: '○', c: C.link } : state === 'abort' ? { g: '×', c: C.red } : { g: '○', c: C.faint }
 
   /** A path as a link that opens the editor at a line; on a surface whose links are https-only, a button that runs `code -g`. */
-  const ref = (path: string, line?: number, label?: string, key?: string) => {
+  /** `key` is the caller's, unique to where the link stands (0.8.1: one path in two blocks no longer shares a key). */
+  const ref = (key: string, path: string, line?: number, label?: string) => {
     const abs = absPath(root, path)
     const text = label ?? (line ? `${path}:${line}` : path)
     if (isTerminal) return <Link href={editorHref(settings.editorUri, abs, line)}>{text}</Link>
-    return <Button key={key ?? `ref-${abs}-${line ?? 0}`} plain label={text}
+    return <Button key={`ref-${key}`} plain label={text}
       onPress={() => void $.process.run(['code', '-g', `${abs}:${line ?? 1}`], { timeoutMs: 8000 }).catch(() => {})} />
   }
   /**
    * A list row's path, clipped to `room`; while the pointer rests on it, a card above shows the whole
    * path. A desktop's button clips its own label, so there the card is drawn for every path.
    */
-  const pathCell = (path: string, room: number) => {
+  const pathCell = (scope: string, path: string, room: number) => {
     const shown = clip(path, room)
     return (
-      <Box key={`path-${pathKey(path)}`} flexGrow={1}>
-        <Box flexGrow={1} overflow="hidden">{ref(path, undefined, shown)}</Box>
+      <Box key={`${scope}path-${pathKey(path)}`} flexGrow={1}>
+        <Box flexGrow={1} overflow="hidden">{ref(`${scope}${pathKey(path)}`, path, undefined, shown)}</Box>
         {shown === path && isTerminal ? null : (
           <Box position="absolute" top={-3} left={0} width={path.length + 4} display="none" hover={{ display: 'flex' }}
             borderStyle="round" borderColor={C.faint} paddingX={1}>
@@ -1078,22 +1129,22 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     )
   }
   /** `+12 −3`, `new`, `deleted`; pressed, the file's diff (which marks it viewed). */
-  const diffCell = (t: FlightTouched | null, path: string) => {
+  const diffCell = (scope: string, t: FlightTouched | null, path: string) => {
     if (!t) return faint('—')
     const body = t.status === '?' || (t.status === 'A' && !t.add) ? [<Text color={C.ok}>new</Text>]
       : t.status === 'D' ? [<Text color={C.red}>deleted</Text>]
       : [<Text color={C.ok}>+{t.add}</Text>, <Text> </Text>, <Text color={C.red}>−{t.del}</Text>]
-    return <Button key={`diff-${pathKey(path)}`} plain onPress={() => sub({ kind: 'diff', path })}>{body as never}</Button>
+    return <Button key={`${scope}diff-${pathKey(path)}`} plain onPress={() => void openDiff($, reqId ?? '', path).catch(() => {})}>{body as never}</Button>
   }
   /** ◉ viewed (the blob still matches), ~ changed since, ○ not yet; pressed, toggles the mark. */
-  const viewedMark = (path: string) => {
+  const viewedMark = (scope: string, path: string) => {
     const k = pathKey(path)
     const hash = g?.hashes[k]
     const mark = marks?.[k]
     const seen = !!mark && mark === hash
     const stale = !!mark && !seen
     return (
-      <Button key={`seen-${k}`} plain onPress={() => void (seen ? unmarkViewed($, reqId ?? '', path) : markViewed($, reqId ?? '', path, hash))}>
+      <Button key={`${scope}seen-${k}`} plain onPress={() => void (seen ? unmarkViewed($, reqId ?? '', path) : markViewed($, reqId ?? '', path, hash))}>
         <Text color={seen ? C.ok : stale ? C.amber : C.faint}>{seen ? '◉' : stale ? '~' : '○'}</Text>
       </Button>
     )
@@ -1280,9 +1331,9 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
         return (
           <Box flexDirection="row">
             <Cell w={14}>
-              <Button key={`home-${p.n}`} plain {...(!gateOnScreen ? { hotkey: String(p.n) } : {})} dimColor={p.n !== tabN} {...(p.state === 'gate' ? { autoFocus: true as const } : {})}
+              <Button key={`home-${p.n}`} plain dimColor={p.n !== tabN} {...(p.state === 'gate' ? { autoFocus: true as const } : {})}
                 onPress={() => go(p.n as FlightTab)}>
-                <Text color={p.n === tabN ? C.v : undefined}>{gateOnScreen ? `${p.n} ` : ''}{p.name}</Text>
+                <Text color={p.n === tabN ? C.v : undefined}>{p.n} {p.name}</Text>
               </Button>
             </Cell>
             <Cell w={2}><Text color={c}>{glyph}</Text></Cell>
@@ -1295,7 +1346,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
 
   // ----- GATE: first on every page -----
   /**
-   * The gate's options inline, `1: fix all (recommended)`, the recommended one in the accent; under them the
+   * The gate's options inline, `a: fix all (recommended)`, the recommended one in the accent; under them the
    * consequence of the recommended one, then `[ ⟳ compact first ]` with the context fill. An option that takes
    * an argument (`fix <ids>`, `revise <what>`) fills the prompt with its head for you to finish.
    */
@@ -1337,9 +1388,12 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
           <Box flexDirection="row" flexWrap="wrap">
             {options.map((o, i) => {
               const hotkey = gateOnScreen ? OPTION_KEYS[i] : undefined
+              // Keyed by the option's head (its identity at this gate, not its changing text); a head two options share gets its place.
+              const head = optionHead(o.label)
+              const optKey = options.findIndex(x => optionHead(x.label) === head) === i ? `opt-${head}` : `opt-${head}-${i}`
               return (
                 <Box marginRight={2} flexShrink={0}>
-                  <Button key={`opt-${optionHead(o.label)}`} plain {...(hotkey ? { hotkey } : {})} dimColor={dimAll || !!pending} onPress={() => choose(o)}>
+                  <Button key={optKey} plain {...(hotkey ? { hotkey } : {})} dimColor={dimAll || !!pending} onPress={() => choose(o)}>
                     <Text color={o.recommended ? C.v : undefined}>{o.label}{o.recommended ? ' (recommended)' : ''}</Text>
                   </Button>
                 </Box>
@@ -1347,7 +1401,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
             })}
           </Box>
         )}
-        {shownCons?.consequence ? <Text color={C.dim} wrap="truncate"><Text color={C.faint}>{recI + 1} →</Text> {shownCons.consequence}</Text> : null}
+        {shownCons?.consequence ? <Text color={C.dim} wrap="truncate"><Text color={C.faint}>{gateOnScreen && OPTION_KEYS[recI] ? `${OPTION_KEYS[recI]} ` : ''}→</Text> {shownCons.consequence}</Text> : null}
         {source === 'standard' ? faint('the phase’s standard options — this gate’s marker lists none') : null}
         {mode !== 'never' && options.length ? (
           <Box flexDirection="row" flexWrap="wrap">
@@ -1483,10 +1537,10 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
         ),
         ...sorted.map(r => (
           <Box flexDirection="row">
-            <Cell w={3}>{viewedMark(r.path)}</Cell>
-            {pathCell(r.path, W - 20 - cols.length * 4)}
+            <Cell w={3}>{viewedMark('', r.path)}</Cell>
+            {pathCell('files-', r.path, W - 20 - cols.length * 4)}
             {cols.map(t => <Cell w={4}><Text color={r.tasks.includes(t.id) ? C.link : C.faint}>{r.tasks.includes(t.id) ? '●' : '·'}</Text></Cell>)}
-            <Cell w={12}>{diffCell(r.touched, r.path)}</Cell>
+            <Cell w={12}>{diffCell('', r.touched, r.path)}</Cell>
           </Box>
         )),
         rows.length ? faint(`◉ viewed  ○ not yet  ~ changed since${tasks.length > cols.length ? ` · ${tasks.length - cols.length} more task columns at a wider width` : ''}`) : null),
@@ -1511,7 +1565,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     const ordered = [...allFindings.filter(needCall), ...allFindings.filter(f => !needCall(f))]
     const findingRow = (f: Finding) => {
       const m = /^(.*?):(\d+)/.exec(f.where)
-      const where = f.where ? (m ? ref(m[1] ?? f.where, Number(m[2]), clip(f.where, wW - 2)) : ref(f.where, undefined, clip(f.where, wW - 2))) : faint('—')
+      const where = f.where ? (m ? ref(`find-${f.id}`, m[1] ?? f.where, Number(m[2]), clip(f.where, wW - 2)) : ref(`find-${f.id}`, f.where, undefined, clip(f.where, wW - 2))) : faint('—')
       const picked = picks[f.id]
       const pickLabel = picked ?? (needCall(f) ? 'call' : 'fix')
       const pickBtn = (
@@ -1594,10 +1648,10 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     ),
     ...rows.map(r => (
       <Box flexDirection="row">
-        <Cell w={3}>{r.touched ? viewedMark(r.path) : faint(' ')}</Cell>
-        {pathCell(r.path, W - 32)}
+        <Cell w={3}>{r.touched ? viewedMark('plan-', r.path) : faint(' ')}</Cell>
+        {pathCell('plan-', r.path, W - 32)}
         <Cell w={12}><Text color={r.planned && r.touched ? C.faint : C.amber}>{!r.planned ? 'surprise' : !r.touched ? 'not touched' : 'planned'}</Text></Cell>
-        <Cell w={12}>{diffCell(r.touched, r.path)}</Cell>
+        <Cell w={12}>{diffCell('plan-', r.touched, r.path)}</Cell>
       </Box>
     )))
 
@@ -1628,9 +1682,9 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
         touched.length === 0 ? dim(g ? 'the tree matches the base' : 'asking git…') : null,
         ...touched.map(r => (
           <Box flexDirection="row">
-            <Box flexGrow={1} overflow="hidden">{ref(r.path, undefined, clip(r.path, W - barW - 12))}</Box>
+            <Box flexGrow={1} overflow="hidden">{ref(`stat-${pathKey(r.path)}`, r.path, undefined, clip(r.path, W - barW - 12))}</Box>
             <Cell w={6}>{faint(String((r.touched?.add ?? 0) + (r.touched?.del ?? 0)))}</Cell>
-            <Cell w={barW}><Button key={`bar-${pathKey(r.path)}`} plain onPress={() => sub({ kind: 'diff', path: r.path })}>{plusMinus(r.touched?.add ?? 0, r.touched?.del ?? 0)}</Button></Cell>
+            <Cell w={barW}><Button key={`bar-${pathKey(r.path)}`} plain onPress={() => void openDiff($, reqId ?? '', r.path).catch(() => {})}>{plusMinus(r.touched?.add ?? 0, r.touched?.del ?? 0)}</Button></Cell>
           </Box>
         ))),
     ]
@@ -1691,43 +1745,31 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     } catch {}
     return (
       <Box flexDirection="column">
-        {header(title, text !== null ? ref(path, undefined, 'open in editor ↗') : null)}
+        {header(title, text !== null ? ref('open-editor', path, undefined, 'open in editor ↗') : null)}
         <Box marginTop={1} flexDirection="column" paddingLeft={2}>
-          {listing ? listing.map(f => <Button key={`doc-${f}`} plain label={f} onPress={() => sub({ kind: 'doc', path: `${path}/${f}`, title: f })} />) : null}
+          {listing ? listing.map(f => <Button key={`doc-file-${f}`} plain label={f} onPress={() => sub({ kind: 'doc', path: `${path}/${f}`, title: f })} />) : null}
           {text !== null ? <Markdown key={`doc-${path}`} text={text} /> : listing ? null : dim('could not read that file')}
         </Box>
       </Box>
     )
   }
 
-  /** One file's change against the base, unified; opening it is what marks the file viewed. */
-  const diffView = async (path: string) => {
+  /**
+   * One file's change against the base, unified. 0.8.1: drawn from `diff`, which the press that opened it filled
+   * (`openDiff`: git is asked, and the file marked viewed, there); this render only reads.
+   */
+  const diffView = (path: string) => {
     const k = pathKey(path)
-    const t = g?.touched.find(x => pathKey(x.path) === k)
-    const cwd = g?.cwd ?? root
-    let source: string | null = null
-    let isNew = false
-    const detached = !!g && g.checkedOut === false // the REQ's branch is not what this checkout has: read it from git, not disk
-    if (t && (t.status === '?' || t.status === 'A') && !g?.base && !detached) {
-      isNew = true
-      try { source = await $.fs.read(absPath(cwd, path)) } catch { source = null }
-    } else {
-      source = await git($, cwd, gitPlan({ branch: g?.tip }, detached ? null : g?.tip ?? 'HEAD', true).diff(g?.base ?? null, path))
-      if (source !== null && !source.trim() && t?.status === '?') { isNew = true; try { source = await $.fs.read(absPath(cwd, path)) } catch { source = null } }
-    }
-    if (source && source.length > DIFF_MAX) {
-      const cut = source.lastIndexOf('\n@@', DIFF_MAX)
-      source = source.slice(0, cut > 0 ? cut : DIFF_MAX) + '\n'
-    }
-    // Opening the diff is what marks the file viewed — once per hash, or this render would mark, redraw and mark again.
-    if (reqId && g && marks?.[k] !== (g.hashes[k] ?? 'seen')) void markViewed($, reqId, path, g.hashes[k])
+    const d = diffAt && diffAt.req === reqId && pathKey(diffAt.path) === k ? diffAt : null
+    const source = d?.source ?? null
+    const isNew = !!d?.isNew
     const seen = !!marks?.[k] && marks[k] === g?.hashes[k]
     return (
       <Box flexDirection="column">
-        {header(clip(path, W - 40), <Box flexDirection="row">{ref(path, undefined, 'open in editor ↗')}<Text>  </Text><Text color={seen ? C.ok : C.amber}>{seen ? '◉ viewed' : 'marking viewed'}</Text></Box>)}
+        {header(clip(path, W - 40), <Box flexDirection="row">{ref('open-editor', path, undefined, 'open in editor ↗')}<Text>  </Text><Text color={seen ? C.ok : C.amber}>{seen ? '◉ viewed' : 'marking viewed'}</Text></Box>)}
         <Box paddingLeft={2}>{faint(`${isNew ? 'new file' : `vs ${g?.baseName ?? 'HEAD'}`}${g?.authors[k] ? ` · last: ${g.authors[k]}` : ''}${source && source.length >= DIFF_MAX ? ' · cut at 90KB' : ''}`)}</Box>
         <Box marginTop={1}>
-          {source === null ? dim('git could not show that file') : isNew ? <Code source={source} path={path} startLine={1} /> : source.trim() ? <Code source={source} format="diff" path={path} /> : dim('no difference against the base')}
+          {!d ? dim('reading the diff…') : source === null ? dim('git could not show that file') : isNew ? <Code source={source} path={path} startLine={1} /> : source.trim() ? <Code source={source} format="diff" path={path} /> : dim('no difference against the base')}
         </Box>
       </Box>
     )
@@ -1787,7 +1829,10 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     const rows = list.length > HIST_MAX ? [...list.slice(0, HIST_MAX), ...list.slice(HIST_MAX).filter(it => it.id === reqId)] : list
     const stateText = (it: FlightItem) =>
       it.state === 'flying' ? `${it.phaseName}` : it.state === 'gate' ? `at the ${it.phaseName} gate` : it.state === 'merged' ? 'shipped' : it.state === 'cancelled' ? 'aborted' : it.state
-    const open = (it: FlightItem) => void setView($, () => ({ req: it.id, tab: (it.state === 'flying' || it.state === 'gate' ? it.phase : 5) as FlightTab, sub: { kind: 'page' }, home: true }))
+    const open = (it: FlightItem) => {
+      void setView($, () => ({ req: it.id, tab: (it.state === 'flying' || it.state === 'gate' ? it.phase : 5) as FlightTab, sub: { kind: 'page' }, home: true }))
+      if (!gitAll[it.id] && deck.reqs.some(r => r.id === it.id)) void refreshGit($, it.id).catch(() => {}) // from the press, not the draw
+    }
     const showing = view.hist ?? null
     const toggle = (id: string, which: 'first' | 'last') =>
       void setView($, v => ({ ...v, hist: v.hist?.id === id && v.hist.which === which ? null : { id, which } }))
@@ -1889,7 +1934,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
             </Button>
           </Box>
         ))),
-      Sec('KEYS', null, <Text color={C.dim} wrap="wrap"><Text color={undefined}>1–6</Text> gate options · <Text color={undefined}>{KEYS.compose}</Text> send your finding picks · <Text color={undefined}>ctrl+x tab</Text> focus the flightdeck, then Tab / Enter</Text>),
+      Sec('KEYS', null, <Text color={C.dim} wrap="wrap"><Text color={undefined}>ctrl+x tab</Text> focus the flightdeck, then <Text color={undefined}>{OPTION_KEYS.slice(0, 4).join(' ')} …</Text> gate options · <Text color={undefined}>{KEYS.compose}</Text> send your finding picks · Tab / Enter — no digit keys: a digit typed in the prompt stays in the prompt</Text>),
     ]
   }
 
@@ -1899,15 +1944,16 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     : view.sub.kind === 'doc' ? await docView(view.sub.path, view.sub.title)
     : view.sub.kind === 'card' ? cardView(view.sub.phase)
     : view.sub.kind === 'lane' ? laneView(view.sub.id)
-    : view.sub.kind === 'diff' ? await diffView(view.sub.path)
+    : view.sub.kind === 'diff' ? diffView(view.sub.path)
     : view.sub.kind === 'mermaid' ? await mermaidView(view.sub.n)
     : await phasePage(tabN || 1)
 
   // Nothing is cut: a tree taller than the band scrolls in the engine's window (wheel, keys). Open and max differ in
   // what a phase page holds (the summary, or the evidence too), never in a height the band could not take anyway.
-  const frame = (...children: unknown[]) => (
-    <Box flexDirection="column" paddingX={1}><Box flexDirection="column" flexShrink={0}>{children as never}</Box></Box>
-  )
+  const frame = (...children: unknown[]) => {
+    const tree = <Box flexDirection="column" paddingX={1}><Box flexDirection="column" flexShrink={0}>{children as never}</Box></Box>
+    return below ? <Box flexDirection="column">{tree}{below as never}</Box> : tree
+  }
 
   if (typeof view.tab !== 'number') return frame(level1(), rule(), body)
   if (showHome) return frame(level1(), rule(), listHome())

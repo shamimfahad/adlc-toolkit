@@ -6,6 +6,17 @@ Labels used below: **[breaking]** needs action on update, **[protocol]** changes
 
 ## [Unreleased]
 
+### Fix: make the record true (`adlc-flightdeck` v0.8.1) **[tooling]**
+
+Mod only. Checked live on Claude Code 2.1.318: a state write made while a band draws is refused and was lost, and a bare digit in an empty prompt presses a band Button keyed with it.
+
+- **A render only reads.** Viewed marks, git facts and the open diff are written from the press or event that asked; `git diff` runs from the press that opens a diff, not while drawing. The narrow layout is derived, not stored.
+- **In flight** now also counts a REQ waiting at a gate, so one at the ship gate stays on the strip and keeps the band up.
+- **No digit keys.** Gate options take letters by position (`a b d e f g i j`, skipping `c` `m` `h` `s`); the narrow list's rows have no key; header controls stay click-only.
+- **Heartbeat**: 4 Hz only while an agent runs; with only gates waiting, the clock moves once a minute.
+- The band draws other mods' band content under its own (`next`); the dead `×` is gone (the engine draws `[-]`); every Button key is unique and stable.
+- README: the band is terminal and desktop only; `code -g` needs `$.process` (CLI). Tests: 72 → 87.
+
 ### Fix: prefixed IDs (`REQ-sf-042`) were invisible to the trail and the vault generator **[tooling]**
 
 Tools matched work items with `REQ-\d+`, so in a `req.id_scheme: prefixed` vault the trail hook never found a REQ: `trail gate --req REQ-sf-042` exited 2, hook stamps went to the wrong item or nowhere, and `trail stats` counted nothing. One pattern now covers every scheme: `(?:REQ|BUG)-(?:[a-z][a-z0-9]{0,7}-)?\d+`.
