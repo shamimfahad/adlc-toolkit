@@ -79,7 +79,7 @@ Mod only; no skill or vault change. A developer who approves a gate is the one a
 - **Record `## Trail`** (`templates/record-template.md`, `/wrapup` step 3): one line per phase — rounds, agents, duration — and the findings decisions, so finished work carries its decisions across clones. `/recover` treats the block as advisory.
 - Not in this cut: the raw-row reader (an agent's transcript drawn in the pane) — 1.10.2.
 
-## [1.9.1] — unreleased
+## [1.9.1] — 2026-10-02
 
 ### The harness — conventions that load by path, knowledge that arrives unasked, checks before reviewers **[protocol]**
 
@@ -93,7 +93,7 @@ The second tranche of the 1.9 plan. 1.9.0 changed the shape of the vault; this c
 - **The extras are wired per repo, per developer — never globally.** New `scripts/claude-settings.mjs` (`node scripts/adlc.mjs settings --repo <path>`) merges the four extras into `<repo>/.claude/settings.local.json`: the developer's own project-scoped file, gitignored (added to the VAULT-LAYOUT pattern set), active only in that repo — so the other Claude Code sessions on the machine and whatever hooks or statusline the developer keeps in `~/.claude/settings.json` are untouched. `/init` step 12c and `/config migrate` step 9b offer it — and only they do: `sync` installs the toolkit and never touches a settings file in either scope, because installing is machine-level and turning hooks on is a per-repo decision that belongs with the vault. `--global` exists as an explicit opt-in for someone who wants the extras everywhere. The merge is keyed on the script names: adds what is missing, repoints entries when the toolkit moved, removes an entry for a script no longer shipped, reuses an existing entry with the same matcher rather than adding a sibling, never touches a hook or statusline that is yours; one-time `.adlc-backup` first; invalid JSON is left alone with the snippet printed. Tested against a hand-authored file with a custom hook, an old-path budget hook and a user statusline, from a subdirectory, with no repo, and with `--global`.
 - **On update:** `node scripts/adlc.mjs settings --repo <repo>` in each ADLC repo (or say yes when `/config migrate` offers it); `/config migrate` copies `conventions-paths.md` into the vault and regenerates rules; run `/config rules` once to move per-area sections out of `conventions.md`.
 
-## [1.9.0] — unreleased
+## [1.9.0] — 2026-10-02
 
 ### The shape — one record per finished item, one line per lesson, generated indexes **[protocol]** **[vault-format]**
 
