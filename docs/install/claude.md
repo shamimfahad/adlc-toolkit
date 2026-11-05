@@ -24,7 +24,7 @@ The pipeline travels with the repo. Run from your project root.
 **macOS / Linux**
 ```bash
 # 1. Vendor the toolkit into the project
-git clone <repo-url> .adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git .adlc-toolkit
 
 # 2. (only if your path differs from the default) regenerate
 node .adlc-toolkit/scripts/adlc.mjs build --tool=claude --toolkit-path=.adlc-toolkit
@@ -38,7 +38,7 @@ cp    .adlc-toolkit/adapters/claude/CLAUDE.md ./CLAUDE.md
 
 **Windows (PowerShell)**
 ```powershell
-git clone <repo-url> .adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git .adlc-toolkit
 node .adlc-toolkit\scripts\adlc.mjs build --tool=claude --toolkit-path=.adlc-toolkit
 New-Item -ItemType Directory -Force .claude | Out-Null
 Copy-Item -Recurse -Force .adlc-toolkit\adapters\claude\skills .claude\skills
@@ -52,7 +52,7 @@ What the one-command installer does, by hand: install once into `~/.claude`, ava
 
 **macOS / Linux**
 ```bash
-git clone <repo-url> ~/code/adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git ~/code/adlc-toolkit
 cd ~/code/adlc-toolkit
 node scripts/adlc.mjs build --tool=claude --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 
@@ -65,7 +65,7 @@ ln -s "$PWD/adapters/claude/agents" ~/.claude/agents
 
 **Windows (PowerShell, Developer Mode or admin)**
 ```powershell
-git clone <repo-url> $HOME\code\adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git $HOME\code\adlc-toolkit
 cd $HOME\code\adlc-toolkit
 node scripts\adlc.mjs build --tool=claude --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 cmd /c mklink /D "$HOME\.claude\skills" "$PWD\adapters\claude\skills"

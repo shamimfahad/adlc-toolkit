@@ -215,7 +215,7 @@ Agents are assigned a capability **tier** — `fast`, `balanced`, or `deep` — 
 One command does install _and_ update, global by default — the pipeline becomes available in every repo you open:
 
 ```bash
-git clone <repo-url> ~/code/adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git ~/code/adlc-toolkit
 cd ~/code/adlc-toolkit
 node scripts/adlc.mjs sync --tool=claude     # or cursor · copilot · codex · gemini · all
 ```
@@ -312,6 +312,13 @@ The activity log (`.adlc/hot.md`, plus `decisions.md` and `glossary.md`) is **co
 
 </details>
 
+<details>
+<summary><b>Teammates find the toolkit, each keeps it where they like</b> — <code>toolkit.repo</code> + <code>.adlc/local.yml</code></summary>
+
+Where to *get* the toolkit is shared: `/init` writes the URL into `.adlc/config.yml` → `toolkit.repo` and the vault README, so anyone who clones the project sees it. Where each person *keeps* their clone is not: it goes in `.adlc/local.yml` → `toolkit.path`, one gitignored file per developer. Stubs fall back to it when their built-in toolkit path doesn't exist on that machine — which is what makes project-local (`--repo`) installs work across a team. `/config migrate` adds both to an existing vault.
+
+</details>
+
 ## Git policy
 
 How much git the assistant runs is **your choice per project**, set at `init` and stored in `.adlc/config.yml` → `git.mode`:
@@ -340,3 +347,7 @@ The seven principles in [ETHOS.md](ETHOS.md), injected into every skill: **you d
 - **Keep `adapters/` in sync automatically:** run `node scripts/adlc.mjs hooks` once — a pre-commit hook rebuilds `adapters/` whenever a commit touches the protocol source. Details in the [installation guide](docs/install/README.md#keeping-adapters-in-sync-automatically).
 
 </details>
+
+---
+
+**Repo:** <https://github.com/shamimfahad/adlc-toolkit>

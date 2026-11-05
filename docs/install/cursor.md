@@ -23,14 +23,14 @@ Cursor auto-discovers `.cursor/` in the open project. Just drop the folder in.
 
 **macOS / Linux**
 ```bash
-git clone <repo-url> .adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git .adlc-toolkit
 node .adlc-toolkit/scripts/adlc.mjs build --tool=cursor --toolkit-path=.adlc-toolkit   # only if path differs
 cp -R .adlc-toolkit/adapters/cursor/.cursor ./.cursor
 ```
 
 **Windows (PowerShell)**
 ```powershell
-git clone <repo-url> .adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git .adlc-toolkit
 node .adlc-toolkit\scripts\adlc.mjs build --tool=cursor --toolkit-path=.adlc-toolkit
 Copy-Item -Recurse -Force .adlc-toolkit\adapters\cursor\.cursor .\.cursor
 ```
@@ -43,7 +43,7 @@ Put the commands in your user-level Cursor folder so they appear in every projec
 
 **macOS / Linux**
 ```bash
-git clone <repo-url> ~/code/adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git ~/code/adlc-toolkit
 node ~/code/adlc-toolkit/scripts/adlc.mjs build --tool=cursor --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 mkdir -p ~/.cursor/commands
 cp ~/code/adlc-toolkit/adapters/cursor/.cursor/commands/*.md ~/.cursor/commands/
@@ -51,7 +51,7 @@ cp ~/code/adlc-toolkit/adapters/cursor/.cursor/commands/*.md ~/.cursor/commands/
 
 **Windows (PowerShell)**
 ```powershell
-git clone <repo-url> $HOME\code\adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git $HOME\code\adlc-toolkit
 node $HOME\code\adlc-toolkit\scripts\adlc.mjs build --tool=cursor --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 New-Item -ItemType Directory -Force $HOME\.cursor\commands | Out-Null
 Copy-Item -Force $HOME\code\adlc-toolkit\adapters\cursor\.cursor\commands\*.md $HOME\.cursor\commands\

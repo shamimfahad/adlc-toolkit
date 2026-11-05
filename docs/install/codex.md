@@ -24,7 +24,7 @@ What the one-command installer does, by hand. Codex prompts and agents are **use
 **macOS / Linux**
 ```bash
 # toolkit (vendored in the project, or global — your choice)
-git clone <repo-url> .adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git .adlc-toolkit
 node .adlc-toolkit/scripts/adlc.mjs build --tool=codex --toolkit-path=.adlc-toolkit
 # (global toolkit instead: --mode=global --toolkit-path="$HOME/code/adlc-toolkit")
 
@@ -39,7 +39,7 @@ cp .adlc-toolkit/adapters/codex/AGENTS.md ./AGENTS.md
 
 **Windows (PowerShell)**
 ```powershell
-git clone <repo-url> .adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git .adlc-toolkit
 node .adlc-toolkit\scripts\adlc.mjs build --tool=codex --toolkit-path=.adlc-toolkit
 New-Item -ItemType Directory -Force $HOME\.codex\prompts, $HOME\.codex\agents | Out-Null
 Copy-Item -Force .adlc-toolkit\adapters\codex\prompts\*.md  $HOME\.codex\prompts\

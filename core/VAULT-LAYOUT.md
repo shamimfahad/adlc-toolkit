@@ -209,6 +209,7 @@ Per-developer scratch state is ignored; durable knowledge and shared logs are co
 
 ```
 .adlc/now.md
+.adlc/local.yml
 .claude/settings.local.json
 .adlc/specs/**/REQ-*/
 .adlc/bugs/**/BUG-*/
@@ -235,7 +236,22 @@ The first two patterns are 1.9.0: the **whole working set** is local, and the re
 
 Single-`*` versions of these silently stop matching the moment a vault partitions, and the symptom is per-developer heartbeat files appearing in everyone's diffs with no error anywhere. If you are editing this list, keep the `**`.
 
-`.adlc/now.md`, `.adlc/ui-auth.env` and `.claude/settings.local.json` (the developer's per-repo Claude Code settings, where the extras' hooks are wired — never shared, never global) are not globs and are easy to lose when the block is swapped wholesale. Keep them.
+`.adlc/now.md`, `.adlc/local.yml` (where this developer's toolkit clone lives — see *The per-developer file* below), `.adlc/ui-auth.env` and `.claude/settings.local.json` (the developer's per-repo Claude Code settings, where the extras' hooks are wired — never shared, never global) are not globs and are easy to lose when the block is swapped wholesale. Keep them.
+
+## The per-developer file — `.adlc/local.yml`
+
+Every teammate keeps the toolkit somewhere different, so *where* it lives can't go in the committed `config.yml`. It goes here — one small file per developer, gitignored by the set above:
+
+```yaml
+# .adlc/local.yml — this developer only. Gitignored; never commit.
+toolkit:
+  path: /Users/you/code/adlc-toolkit   # absolute path to your toolkit clone
+```
+
+- **Written by** `/init` (from the toolkit root it ran with) and `/config migrate` (when missing, or when its path no longer holds `core/`). Show the file before writing it.
+- **Read by** every generated stub and skill when the baked-in `Toolkit root:` doesn't exist on this machine — the case for project-local (vendored) stubs committed to a repo, and for a teammate whose clone sits elsewhere. Order: a toolkit root named by the dispatching prompt (`/sprint` passes runners an absolute one) → the stub's `Toolkit root:` → `local.yml`'s `toolkit.path` → `ADLC_TOOLKIT_PATH` → ask, then offer to record the answer here.
+- **Worktrees don't have it.** The file is gitignored, so a fresh `git worktree` (`/proceed` worktree mode, `/sprint` runners) has no copy. Read the main checkout's: `$(git rev-parse --path-format=absolute --git-common-dir)/../.adlc/local.yml`. Never copy the file into a worktree.
+- **Where to get the toolkit** is the committed half: `config.yml` → `toolkit.repo` (the URL a new teammate clones from). Path is per-person; the repo URL is shared.
 
 ## Links in artifacts — split by lifetime
 

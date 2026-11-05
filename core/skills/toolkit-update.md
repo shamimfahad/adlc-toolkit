@@ -9,7 +9,7 @@ Its highest-value job: because `core/` is upstream-owned and your customizations
 
 ## Scope and posture
 
-- **Operates only on the toolkit repo** at `$TOOLKIT_PATH` (the "Toolkit root:" line in the command that invoked you). It never touches a project's source code, and the only thing it does to a project vault is *advise* running `/config migrate` afterward.
+- **Operates only on the toolkit repo** at `$TOOLKIT_PATH` (the "Toolkit root:" line in the command that invoked you; if that folder doesn't exist on this machine, `.adlc/local.yml` → `toolkit.path`). It never touches a project's source code, and the only thing it does to a project vault is *advise* running `/config migrate` afterward.
 - **Git here is the toolkit's own git**, not a project's — the project `git.mode` invariants don't apply. Even so: only fast-forward or a clean merge/rebase of upstream onto the local clone; **never** force-push, rewrite history, or push anything. If the pull can't be clean, stop and surface (see "If the pull won't be clean").
 - **Confirm before every write** — the `git pull` and the `sync` are each shown as a plan and run only on approval.
 

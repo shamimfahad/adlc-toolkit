@@ -41,7 +41,7 @@ The adapters install into your assistant's **user-level** config once, so indivi
 ### 1. Get the toolkit
 
 ```bash
-git clone <repo-url> ~/code/adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git ~/code/adlc-toolkit
 ```
 
 Keep it wherever you like — just leave it there. The installed commands read the protocol from this folder at runtime, so it's the toolkit's permanent home.

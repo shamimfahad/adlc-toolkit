@@ -1,6 +1,7 @@
 description = "Autonomous end-to-end pipeline. Runs /spec → /architect → /implement → /review → /wrapup like /proceed, but instead of pausing at each gate it routes the decision through the decision-maker agent, commits its work as it goes, and ends in a single final human review backed by a full audit log. Opt-in; conservative by default; never merges to main or rewrites history."
 prompt = """
 Toolkit root: .adlc-toolkit
+(If that folder doesn't exist on this machine, read `toolkit.path` from `.adlc/local.yml` — this developer's own, gitignored; inside a git worktree it is in the main checkout: `$(git rev-parse --path-format=absolute --git-common-dir)/../.adlc/local.yml`. Use that path in place of the root everywhere below. If neither exists, ask the user where their toolkit clone is and offer to record it there.)
 
 Execute the ADLC **autopilot** protocol — defined in `.adlc-toolkit/core/skills/autopilot.md` — against the `.adlc/` vault in the current repository.
 
