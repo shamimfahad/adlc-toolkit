@@ -1,0 +1,40 @@
+                                                                                         ╭─────────────────────────────╮
+ ▐▛███▛█   Claude Code v2.1.318                                                          │ flightdeck-engine-probes    │
+▝▜██████▀  Opus 5.5 · Claude Max                                                         │ probe submitted: "line one" │
+ ▝▝   ▝▝   ~/code/adlc-toolkit                                                           ╰─────────────────────────────╯
+
+  Introducing Opus 5.5
+  Get to finished work sooner with Opus 5.5. Switch anytime with /model.
+
+❯ /probe p3
+  ⎿  flightdeck-engine-probes: probe mode: p3
+
+❯ /probe p3
+  ⎿  flightdeck-engine-probes: probe mode: p3
+
+❯ /probe p8
+  ⎿  flightdeck-engine-probes: probe mode: p8
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Explain back:   ⏎ submit · \⏎ new line                                                                              [-]
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle) · PR #1 · ← 1 agent

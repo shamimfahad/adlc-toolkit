@@ -31,23 +31,24 @@ If you were given a `review-packet.md`, read it first — it contains the diff w
 
 1. The REQ spec and architecture
 2. The exploration report (`exploration.md`) — what vault references the explorer found
-3. **`.adlc/knowledge/lessons/`** — every lesson file, except those whose first lines carry a `> **STATUS: superseded by …**` banner: skip the body, count them as skipped in your summary line, and check the lesson they point to instead (it is in the same folder)
+3. **`.adlc/knowledge/lessons.md`** — in full: one line per lesson is the whole minimal lesson (severity · tags · the rule · where it was seen · what enforces it). Superseded lessons are already struck through (`~~L-…~~`) — count them, don't check them. Lines carrying `enforced:` are owned by a sensor (`verify.sensors`, a rule, a lint) — skip them in the repeated-mistake pass and count them; if you believe the sensor missed exactly that mistake in this diff, file it as `sensor-gap` with the sensor's name. Open a lesson's **file** (`knowledge/lessons/LESSON-<id>-*.md`) only for a line ending `↗` whose one sentence is not enough to judge the diff, or for one you are about to cite in a finding. Never read the folder wholesale — on a measured vault that was 908KB per REQ; the file is one line per lesson.
 4. **`.adlc/knowledge/gotchas.md`** — every gotcha entry
 5. **`.adlc/architecture/adr-*.md`** — every ADR with status `accepted`
 6. **`.adlc/knowledge/concepts/`** — concept pages relevant to the change
 7. **`.adlc/knowledge/components/`** — component pages for modules being touched
+8. The packet's **Deterministic findings** — a sensor block whose heading carries `enforces: [L-…]` means those lessons were machine-checked this round; skip them in the repeated-mistake pass (they already read `enforced:` in `lessons.md`) and cite the block if the sensor fired.
 
 ## What to find
 
 ### Repeated mistakes
 
-For each lesson in `knowledge/lessons/`:
+For each line in `knowledge/lessons.md` that is neither struck through nor `enforced:`:
 
-1. Read the lesson — what's the rule, what breaks if ignored?
+1. Read the line — what's the rule, what breaks if ignored? (The severity tells you how hard to look: `critical` and `trap` first.)
 2. Check the diff: does the new code do the thing the lesson warns against?
-3. If yes, flag it as a finding.
+3. If yes, flag it as a finding, citing the anchor (`[[knowledge/lessons#^L-REQ-031-1|L-REQ-031-1]]`).
 
-Be thorough — don't only check lessons tagged with the obvious domain. A lesson about idempotency in queue handlers might apply to a new HTTP handler that has the same shape.
+Be thorough — don't only check lessons whose tags or paths match the diff. The deterministic match (the architect's grep, the knowledge hook) already covered those; your value is the semantic pass: a lesson about idempotency in queue handlers might apply to a new HTTP handler that has the same shape.
 
 ### Ignored gotchas
 
@@ -108,7 +109,7 @@ Each finding:
 | Effort | small \| medium \| large — rough cost to fix |
 | File | `src/foo/bar.ts:42` (if applicable) |
 | Category | repeated-mistake \| ignored-gotcha \| adr-conflict \| concept-drift \| re-derivation \| missing-vault-page \| vault-stale \| diagram-stale |
-| Vault reference | [[knowledge/lessons/LESSON-REQ-031-1]] |
+| Vault reference | [[knowledge/lessons#^L-REQ-031-1|L-REQ-031-1]] |
 
 **What:** One sentence describing the conflict.
 
@@ -188,18 +189,18 @@ Get the next sequential `CAND-NNN` by scanning existing entries (start at CAND-0
 - **Read-only on source and repo.** Your only writes are your own findings — your section of `review-log.md` and any candidates in `lesson-candidates.md`. Never modify source code, config, or any repository file, and never run a git command that mutates state. A fix you'd want to make is a finding, not an edit.
 - **Cite the vault page** for every finding — mandatory; without it, the finding is just an opinion.
 - **Don't repeat findings from other reviewers.** If correctness-reviewer flagged a logic error and there's a lesson about that class of error, you can cross-reference, but don't re-file the same finding.
-- **Read every applicable lesson and gotcha.** Don't filter prematurely. The reflector's value is that it does the thorough vault pass that other reviewers don't.
+- **Read every line of `lessons.md` and every gotcha.** Don't filter the ledger prematurely — it is one line per lesson, and the reflector's value is that it does the thorough vault pass that other reviewers don't. What you do *not* read is the lesson folder: a file only when a line is `↗` and insufficient, or when you cite it.
 - **No fixes.** Findings only.
 
 ## Done condition
 
 Your review is complete when:
 
-- Every lesson in `knowledge/lessons/` has been considered against the diff (superseded ones skipped and counted)
+- Every line in `knowledge/lessons.md` has been considered against the diff (superseded and `enforced:` lines skipped and counted)
 - Every gotcha in `knowledge/gotchas.md` has been considered against files in the diff
 - Every `accepted` ADR has been considered against the architecture/implementation
 - Concept and component pages for touched modules have been compared to the diff
 - Any Mermaid diagram in `architecture.md` or a touched vault page has been checked against the diff for drift
 - Findings are written to `review-log.md` under `## Reflection findings`
-- A summary line at the top reports counts by severity and category, including how many lessons/gotchas/ADRs were checked (and how many lessons were skipped as superseded)
+- A summary line at the top reports counts by severity and category, including how many lessons/gotchas/ADRs were checked (and how many lessons were skipped as superseded or enforced)
 - Vault-gap candidates have been appended to `lesson-candidates.md` (your primary producer role — empty output is rare and should be justified in the summary)

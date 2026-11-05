@@ -26,12 +26,15 @@ You will receive:
 
 1. **The task file** — your contract. What's the goal, what files to touch, what's the acceptance.
 2. **The architecture doc** for the REQ — how this task fits the overall design.
-3. **`.adlc/context/conventions.md`** — the rules quality-reviewer will check against. Follow them now or pay later.
-4. **`.adlc/knowledge/lessons/`** — grep for lessons tagged with the component or domain you're touching.
-5. **`.adlc/knowledge/gotchas.md`** — scan for gotchas in the files you're about to edit. If you're touching code with a `^g##` reference, read the gotcha first.
+3. **`.adlc/context/conventions.md`** — the cross-cutting rules quality-reviewer will check against. Follow them now or pay later. Path-scoped rules live in `context/conventions-paths.md`: on Claude Code they reach you on their own (`.claude/rules/adlc-*.md` loads when you read a matching file; the knowledge hook injects it on the first write of a new file) — on any other assistant, grep that file for the directories in your task's file list and read the matching sections before you write.
+4. **`.adlc/knowledge/lessons.md`** — grep it for every directory in your task's file list and for your component's tags; read the matching lines (each line is the whole lesson). **Never open `knowledge/lessons/`** — the folder is the write side. A line ending `↗` has a grown file behind it; open that file only if the one line is not enough. Critical lessons were injected when you were dispatched (Claude adapter); treat them as part of the task.
+5. **`.adlc/knowledge/gotchas.md`** — grep for the files you're about to edit. If you're touching code with a `^g##` reference, read the gotcha **before** the edit, not after.
 6. **The exploration report** — similar patterns to follow, integration points to use.
+7. **`config.yml` → `verify:`** — the commands you will run and quote before claiming done (below). If the block is absent, note that in your report and run what `conventions.md` names.
 
 If any of these reveal something that contradicts the task description, **stop and surface it** to the orchestrating skill. Do not silently work around contradictions.
+
+**When existing code disagrees with the docs, the docs win.** `.adlc/context/architecture.md` and `conventions.md` are the target; production code is history, not guidance — a pattern is not correct because it is nearby, and the explorer flags such neighbours as legacy. Follow the doc and report the conflict in your status report as `legacy-pattern: <file> — <what the doc says instead>`. If you believe the doc itself is wrong, say so there too; do not silently pick the code.
 
 ## Operating procedure
 
@@ -97,6 +100,7 @@ Output a terse status to the orchestrating skill:
 - Files changed (paths only)
 - Tests added or modified (paths)
 - Test status — passed / failed / not run with reason
+- `verify:` — one entry per command configured in `config.yml → verify` (`format`, `lint`, `typecheck`, `test`), each with its **last output line quoted verbatim**: `verify: typecheck ✓ \`Build succeeded. 0 Error(s)\` · test ✓ \`Passed! - Failed: 0, Passed: 412\` · lint —(not configured)`. A `scope: changed` command never earns "types pass" — only a `scope: project` one does. No `verify:` block → `verify: not configured — ran <what you ran instead>`, so the gap is visible at the gate.
 - Any deviations from the task spec, surfaced explicitly
 - Any follow-up work spotted but not included
 

@@ -44,6 +44,8 @@ Every implementation must leave the vault smarter. Lessons, gotchas, concepts, c
 
 The vault is the system's memory. Treat it that way: index things, link them, mark provisional content with `STATUS: needs verification`, and write the second-best version *now* rather than waiting for the perfect version *later*.
 
+Memory that only grows stops being memory. Knowledge a machine can check becomes a check — a sensor, a rule, a lint — and leaves the prose; prose keeps only what needs judgment. A lesson cited twice with nothing enforcing it is a check waiting to be written, and `/analyze` says so. Finished work leaves one record, not a folder.
+
 **Applies when:** Wrapping up features, encountering surprising behavior, making non-obvious technical choices, validating or invalidating assumptions.
 
 ---
@@ -64,7 +66,7 @@ When you need a decision from the user — a gate, a clarification, a fork in ap
 
 A well-framed choice is faster to answer and produces a better decision than an open-ended question. Only ask open-ended when the possible answers genuinely can't be listed.
 
-**Tool mapping:** on Claude, use the `AskUserQuestion` tool. On assistants without a structured-question UI, present the same options as a short numbered list inline in chat. Either way: discrete options, a recommendation, and room for the user to go off-menu.
+**Tool mapping:** a phase gate ends the turn and the reply is the answer (GATE-PROTOCOL invariant 5) — the same on every assistant, and never a question dialog, which hides the cockpit while it is open. For a choice inside a phase that is not a gate (a `/ux-doctor` plan, a clarification), on Claude use `AskUserQuestion`; elsewhere a short numbered list inline. Either way: discrete options, a recommendation, and room for the user to go off-menu.
 
 **Applies when:** Any phase gate, any mid-phase clarification, a decision-maker HALT handed back to the user, init/setup choices, or any moment you'd otherwise ask the user an open question.
 

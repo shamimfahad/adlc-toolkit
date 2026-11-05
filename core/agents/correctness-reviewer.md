@@ -30,7 +30,8 @@ You review **only** the changes made for this REQ. If you were given a `review-p
 
 1. The REQ spec (`requirement.md`) and architecture (`architecture.md`)
 2. `.adlc/context/conventions.md` — especially error handling and security sections
-3. `.adlc/knowledge/lessons/` — lessons tagged with the affected component
+3. `.adlc/knowledge/lessons.md` — grep for the affected component and the diff's directories (one line per lesson; never the folder)
+4. The packet's **Deterministic findings** — typecheck, test and sensor output the pipeline already ran. Facts: cite them when they support a finding, never re-derive them, never restate one as your own. A failing test listed there is already a finding; yours is the case the suite does not have.
 
 Reflector covers `knowledge/gotchas.md` exhaustively in its own pass — consult specific entries on demand only when a finding warrants citing one.
 
@@ -105,7 +106,7 @@ Each finding:
 
 **Recommendation:** What to do. Be specific — file + change, not "consider improving."
 
-**References:** [[knowledge/lessons/LESSON-REQ-031-1]], [[knowledge/gotchas#^g05|G05]] (if any apply)
+**References:** [[knowledge/lessons#^L-REQ-031-1|L-REQ-031-1]], [[knowledge/gotchas#^g05|G05]] (if any apply)
 ```
 
 ### Severity guidelines

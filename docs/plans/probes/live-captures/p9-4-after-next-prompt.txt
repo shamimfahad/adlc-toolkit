@@ -1,0 +1,40 @@
+                                                                  │                                                   ✕
+                                                                  │mode="p9"
+❯ /probe p3                                                       │presses=["decide-y","decide-y","decide-9","decide-y"]
+  ⎿  flightdeck-engine-probes: probe mode: p3                     │bandOffset=0
+                                                                  │viewedMarks=0
+❯ /probe p3                                                       │p5Open=null
+  ⎿  flightdeck-engine-probes: probe mode: p3                     │p8Submits=["terminal:\"line one\"","terminal:\"line
+                                                                  │one\\nline two\"","terminal:\"alpha\\nbeta\""]
+❯ /probe p8                                                       │p8Inputs=["line one","line one","line one\n","line
+  ⎿  flightdeck-engine-probes: probe mode: p8                     │one\nline two","alpha\\","alpha\n","alpha\nbeta"]
+                                                                  │measure={"percent":6,"tokens":57110,"window":1000000,
+❯ /probe p9                                                       │"keys":["percent","tokens","window"],"changed":["cont
+  ⎿  flightdeck-engine-probes: probe mode: p9                     │ext","cost"]}
+                                                                  │
+❯ say hi                                                          │
+                                                                  │
+⏺ Hi. Probe mode now p9.                                          │
+                                                                  │
+  The caveman plugin's status line badge isn't set up yet. Want me│
+  to add it to ~/.claude/settings.json?                           │
+                                                                  │
+✻ Cooked for 3s · done 1:35 AM                                    │
+                                                                  │
+❯ /compact                                                        │
+  ⎿  Compacted (ctrl+o to see full summary)                       │
+                                                                  │
+❯ /probe readout                                                  │
+  ⎿  flightdeck-engine-probes: readout pane: {"isPlaced":true}    │
+                                                                  │
+❯ say hi again                                                    │
+                                                                  │
+⏺ Hi again. The readout pane is placed (isPlaced: true).          │
+                                                                  │
+✻ Cooked for 2s · done 1:36 AM                                    │
+ctx 6%                                                        [-] │
+                                                                  │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle) · PR #1 · ← 1 agent

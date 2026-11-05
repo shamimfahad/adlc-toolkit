@@ -1,5 +1,5 @@
 ---
-description: "Bootstrap the .adlc/ vault in a new repo."
+description: "Bootstrap the .adlc/ vault in a new repo — copies templates, generates the CLAUDE.md schema doc, creates empty vault files (now, hot, index, decisions, glossary, gotchas), and scans for existing documentation (README, ARCHITECTURE, CONTRIBUTING, lint configs, prior ADRs, GLOSSARY) to seed context/ and architecture/ with STATUS-flagged starting content."
 ---
 
 Toolkit root: .adlc-toolkit

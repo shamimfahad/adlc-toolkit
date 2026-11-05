@@ -62,6 +62,7 @@ For each REQ/BUG/sprint, gather signals.
 **From disk:**
 
 - `pipeline-state.workPath` exists as a directory?
+- `.adlc/<REQ_PATH>/.awaiting-approval` present, and its `Phase:` and `Gate:` lines
 - If `isolation: "branch"` and the work path is the repo root, `git -C <workPath> status --porcelain` — surface uncommitted changes but don't act on them.
 
 **From the REQ folder:**
@@ -76,17 +77,20 @@ Inventory which artifact files exist: `requirement.md`, `architecture.md`, `task
 | Branch merged (or PR found merged), `currentPhase < 5` or `prState != merged` | **stale-state-reality-further** | back-fill missing phases, mark merged |
 | Branch merged AND `currentPhase == 5` cleared but vault capture missing (no recent hot.md entry, no `recoveredAt`) | **stale-state-reality-matches** | back-fill vault capture only |
 | No branch, no merge detected, no commits in base referencing the REQ, work path missing | **abandoned** | mark aborted with reconciliation note |
+| `.awaiting-approval` present, branch alive, artifacts match its `Phase:` — whatever `gateState` says | **in-sync-at-gate** | suggest `/proceed`; it re-emits the gate. If `gateState` is not `awaiting`, set it (`currentPhaseGate` from the marker's `Phase:`) and note `recoveryNotes: "gateState restored from marker"` |
 | State claims shipped (`prState == "merged"`) but branch is alive and unmerged | **divergent** | surface raw signals; user decides |
 | Sprint registry `status: "running"`, all its REQs already classified non-running | **sprint-stuck** | mark sprint ended |
 
 If signals don't cleanly fit any bucket, classify as `divergent` and surface the raw signals — let the user judge. Never guess.
+
+The marker is the gate signal. `gateState` can lag it — a session that wrote the marker and died before the state write, or a hand edit — and the marker wins. A marker whose `Phase:` disagrees with `currentPhaseGate` (or, without one, with `currentPhase`) is `divergent`.
 
 ### 3. Present the triage queue
 
 Build a queue with one entry per classified candidate. Show:
 
 - ID and one-line title (from `requirement.md` first H1, or `bug.md`)
-- Claimed state: `phase / gateState`
+- Claimed state: `phase / gateState · marker: <phase> | none`
 - Detected reality: classified phase
 - Classification + recommended action
 
@@ -98,22 +102,22 @@ ADLC recovery queue — YYYY-MM-DD HH:MM
 Scanned: <count> entries (<spec-count> REQs, <bug-count> bugs, <sprint-count> sprints)
 
   1. REQ-042-firestore-indexes
-     Claimed: phase 3 (implement) / gateState: awaiting
+     Claimed: phase 3 (implement) / gateState: awaiting · marker: implement
      Reality: merged via PR #117 on 2026-05-09
      Status:  records are behind — this actually shipped
               (stale-state-reality-further)
      Recommend: recover (back-fill phases 4-5, mark merged)
 
   2. REQ-051-export-button
-     Claimed: phase 2 (architect) / gateState: cleared
+     Claimed: phase 2 (architect) / gateState: cleared · marker: none
      Reality: branch deleted, no merge, no commits in base
      Status:  looks abandoned — nothing came of it (abandoned)
      Recommend: abort
 
   3. BUG-009-cookie-domain
-     Claimed: phase 4 (review) / gateState: awaiting
+     Claimed: phase 4 (review) / gateState: awaiting · marker: verify
      Reality: branch alive, 3 commits ahead of base, unmerged
-     Status:  alive and consistent — just pick it back up (in-sync-alive)
+     Status:  waiting at its gate — just pick it back up (in-sync-at-gate)
      Recommend: leave (run /proceed BUG-009-cookie-domain yourself)
 
   4. SPRINT-2026-04-30-1400
@@ -183,6 +187,8 @@ Process one entry at a time as the user replies.
 
    Summary section drawn from `requirement.md`'s Goal (rewritten in past tense). Changes section listing the touched files from `git diff <base>..<branch> --stat`.
 
+3b. **Write the record** `.adlc/<REQ_PATH>.md` from `templates/record-template.md` as `/wrapup` step 3b would have — header from git (`Status: merged`, commits, lines), Goal from `requirement.md`, criteria marked `⚠ recovered — not verified at a gate`, What-changed from the `--stat`, Verification `recovered — /review did not run`, Knowledge = whatever step 4 captures. Add one line under `## Later`: `- <date> — back-filled by /recover; shipped outside the pipeline`. A recovered item that already has a record (the user ran `/wrapup` and only the state drifted) keeps it untouched. `pipeline-state.phases` (the trail, 1.10) is advisory here — never required for recovery, never repaired; if present, write the record's `## Trail` from it as `/wrapup` does, else `Trail: not recorded`.
+
 4. **Capture user-provided knowledge.** For each lesson the user named, create `.adlc/knowledge/lessons/LESSON-<REQ_ID>-<n>-<slug>.md` from `templates/lesson-template.md` — the ID is namespaced under the recovered REQ, scan per `core/VAULT-LAYOUT.md` → `mint(lesson)` (never a vault-wide count; legacy `LESSON-NNN` files are frozen). Add a banner: `> **STATUS: needs verification** — captured during recover of REQ-NNN; expand from memory when you have time.` For each gotcha, append to `.adlc/knowledge/gotchas.md` with the next sequential `^g##` anchor, same banner style.
 
 5. **Update navigation files:**
@@ -193,7 +199,7 @@ Process one entry at a time as the user replies.
 
    Plus one entry per captured artifact: `## [YYYY-MM-DD] lesson | L-REQ-NNN-n — <title> (recovered)` and `## [YYYY-MM-DD] gotcha | G-NN — <title> (recovered)`.
 
-   Rebuild `knowledge/lesson-ledger.md` if a lesson was captured (as `/wrapup` step 4 — a full rewrite from the lesson files' header lines). Update `now.md` to remove the REQ from active focus if present.
+   Run the generators — `node $TOOLKIT_PATH/scripts/adlc.mjs lessons --vault .adlc` if a lesson was captured, `node $TOOLKIT_PATH/scripts/adlc.mjs index --vault .adlc` always (the record is a new row). Update `now.md` to remove the REQ from active focus if present.
 
 6. **Update `pipeline-state.json`:**
 
@@ -251,6 +257,12 @@ No vault changes. Just confirm:
 REQ-NNN-<slug> looks alive. State and git agree. Run /proceed REQ-NNN-<slug> to continue.
 ```
 
+#### `recover` with classification `in-sync-at-gate`
+
+1. If `gateState` is already `awaiting`, nothing to write — answer as `leave` does.
+2. Otherwise update `pipeline-state.json`: `gateState: "awaiting"`, `currentPhaseGate: <the marker's Phase:>`, `recoveredAt: <now>`, `recoveryNotes: "gateState restored from marker"`. Append `## [DATE] req-recovered | REQ-NNN-<slug> | gateState restored from marker (<phase>)` to `hot.md`.
+3. Then: `REQ-NNN-<slug> is waiting at its <phase> gate. Run /proceed REQ-NNN-<slug>; it re-emits the gate.`
+
 #### `recover` with classification `sprint-stuck`
 
 1. Read the sprint registry. Resolve it by name per VAULT-LAYOUT's sprint rule — `find .adlc/sprints -maxdepth 2 -name 'SPRINT-YYYY-MM-DD-<HHMM>.json'` — since a bucketed vault files it under its month.
@@ -302,7 +314,7 @@ Per recovered REQ:
 - Updated `.adlc/<REQ_PATH>/pipeline-state.json` with `recoveredAt`, `recoveryNotes`, terminal/merged state
 - `.adlc/<REQ_PATH>/verification.md` (placeholder, if missing)
 - `.adlc/<REQ_PATH>/pr-draft.md` (historical record, if missing)
-- User-captured `.adlc/knowledge/lessons/LESSON-<REQ_ID>-<n>-<slug>.md` files, and a rebuilt `knowledge/lesson-ledger.md`
+- The back-filled record `.adlc/<REQ_PATH>.md`; user-captured `.adlc/knowledge/lessons/LESSON-<REQ_ID>-<n>-<slug>.md` stubs; the regenerated `knowledge/lessons.md` and `index.md`
 - User-captured entries appended to `.adlc/knowledge/gotchas.md`
 - Updates to `.adlc/hot.md`, `.adlc/index.md`, `.adlc/now.md`, `.adlc/decisions.md`
 

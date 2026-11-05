@@ -24,6 +24,9 @@ All five assistants converged on the same three primitives — a memory/context 
 | Parallel sub-agents (`/sprint`) | ✅ | ❌ sequential | ⚠️ handoffs | ✅ | ✅ |
 | Per-agent model tier | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Vault budgets enforced (hook) | ✅ `adlc-budget.mjs` | ❌ prose only | ❌ prose only | ❌ prose only | ❌ prose only |
+| Path-scoped conventions (`conventions-paths.md`) | ✅ native `.claude/rules/adlc-*.md` on read + hook on first write | ⚠️ skills grep the file by path | ⚠️ grep | ⚠️ grep | ⚠️ grep |
+| Relevant knowledge arrives unasked (`adlc-knowledge.mjs`) | ✅ injected per directory, once | ❌ implementer greps `lessons.md` (instructed) | ❌ instructed | ❌ instructed | ❌ instructed |
+| Generated files write-blocked | ✅ hook denies | ❌ prose only | ❌ prose only | ❌ prose only | ❌ prose only |
 
 ✅ first-class · ⚠️ works, reduced · ❌ not available, degrades gracefully
 
@@ -36,6 +39,8 @@ All five assistants converged on the same three primitives — a memory/context 
 **Inline agents on Cursor.** Cursor has no sub-agent process, so the reviewer/explorer/implementer roles run sequentially inside the main session. The generated `adlc-agent-*` command files let you invoke a role on demand, and the orchestration stubs instruct the main agent to run each role's checklist in its own pass. You lose isolation (each role sees the others' context) but keep the substance.
 
 **Vault budgets.** Every adapter carries the budgets as protocol: `/wrapup` rotates `hot.md` and keeps `now.md` to its table, `/status` prints the strip, `/config budgets` repairs drift. Only Claude Code has a hook surface that can refuse a write, so only there is a budget a guarantee rather than an instruction. On the other tools, run `/status` and act on `⚠`.
+
+**Path-scoped conventions and knowledge injection (1.9.1).** On Claude Code, `node scripts/adlc.mjs rules` turns each section of `.adlc/context/conventions-paths.md` into a `.claude/rules/adlc-*.md` that loads only when a matching file is read — inside sub-agents too, since a sub-agent receives the project rules — and `adlc-knowledge.mjs` injects the matching `lessons.md`/`gotchas.md` lines the first time a directory is touched. Elsewhere the same files exist and the skills say to grep them (`task-implementer` §Required reading, the reviewers' **Rules in scope**); the difference is who has to remember.
 
 **Per-agent model tier.** Claude/Codex/Gemini/Copilot can assign a cheaper model to the recon pass and a stronger one to implementation. Cursor uses one model for the session. Tier defaults live in `core/manifest.json` → `tierToModel` and are overridable in `.adlc/config.yml`.
 

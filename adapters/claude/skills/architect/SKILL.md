@@ -1,6 +1,6 @@
 ---
 name: architect
-description: "Design + task breakdown + validate. Phase 2."
+description: "Design the architecture and task breakdown for a REQ. Phase 2 of /proceed. Dispatches codebase-explorer to inform the design, then drafts architecture.md and tasks/TASK-*.md. On high-stakes REQs, dispatches the architecture-adversary to attack the design before the gate so the user reviews a stress-tested plan. Ends in the architecture gate — user must approve before /implement."
 ---
 
 Toolkit root: .adlc-toolkit

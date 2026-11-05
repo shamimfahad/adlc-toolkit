@@ -39,7 +39,7 @@ This single phase does triage, a lightweight spec, and a short approach — the 
 
 ### 1. Quick recon
 
-A light pass, not a full blast-radius exploration: grep the area the change touches, identify the files likely involved, and check `hot.md` / `gotchas.md` / `lessons/` for anything relevant. If the change is non-trivial to scope, you may dispatch `codebase-explorer` for one focused exploration pass — but if you reach for it, that's already a signal the work may belong in `/proceed`.
+A light pass, not a full blast-radius exploration: grep the area the change touches, identify the files likely involved, and grep `hot.md` / `gotchas.md` / `knowledge/lessons.md` (one line per lesson — never the folder) for the directories and component names involved. If the change is non-trivial to scope, you may dispatch `codebase-explorer` for one focused exploration pass — but if you reach for it, that's already a signal the work may belong in `/proceed`.
 
 ### 2. Triage — the escalation decision
 
@@ -105,7 +105,9 @@ Emit per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A task plan gate folds spec + ar
 - **NEEDS YOU** — only if triage leans escalate (name the signal — sensitive surface / blast radius / ADR needed). Omit when it's cleanly a task.
 - **CHECKS** — acceptance testable · scope bounded, no sensitive surface · approach concrete (files named).
 - **MY READ** — recommendation + why (risk forces escalate regardless of size).
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (clear the gate; implement), **escalate** (hand to `/proceed`), **revise** (adjust goal/scope/approach), **abort** (discard the REQ).
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: plan`, `Gate: 1/2`): **approve** (clear the gate; implement), **escalate** (hands this REQ to `/proceed` at architect), **revise** (adjust goal/scope/approach), **abort** (discard the REQ). Mark the one `MY READ` names `(recommended)`. Then end your turn.
+
+**Both gates in this skill** write `.adlc/<REQ_PATH>/.awaiting-approval` before their card, per GATE-PROTOCOL → *The marker* — `Phase:` and `Gate:` as the **Decision** bullet names them, `Ask:`, the card's options with their consequences under `Options:`, `Recommended:`, and the files the card names under `Files:` — set `gateState: "awaiting"` and `currentPhaseGate` to the same phase, emit the card, and end the turn.
 
 ```
 GATE 1/2 · Plan · REQ-NNN-<slug>  (task)
@@ -120,8 +122,12 @@ MY READ  approve — clean small change; nothing forces escalation
 Decision →  approve · escalate · revise <what> · abort
 ```
 
-On `approve`: delete any marker, set `gateState: "cleared"`, append `## [DATE] task-plan-cleared | REQ-NNN-<slug>` to `hot.md`, continue to Phase 2.
-On `escalate`: follow **Escalation handoff**.
+The answer is the user's next message: read its first words for the option and treat the rest as their note; a reply that names no option gets an answer and the `Decision →` line again, and the marker stays. Record the answer first — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the reply, verbatim>"` (GATE-PROTOCOL → *The trail*); the same at the wrap-up gate.
+
+On `approve`: delete the marker, set `gateState: "cleared"`, append `## [DATE] task-plan-cleared | REQ-NNN-<slug>` to `hot.md`, continue to Phase 2.
+On `escalate`: delete the marker, then follow **Escalation handoff**.
+On `revise`: apply it, rewrite the marker, re-emit the card, and end the turn.
+On `abort`: ask once, plainly, and end the turn — act only on a yes in the next reply.
 
 ## Phase 2 — Implement (no gate)
 
@@ -159,13 +165,14 @@ Dispatch a **reduced reviewer set**, not the full five:
 - **ui-reviewer** — only when the change touches UI directly or via a consumed API contract (the same evidence-driven trigger `/review` uses). A task that changes a button or an API a screen calls still gets its UI verified.
 - Skip quality and architecture reviewers unless the diff introduced significant new code or moved layering — if it did, that's also a hint it should have been `/proceed`.
 
-Pass `Candidates file: .adlc/<REQ_PATH>/lesson-candidates.md` and `Output file: .adlc/<REQ_PATH>/review-log.md` — the reviewer agents' default, so no special wording is needed. State the write budget in the dispatch prompt as `/review` does: summary ≤5 lines, finding ≤8 lines after its table, section ≤12KB, ≤12 candidates of ≤4 lines. Then consolidate into `.adlc/<REQ_PATH>/verification.md` exactly as `/review` step 4 does: digest table, roster line, consolidated findings with only the dispatched reviewers' sections. The verdict file is the digest; the narrative lives in the log from the first pass. (Until 1.7.0 slim pipelines wrote reviewer narrative straight into `verification.md` and created a log only at the first re-review; measured `/task` verdict files were 43–51KB against an 8KB budget after a single pass, so the split now applies from round 1.) Re-review rounds follow `/review` step 6: the log keeps every round, the verdict file collapses resolved findings, and from round 3 the gate card leads with `Re-review round <N> · verdict file <N>KB`.
+Run `/review` **step 0** first — the `verify:` commands from `config.yml`; a `halt_on` failure stops here and goes back to the fix, anything else becomes Deterministic findings the reviewers receive as facts. Then pass `Candidates file: .adlc/<REQ_PATH>/lesson-candidates.md` and `Output file: .adlc/<REQ_PATH>/review-log.md` — the reviewer agents' default, so no special wording is needed. State the write budget in the dispatch prompt as `/review` does: summary ≤5 lines, finding ≤8 lines after its table, section ≤12KB, ≤12 candidates of ≤4 lines. Then consolidate into `.adlc/<REQ_PATH>/verification.md` exactly as `/review` step 4 does: digest table, roster line, consolidated findings with only the dispatched reviewers' sections. The verdict file is the digest; the narrative lives in the log from the first pass. (Until 1.7.0 slim pipelines wrote reviewer narrative straight into `verification.md` and created a log only at the first re-review; measured `/task` verdict files were 43–51KB against an 8KB budget after a single pass, so the split now applies from round 1.) Re-review rounds follow `/review` step 6: the log keeps every round, the verdict file collapses resolved findings, and from round 3 the gate card leads with `Re-review round <N> · verdict file <N>KB`.
 
 ### 2. Wrapup-lite — capture knowledge
 
 - Process lesson candidates: read `lesson-candidates.md`, check each against existing lessons on this branch and on `origin/<base-branch>` (exactly `/wrapup` step 2 — `git -C <workPath> ls-tree …`, the age line, the skip line), issue a verdict on each (`promote` / `demote-to-gotcha` / `discard`), append the `## Candidate verdicts` table. **Unlike `/bugfix`, zero non-discard verdicts is allowed** — a small task may legitimately produce no lasting knowledge; sweep honestly and a clean "nothing to keep" is fine, no forced capture.
-- Write any promoted lessons / gotchas to the vault (minimum-required fields). Lesson IDs are `LESSON-<REQ_ID>-<n>` — scan per `core/VAULT-LAYOUT.md` → `mint(lesson)`, never a vault-wide count. Rebuild `knowledge/lesson-ledger.md` if a lesson was written (as `/wrapup` step 4).
-- Update navigation: `hot.md` (req-ready entry + any artifacts), `index.md` (the new REQ — lessons live in the ledger, not here), `now.md` (clear active focus if this was it).
+- Write any promoted lessons / gotchas to the vault (the stub's table only; `Detectable` column in the verdict table as `/wrapup` step 3). Lesson IDs are `LESSON-<REQ_ID>-<n>` — scan per `core/VAULT-LAYOUT.md` → `mint(lesson)`, never a vault-wide count.
+- **Write the record** `.adlc/<REQ_PATH>.md` exactly as `/wrapup` step 3b — the slim path writes the same file; a `/task` record is usually under 3KB (`Path kind: /task`).
+- Update navigation: `hot.md` (req-ready entry + any artifacts), `now.md` (clear active focus if this was it); then run the generators — `node $TOOLKIT_PATH/scripts/adlc.mjs lessons --vault .adlc` (if a lesson was written) and `node $TOOLKIT_PATH/scripts/adlc.mjs index --vault .adlc` (always — the record is a new row). Never edit `index.md` or `lessons.md` by hand.
 - Repo-doc sweep, same as `/wrapup` step 1: grep the doc surface for the changed symbols, list stale claims with corrected facts under NEEDS YOU, apply on approve.
 - Draft `pr-draft.md` (title + body, change summary, lessons captured) and `merge-checklist.md` — same shapes as `/wrapup`, slimmer body.
 - Source write-back (optional, gated): same rule as `/wrapup` step 5a — only if `sources.write` lists the tracker and this REQ links an issue; drafted, never auto-sent.
@@ -179,7 +186,7 @@ Emit per the gate protocol — one consolidated review + ship gate:
 - **READY** — reviewers run (correctness, reflector, +ui if UI touched) with UI tier/counts or "n/a — no UI surface"; files changed `<N>` +a/-b, tests added/updated; commit drafted; knowledge (promoted `L-REQ-NNN-n` / gotcha `^gNN` / "nothing to keep — confirmed"; dedup basis when a lesson was considered); PR draft + merge checklist.
 - **CHECKS** — acceptance met · tests pass · no debug artifacts.
 - **MY READ** — recommendation + why (never approve while a Critical stands).
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (run the merge checklist), **fix** (`<ids>`, then re-verify), **revise**, **merged** (finalize after you merge), **abort**.
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: ship`, `Gate: 2/2`): **approve** (run the merge checklist), **fix** (`<ids>`, then re-verify), **revise**, **merged** (after you merge — finalize state, log to `hot.md`), **abort** (halts without merging). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 2/2 · Wrap up · REQ-NNN-<slug>  (task)
@@ -196,7 +203,7 @@ MY READ  approve — small, clean, covered
 Decision →  approve · fix <ids> · revise <what> · merged · abort
 ```
 
-Gate clearance mirrors `/wrapup`: on `approve`, set `gateState: "cleared"`, log to `hot.md`; on `merged`, finalize `pipeline-state` (`terminal`/`prState: merged`), update `now.md`, log `## [DATE] req-merged | REQ-NNN-<slug>`.
+Gate clearance mirrors `/wrapup`: on `approve`, delete the marker, set `gateState: "cleared"`, log to `hot.md`; on `fix`, fix and re-verify, then rewrite the marker and re-emit the card; on `merged`, finalize `pipeline-state` (`terminal`/`prState: merged`), update `now.md`, log `## [DATE] req-merged | REQ-NNN-<slug>`.
 
 ## Escalation handoff
 
@@ -226,4 +233,4 @@ Per `REQ-NNN-<slug>` (kind: task):
 - `lesson-candidates.md` (with verdicts; zero non-discard allowed)
 - `source-writeback.md` (only when configured and an issue is linked)
 - `pipeline-state.json`
-- Vault updates: `hot.md`, `index.md`, `now.md`, any promoted lessons/gotchas, and `lesson-ledger.md` when a lesson was written
+- The record `.adlc/<REQ_PATH>.md`; vault updates: `hot.md`, `now.md`, any promoted lessons/gotchas, and the generated `index.md` / `knowledge/lessons.md`

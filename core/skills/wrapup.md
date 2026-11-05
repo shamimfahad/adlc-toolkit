@@ -25,6 +25,8 @@ You are running Phase 5 of the ADLC pipeline: drafting the PR, capturing knowled
 
 Run `git -C <workPath> diff <base-branch>..<branch> --stat` and compare against architecture.md's blast radius. Surface any mismatch — files changed that weren't in the architecture, or files in architecture that weren't actually touched.
 
+**Generated-file check.** If the diff touched `.adlc/context/conventions-paths.md`, run `node $TOOLKIT_PATH/scripts/adlc.mjs rules --vault .adlc` so the `.claude/rules/adlc-*.md` files match it, and say so in the gate card.
+
 **Repo documentation sweep.** This is where user-facing docs get checked and fixed — one place, at the end, instead of a review finding plus a fix round. Read `config.yml` → `docs:` for the doc surface (files/dirs/globs); absent means `README*` at the repo root plus `docs/` if it exists; `docs: []` skips the sweep, say so on the gate card. Two passes, grep scopes and you judge:
 
 1. **Candidate-find.** From `git diff --stat` and the commit subjects, list the changed surface: renamed/removed/added symbols, CLI flags, config keys, env vars, routes, file paths, defaults, test counts a README quotes. `grep` the doc surface for each. Every hit is a candidate.
@@ -83,13 +85,16 @@ Knowledge capture happens in two halves: candidates were surfaced upstream (duri
    ```markdown
    ## Candidate verdicts
 
-   | Candidate | Verdict | Target / Reason |
-   |---|---|---|
-   | CAND-001 | promote | LESSON-REQ-042-1 |
-   | CAND-002 | demote-to-gotcha | ^g14 |
-   | CAND-003 | discard | duplicate of LESSON-REQ-031-2 (on main, not merged here yet) |
-   | CAND-004 | discard | trivial — one-off, no recurring pattern |
+   | Candidate | Verdict | Target / Reason | Detectable |
+   |---|---|---|---|
+   | CAND-001 | promote | LESSON-REQ-042-1 | no |
+   | CAND-002 | promote | LESSON-REQ-042-2 | grep — `firestore.indexes.json` must list every compound `where` |
+   | CAND-003 | demote-to-gotcha | ^g14 | no |
+   | CAND-004 | discard | duplicate of LESSON-REQ-031-2 (on main, not merged here yet) | |
+   | CAND-005 | discard | trivial — one-off, no recurring pattern | |
    ```
+
+   `Detectable` asks one question of every `promote` and `demote-to-gotcha`: could a machine catch a violation — a grep over the diff, a lint rule, a test? Anything but `no` goes on the gate card under **Promotion candidates** with the one-line check written out, and into the stub's `Detectable` row. The user decides whether it becomes a `verify.sensors` entry in `config.yml`, a rule line in `context/conventions.md`, or a lint rule they write; when one exists, the lesson's `Enforced by` row is filled and the lesson leaves the reflector's repeated-mistake pass and the knowledge hook — a sensor owns it now. Knowledge a machine can check becomes a check; prose keeps only what needs judgment.
 
 #### Lessons
 
@@ -100,9 +105,9 @@ Knowledge capture happens in two halves: candidates were surfaced upstream (duri
   ```
 
   → that + 1, or `1`. Never a vault-wide count, and never by reading the lesson files. Legacy `LESSON-NNN` files in the vault are frozen; do not continue their sequence. Fill the `^L-<REQ_ID>-<n>` anchor.
-- Use the **minimum required fields only** — title, metadata table (Tags is required — 2–5 tokens naming the component or domain), "The lesson", "Saw it in". The optional sections are filled when the lesson recurs in a future REQ, per the template's "born minimal, grown on demand" instruction.
+- Fill the **table only** — title with anchor, then the 9 rows (`Tags` 2–5 tokens naming the component or domain as the blast radius names them; `Lesson` is the one sentence, written as a do/don't; `Saw in` is a repo-relative `path:line` — the knowledge hook matches on its directory, so name the real one; `Detectable` from the verdict table; `Enforced by` is `—` until a sensor exists). Nothing below the rule: the grown sections are filled when the lesson recurs in a future REQ, per the template's "born minimal, grown on demand" instruction. `critical` severity means *always-read* — every implementer sees it at dispatch — so reserve it for what must never repeat, not for what merely hurt.
 - If the new lesson replaces an existing one, fill `Supersedes` and add the `STATUS: superseded by …` banner to the top of the old file (template header says how). Never delete the old file.
-- The ledger is rebuilt at step 4 — no `index.md` row to add.
+- `knowledge/lessons.md` is rebuilt at step 4 — no `index.md` row to add, and nothing to edit in `lessons.md` by hand.
 
 If the verify phase produced reflector findings tagged `vault-stale`, draft updates to existing lessons (don't auto-apply — show them to the user as part of the gate prompt). When the finding says a lesson is outdated rather than wrong, supersession is usually the right shape.
 
@@ -127,6 +132,26 @@ If the verify phase produced reflector findings tagged `vault-stale`, draft upda
 - If an ADR was proposed during `/architect` and the user accepted it at the architect gate, confirm its status is `accepted` and it's in `decisions.md`.
 - If an ADR needs to be superseded by something this REQ established, draft the supersession.
 
+### 3b. Write the record
+
+The record is the one file about this REQ that outlives its folder. It lives **beside** the folder, not in it — `.adlc/<REQ_PATH>.md` (`specs/REQ-042-slug.md` next to `specs/REQ-042-slug/`; `VAULT-LAYOUT.md` → `record(ID)`). It is committed; the folder is the local working set. Write it once, here; after this step nothing edits it except the append-only `## Later` section (`/bugfix` adds a line when a bug traces back).
+
+Copy `.adlc/templates/record-template.md` (toolkit fallback `$TOOLKIT_PATH/templates/record-template.md`, same rule as step 2) to `.adlc/<REQ_PATH>.md` and fill it from what you already have open — do not open anything new for it:
+
+| Section | Source |
+|---|---|
+| Header table | `pipeline-state.json` (path kind, branch, rounds, PR), `git log --oneline <base>..HEAD` and `--shortstat` (commits, lines), `usage.json` if present |
+| Goal | `requirement.md` Goal, past tense (you wrote this for the PR body at step 2 — reuse it) |
+| Acceptance criteria | `requirement.md`, ticked from `verification.md`'s cross-check |
+| What changed | `architecture.md` blast-radius table, paths only; two to four sentences of approach |
+| Decisions | ADRs touched this REQ; gate decisions from `pipeline-state.notes` |
+| Trail | `pipeline-state.phases` (1.10): one line per phase — `3 implement · 2 rounds (revise · typed → approve · viewed 4/7 · via pane) · 6 agents · 14m` — then the findings decisions as a short table (`id · severity · decision · reason`). Rounds and agents counted from the block; a round's `viewed`, then its `via` (1.12: `· via pane` when it was answered from the cockpit, `· typed` otherwise; nothing for a round without `via`, which predates 1.12) and its `compactions` (`· 1 compaction`) ride after its decision, in that order — `trail stats` reads them back; a `predict` or `summary` round is quoted in full, like a note. Durations from `startedAt` to the last round. No paths, no session ids. Absent block → `Trail: not recorded (pre-1.10)`. |
+| Verification | `verification.md` verdict line, tests added, the `verify:` runs it quotes, the ui line |
+| Knowledge | IDs from step 3's verdict table and the gotcha/concept/component pages you touched |
+| Follow-ups | `verification.md` follow-ups + anything deferred at a gate |
+
+**Budget 6KB** — the budget hook refuses more; if you are over, the Goal or What-changed prose is too long, not the tables. Links go to `knowledge/…` by anchor and to work items by ID; never link into `<REQ_PATH>/` — on a teammate's clone that folder does not exist.
+
 ### 4. Update the navigation files
 
 #### `.adlc/hot.md`
@@ -150,23 +175,16 @@ Plus one entry per artifact created:
 
 **Rotate past 500 lines — here, every time.** After appending, `wc -l`. If the file is over 500 lines, cut everything from the 501st line down (the oldest entries — newest are at the top) and prepend it to `.adlc/hot-archive-<YYYY>.md` (the year of the oldest cut entry; create with a one-line header if absent). Add or keep one row for the archive in `index.md`. Nothing is deleted; Obsidian still searches both. Measured before this rule: 3,860 lines, 754KB, "truncate when unwieldy" never fired because nobody was the one to call it unwieldy.
 
-#### `.adlc/knowledge/lesson-ledger.md` — rebuild, don't edit
+#### `.adlc/knowledge/lessons.md`, `.adlc/index.md`, `.adlc/decisions.md` — generated, never edited
 
-Whenever this REQ promoted or superseded a lesson, rewrite the ledger from the lesson files' header lines — one `grep`, never a read of the files:
+Run the generators; do not open these files:
 
 ```sh
-grep -h '^# \|^| ID \|^| Tags \|^| Severity \|^| REQ \|^> \*\*STATUS: superseded' .adlc/knowledge/lessons/LESSON-*.md
+node $TOOLKIT_PATH/scripts/adlc.mjs lessons --vault .adlc    # one line per lesson, from the stubs' header tables
+node $TOOLKIT_PATH/scripts/adlc.mjs index   --vault .adlc    # index.md (records, in-flight folders, ADRs, concepts, components) + decisions.md (ADR ledger)
 ```
 
-One row per file — `| ID | Title | Tags | Severity | REQ |` — under the template's generated-file header (`$TOOLKIT_PATH/templates/vault/knowledge/lesson-ledger.md`). Title is the H1 minus its `^L…` anchor. A superseded lesson renders as `~~LESSON-…~~` with `→ LESSON-…` after the title. Order: legacy `LESSON-NNN` ascending, then `LESSON-<WORK_ID>-<n>` by work ID then `<n>`. **Replace the whole file** — it carries `merge=union`, and a union merge can leave a duplicated row; a full rewrite is what clears it. Nobody hand-edits this file; if it looks hand-edited, rebuild it anyway.
-
-#### `.adlc/index.md`
-
-Add rows for new specs, ADRs, concepts, components. Open it here, and read only the sections you're adding rows to. Lessons are not rows here — `index.md` links to the ledger.
-
-#### `.adlc/decisions.md`
-
-Update if ADR statuses changed — most REQs change none, in which case never open it.
+Each prints a one-line summary (`lessons.md rebuilt: 312 lessons · 4 critical · …`, `index: 94 REQ · 12 BUG · …`) — put both lines in the gate card. They rewrite the **whole file** from header lines only, so cost does not grow with the vault; a `merge=union` duplicate on `lessons.md` is cleared by the rebuild. The Claude adapter refuses a hand edit to any of the three (they carry `<!-- GENERATED`); on another adapter the rule is the same, just unenforced. `index.md` keeps everything under its `## Reference` heading verbatim — that section is the one hand-maintained part.
 
 #### `.adlc/now.md`
 
@@ -202,15 +220,39 @@ Only if `config.yml.sources.write` includes the issue tracker **and** this REQ w
 
 ### 7. Write the gate marker
 
+Per GATE-PROTOCOL → *The marker*, after step 7b's ask has had its reply (or was skipped):
+
 ```
 Phase: ship
 REQ: REQ-NNN-<slug>
+Gate: 5/5
 Awaiting: review the PR draft and vault updates, then run the merge checklist.
+Ask: <the verdict line, as a question>
+Options:
+  - approve — run the merge checklist; reply merged when done
+  - revise <what> — I change the PR draft or vault updates, ask again
+  - merged — after you merge: I finalize the state and log it
+  - abort — halts without merging
+Recommended: <label>
 Files:
   - .adlc/<REQ_PATH>/pr-draft.md
   - .adlc/<REQ_PATH>/merge-checklist.md
+  - .adlc/<REQ_PATH>.md   (the record)
   - New / updated vault files (see below)
 ```
+
+### 7b. Ask for the review summary
+
+**This runs before steps 6 and 7** — the ask ends the turn, and a marker already on disk would make the trail hook take the ask for the gate. Unless `config.yml.autonomy.review_summary` is `false`, this run is driven by `/autopilot` or a `pipeline-runner` under `/sprint`, or a `summary` round already exists for this REQ (`pipeline-state.json` → `phases["5"].gates[]`): ask — as text, never a question dialog — and end the turn (GATE-PROTOCOL → *The trail*). No marker; this is not a gate.
+
+```
+ASK · Summary · REQ-NNN-<slug>
+In your words: what does this change do, and what did you check?
+Two to four lines.
+skip — no summary; I go straight to the ship gate
+```
+
+On the reply, record it at once — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision summary --note "<the reply, verbatim>" --phase 5` (a `skip` is recorded as `--note skip`) — then compare it with the diff: the changed files whose name (or stem) the summary never mentions, and any claim in it that the tree contradicts. A summary that names no file is handed back once — *"name the files you looked at"*, which ends the turn the same way — and then taken as given. Append to `pr-draft.md`, after `### Summary`, a block `### Reviewed by <git user.name>` holding the lines verbatim; the user keeps or cuts it when opening the PR. The commits stay as drafted in step 1, in the repo's convention — this is the reviewer's account, not the author's message. Then, in the same turn, write the state (step 6), the marker (step 7) and the card (step 8).
 
 ### 8. Emit the gate card
 
@@ -218,11 +260,12 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A wrap-up gate's body i
 
 - **Header** — `Gate 5 of 5 · Wrap up · REQ-NNN-<slug>`.
 - **Verdict** — e.g. "PR + vault ready — run the checklist when you're set", or flag if the final sanity check surfaced anything.
-- **READY** — PR title + `pr-draft.md` (files changed, +/-); `merge-checklist.md`; vault capture in one compact line (candidates considered `<N>`; promoted `<L-REQ-NNN-n>`; gotchas `<^gNN>`; ADRs/concepts/components/glossary/hot as applicable), then the dedup basis: `dedup vs origin/<base> as of <age>` or `cross-branch dedup skipped: origin/<base> not found`. The age is the honest signal — a week-old fetch makes the check weaker, and the card shows it rather than hiding it.
-- **NEEDS YOU** — only genuine calls: the repo-doc list from step 1 (`docs: <file> — <claim> → <fact>`, applied on approve); a drafted issue-tracker write-back awaiting your OK (never auto-sent); a "no knowledge captured — is that right?" confirmation; any unresolved final-sanity item. Omit if none.
+- **READY** — PR title + `pr-draft.md` (files changed, +/-); `merge-checklist.md`; the record (`<REQ_PATH>.md`, size); vault capture in one compact line (candidates considered `<N>`; promoted `<L-REQ-NNN-n>`; gotchas `<^gNN>`; ADRs/concepts/components/glossary/hot as applicable), then the dedup basis: `dedup vs origin/<base> as of <age>` or `cross-branch dedup skipped: origin/<base> not found`. The age is the honest signal — a week-old fetch makes the check weaker, and the card shows it rather than hiding it.
+- **NEEDS YOU** — only genuine calls: the repo-doc list from step 1 (`docs: <file> — <claim> → <fact>`, applied on approve); **Promotion candidates** from step 3 (`L-REQ-NNN-n — detectable by <grep|lint|test>: <the check>` — pick a home for the check, or `later`); a drafted issue-tracker write-back awaiting your OK (never auto-sent); a "no knowledge captured — is that right?" confirmation; any unresolved final-sanity item. Omit if none.
 - **CHECKS** — final diff sanity as one compact `✓ / ⚠` line: blast radius matches architecture · user-facing docs swept (`N` stale claims listed / none / skipped) · no debug artifacts · no `--no-verify` · commit drafts all in git log.
+- **YOUR SUMMARY** — when a `summary` round was recorded (step 7b): `names 5 of 7 changed files · not mentioned: Startup.cs, docs/retries.md` and any contradiction in one line. Omit when the ask was skipped. The cockpit draws the summary beside the diffstat.
 - **MY READ** — recommendation + one-line why.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (gate cleared — run the merge checklist), **revise** (adjust PR draft or vault updates), **merged** (after you merge — finalize state, log to `hot.md`), **abort** (halt without merging). Mark approve *(Recommended)* per `MY READ`.
+- **Decision** — the last line, `Decision →`, with the same options as the marker: **approve** (gate cleared — run the merge checklist), **revise** (adjust PR draft or vault updates), **merged** (after you merge — finalize state, log to `hot.md`), **abort** (halt without merging). Mark the one `MY READ` names `(recommended)`. Then end your turn: the user's reply is the answer (GATE-PROTOCOL invariant 5).
 
 Example shape:
 
@@ -242,10 +285,15 @@ CHECKS      ✓ changed files match the plan · ✓ docs updated · ✓ no debug
 
 MY READ     approve — clean wrap; the write-back is the only thing awaiting you
 
-Decision →  approve · revise <what> · merged · abort
+Decision →  approve (recommended — run the merge checklist) · revise <what> ·
+            merged (after you merge) · abort (halts without merging)
 ```
 
 ## Gate clearance
+
+**The answer is the user's next message.** Read its first words for the option — `approve`, `revise …`, `merged`, `abort` — and treat the rest as their note. A reply that names no option is not an answer: respond to it, then end the turn with the `Decision →` line again; the marker stays.
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the reply, verbatim>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words. If the conversation was compacted since the card, re-read this file, GATE-PROTOCOL and the marker first (GATE-PROTOCOL → *Compaction at a gate*).
 
 If `approve`:
 
@@ -257,24 +305,25 @@ If `approve`:
 If `revise: ...`:
 
 1. Apply revisions to pr-draft.md or vault updates.
-2. Re-emit the gate prompt.
+2. Rewrite the marker, re-emit the gate card, and end the turn.
 
 If `merged`:
 
 1. Verify the merge: `gh pr view <pr-url> --json state,mergedAt` (if user provided a URL or if it's discoverable).
 2. Update `pipeline-state.json`: `prState: "merged"`, `mergedAt: <timestamp>`, terminal status.
 3. Append to `hot.md`: `## [DATE] req-merged | REQ-NNN-<slug>`.
-4. Update `now.md`: remove this REQ from active focus.
-5. **Offer to archive.** One question: move `<REQ_PATH>/` under `_archive/`? Archiving keeps `specs/` showing only active work and keeps Obsidian search and graph focused; the folder moves **whole** — verdict, log, drafts, state — nothing is deleted, and git history keeps every prior path.
+4. Update `now.md`: remove this REQ from active focus. Fill the record's header `Status` → `merged` and `Opened → merged` date if they were still `ready-to-merge` (the one edit a record ever takes besides `## Later`).
+5. **Offer to clean up the working set.** One question, with the numbers in it, and end the turn:
 
-   The destination **mirrors the source's tail**: insert `_archive/` right after `specs/` and keep everything after it exactly as it was — `specs/2026-08/sf/REQ-042-slug/` archives to `specs/_archive/2026-08/sf/REQ-042-slug/`, and a flat REQ archives flat. Never mint a month here — that would bucket the work by its merge date instead of the date it was opened.
+   > Record written at `.adlc/<REQ_PATH>.md`. The working set `.adlc/<REQ_PATH>/` (N files, M MB — exploration, tasks, review log, packets, evidence, drafts, state) is local and nothing links into it. **Delete it now, or keep it?**
 
-   On yes: `mkdir -p` the destination's parent first (the move fails outright if it doesn't exist), then plain `mv` the folder — **not `git mv`**, which stages a rename and would be a git write in `manual` mode. Git detects the rename from content at commit time either way, so `git log --follow` still traces the files. Then repoint this REQ's `Path` column in `.adlc/index.md` to the new path, and append `## [DATE] req-archived | REQ-NNN-<slug>` to `hot.md`. On no: leave it — `/analyze`'s vault-health lists it as an archive candidate after 30 days, so the offer comes back. (Archived REQs keep their IDs; `/spec` and `/task` scan `_archive/` when minting, so numbers are never reused.)
-6. Clean up: ask the user if they want to delete the REQ folder's ephemeral files (`.awaiting-approval` if any, the worktree path can be removed since it's likely already gone).
+   Default is **keep**: a reply that is not `delete` keeps it. On `delete`: `rm -rf .adlc/<REQ_PATH>/` — the folder only; the record and every `knowledge/` page stay, and `/spec`, `/status`, `mint` all still see the item through its record (`VAULT-LAYOUT.md` → `record(ID)`). Append `## [DATE] req-cleaned | REQ-NNN-<slug> | M MB` to `hot.md`. On `keep`: leave it; `/analyze`'s vault-health lists working sets of merged items older than 30 days with their sizes, so the question comes back with a total attached. A vault without git (no `.git` at the repo root, or `.adlc/` ignored by it) gets the same question with one more sentence: *"This vault is not under version control — deleted means gone."*
+6. **Archive is for kept folders only.** If the working set was kept and the user wants `specs/` to show active work only, offer the `_archive/` move: the destination **mirrors the source's tail** (`specs/2026-08/sf/REQ-042-slug/` → `specs/_archive/2026-08/sf/REQ-042-slug/`; flat archives flat; never mint a month here — that would bucket by merge date). `mkdir -p` the destination's parent, then plain `mv` — **not `git mv`**, which stages a rename and would be a git write in `manual` mode. The record does not move. Append `## [DATE] req-archived | REQ-NNN-<slug>` to `hot.md`. A deleted working set needs no archive: the record already sits in `specs/` at its month/author position, which is the browsable history.
+7. Rebuild `index.md` (`node $TOOLKIT_PATH/scripts/adlc.mjs index --vault .adlc`) so the item moves from in-flight to done.
 
 If `abort`:
 
-1. Confirm. Roll back what makes sense.
+1. Ask once, plainly, and end the turn — "This halts REQ-NNN without merging. Abort?" — and act only on a yes in the next reply. Then roll back what makes sense.
 2. Append to `hot.md`: `## [DATE] ship-aborted | REQ-NNN-<slug>`.
 
 ## Constraints
@@ -292,6 +341,7 @@ If `abort`:
 - `.adlc/<REQ_PATH>/merge-checklist.md`
 - `.adlc/<REQ_PATH>/lesson-candidates.md` (now includes the `## Candidate verdicts` table appended at the bottom; retained after wrapup as decision history)
 - `.adlc/<REQ_PATH>/source-writeback.md` (only when `sources.write` is configured and a write-back was drafted at step 5a)
-- New / updated vault files: `lessons/`, `lesson-ledger.md` (rebuilt), `gotchas.md`, `concepts/`, `components/`, `architecture/`, `index.md`, `decisions.md`, `hot.md`, `now.md`, `glossary.md`
-- On `merged` + user approval: the REQ folder moved under `specs/_archive/` with its tail preserved (whole, nothing deleted) and its `Path` column in `index.md` repointed
+- `.adlc/<REQ_PATH>.md` — the record (new, ≤6KB, committed)
+- New / updated vault files: `lessons/` stubs, `knowledge/lessons.md` (generated), `gotchas.md`, `concepts/`, `components/`, `architecture/`, `index.md` + `decisions.md` (generated), `hot.md`, `now.md`, `glossary.md`
+- On `merged`: the working set `<REQ_PATH>/` deleted (on `delete`) or kept — and, if kept and asked, moved under `specs/_archive/` with its tail preserved; the record stays where it is
 - Updates to `pipeline-state.json`

@@ -1,0 +1,5 @@
+{
+  "name": "adlc-mods",
+  "owner": { "name": "ADLC toolkit" },
+  "plugins": [{ "name": "adlc-flightdeck", "source": "./adlc-flightdeck" }]
+}

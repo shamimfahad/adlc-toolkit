@@ -28,7 +28,17 @@ You are running Phase 2 of the ADLC pipeline: designing the architecture and bre
       - **`branch` mode.** Verify the working tree is clean: `git -C <repo-path> status --porcelain`. If the output is non-empty, **stop and surface** — direct the user to commit or stash, or to set `workflow.isolation: worktree` in `config.yml` if they want parallel uncommitted work to coexist with this REQ. If clean, run `git -C <repo-path> checkout -b <branch-name>`. Update `pipeline-state.json` with `isolation: "branch"`, `workPath: <repo-path>`, `branch: <branch-name>`, `worktree: null`.
       - **`worktree` mode.** Derive the worktree path: `<repo-path>/.worktrees/REQ-NNN-<slug>` — it lives in the repo, not the vault, so name it by REQ ID and slug, never by `<REQ_PATH>`. Run `git -C <repo-path> worktree add <worktree-path> -b <branch-name>`. Update `pipeline-state.json` with `isolation: "worktree"`, `workPath: <worktree-path>`, `worktree: <worktree-path>`, `branch: <branch-name>`.
    e. Append to `hot.md`: `## [DATE] work-path-set | REQ-NNN-<slug> | <mode> at <workPath>`.
-5. **Resolve a design reference (optional).** If `config.yml.sources.design` is set (not `none`) and the spec or the user supplies a design reference (a Figma frame/file link, or a node mentioned in `requirement.md`):
+5. **Ask before you look (predict first).** Unless `config.yml.autonomy.predict_first` is `false`, this run is driven by `/autopilot` or a `pipeline-runner` under `/sprint`, or a `predict` round already exists for this REQ (`pipeline-state.json` → `phases["2"].gates[]`): before the explorer flies, ask — as text, never a question dialog — and end the turn (GATE-PROTOCOL → *The trail*). No marker; this is not a gate.
+
+   ```
+   ASK · Predict · REQ-NNN-<slug>
+   Before I show the design: which files do you expect this touches, and how
+   would you approach it? One line each is enough.
+   skip — no expectation; I go straight on
+   ```
+
+   On the reply, record it at once — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision predict --note "<the reply, verbatim>" --phase 2` — and continue at step 6 without discussing it; the comparison comes on the card (step 10, `YOU SAID`) and in the cockpit. The point is the generation effect: what the user names before seeing the design, they remember; what they confirm afterwards, they do not. A `skip` is recorded as `--note skip` and the ask is not repeated.
+6. **Resolve a design reference (optional).** If `config.yml.sources.design` is set (not `none`) and the spec or the user supplies a design reference (a Figma frame/file link, or a node mentioned in `requirement.md`):
    - Resolve the mechanism, first that works wins: an attached MCP server for the design tool, else a plain fetch if the reference is a full URL.
    - If it resolves, pull the frame/flow and carry it into step 2 as draft material for UI structure, component boundaries, and UI-facing acceptance criteria. Add the design link to architecture.md's "Related" section for provenance.
    - If nothing resolves or no design service is configured, print one line (`couldn't reach <design service> — proceeding from the spec alone`) and continue. The seed is strictly additive and never blocks the architecture.
@@ -63,7 +73,14 @@ Copy `.adlc/templates/architecture-template.md` to `.adlc/<REQ_PATH>/architectur
 - The exploration report (`exploration.md`)
 - Project conventions (`context/conventions.md`)
 - Existing ADRs (`architecture/adr-*.md` with status `accepted`)
-- Relevant lessons, gotchas, and concepts from the vault
+- Knowledge that matches the change — found, not remembered. Take every directory in the blast radius and every component name and grep for them:
+
+  ```sh
+  grep -n -i -e '<dir1>' -e '<dir2>' -e '<component>' .adlc/knowledge/lessons.md .adlc/knowledge/gotchas.md
+  grep -n ' · critical · ' .adlc/knowledge/lessons.md          # always-read, whatever the match
+  ```
+
+  List the hits under architecture.md **Related**, one line each (`L-REQ-042-1 — why it applies here`); skip lines marked `enforced:` (a sensor owns them). Open a lesson's file only if its line ends `↗` and you need the grown detail. Zero hits is a valid answer — write `Related: none matched (<N> lessons, <M> gotchas searched)` so the gate can see the search happened. The reflector does the semantic pass at review; this is the cheap deterministic one. Concept pages (`knowledge/concepts/`) by name as before.
 - The resolved design reference, if any (preflight step 5) — for UI structure, component boundaries, and UI-facing acceptance criteria. Treat it as draft input the gate still reviews, not a binding contract.
 
 Sections to fill:
@@ -190,12 +207,19 @@ The gate prompt (step 10) reports what was attacked, what survived, and how each
 
 ### 9. Write the gate marker
 
-Create `.awaiting-approval` with:
+Create `.awaiting-approval` per GATE-PROTOCOL → *The marker*, with the card's options. When an ADR was proposed, the two approve options replace the single one (step 10, **Decision**):
 
 ```
 Phase: architect
 REQ: REQ-NNN-<slug>
+Gate: 2/5
 Awaiting: review the architecture and tasks, approve to proceed to /implement.
+Ask: <the verdict line, as a question>
+Options:
+  - approve — move on to implementation
+  - revise <what> — I change the design, re-check, ask again
+  - abort — discards this architecture; the spec stays
+Recommended: <label>
 Files:
   - .adlc/<REQ_PATH>/architecture.md
   - .adlc/<REQ_PATH>/tasks/*.md
@@ -211,10 +235,11 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md` (the shared card format)
 - **Header** — `Gate 2 of 5 · Architect · REQ-NNN-<slug>`.
 - **Verdict** — "ready to review — `<k>` items need your call", or "clean — nothing flagged, recommend approve".
 - **READY** — `architecture.md` (blast radius, approach); `<N>` tasks / `<M>` tiers; `exploration.md`; new ADR if drafted. Include the task DAG in compact text form: `T1,T2 → T3,T4 → T5` (the rendered diagram lives in `architecture.md` — don't restate it here).
-- **NEEDS YOU** — a proposed ADR awaiting accept/reject; each surviving adversary finding and how it was handled (ask the user to confirm the fix); unresolved open questions from `architecture.md`. Omit the block if none.
+- **NEEDS YOU** — a proposed ADR awaiting accept/reject (the call is on the `Decision →` line); each surviving adversary finding and how it was handled (ask the user to confirm the fix); unresolved open questions from `architecture.md`. Omit the block if none.
 - **CHECKS** — the step-6 inline validation as one compact `✓ / ⚠` line (criteria covered · no cycles · conventions · tests concrete · lessons/ADRs referenced), then the adversarial-hardening depth (full pass / quick self-check) and surviving-finding count.
+- **YOU SAID** — when a `predict` round was recorded (preflight 5): one line comparing it with the blast radius — `named RetryPolicy, Gateway · not named: Startup.cs, docs/retries.md` — and, if the approach differs from what they expected, three words on how (`you: middleware · design: policy object`). Omit when the ask was skipped. Never grade it; the cockpit draws the two side by side.
 - **MY READ** — your recommendation and a one-line why. **Never recommend approve while a critical adversary finding is unaddressed** — that is a `revise`.
-- **Decision** — on Claude, an `AskUserQuestion` with: **approve** (clear the gate, ready for `/implement`), **revise** (describe what to change), **abort** (discard this architecture, keep the spec). Mark approve *(Recommended)* per `MY READ`. A proposed ADR's accept/reject is confirmed at clearance (Gate clearance step 3).
+- **Decision** — the last line, `Decision →`, with the same options as the marker: **approve** (clear the gate, ready for `/implement`), **revise** (describe what to change), **abort** (discard this architecture, keep the spec). When an ADR was proposed, its accept/reject folds into the options — `approve — move on to implementation; ADR-NNN accepted` · `approve, reject ADR-NNN — move on; the decision is recorded rejected` — one gate, no second question. Mark the one `MY READ` names `(recommended)`. Then end your turn: the user's reply is the answer (GATE-PROTOCOL invariant 5).
 
 Example shape (fill from the real REQ):
 
@@ -235,18 +260,22 @@ CHECKS      ✓ criteria covered · ✓ no cycles · ✓ conventions · ✓ test
 
 MY READ     approve — the flagged risk is fixed; the new decision is low-risk
 
-Decision →  approve (move on to implementation) · revise <what> · abort
+Decision →  approve (recommended — move on; ADR-007 accepted) ·
+            approve, reject ADR-007 (move on; recorded rejected) ·
+            revise <what> · abort
 ```
-
-(On Claude the `Decision →` line is delivered as an `AskUserQuestion`, not typed text.)
 
 ## Gate clearance
 
-If `approve`:
+**The answer is the user's next message.** Read its first words for the option — `approve`, `approve, reject ADR-NNN`, `revise …`, `abort` — and treat the rest as their note. A reply that names no option is not an answer: respond to it, then end the turn with the `Decision →` line again; the marker stays.
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the reply, verbatim>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words. If the conversation was compacted since the card, re-read this file, GATE-PROTOCOL and the marker first (GATE-PROTOCOL → *Compaction at a gate*).
+
+If `approve` (either form):
 
 1. Delete `.awaiting-approval`.
 2. Update `pipeline-state.json`: `gateState: "cleared"`.
-3. If an ADR was proposed, prompt: "Mark ADR-NNN as `accepted`?" (separate confirmation). Update its status and `decisions.md` if yes.
+3. If an ADR was proposed: on `approve`, mark ADR-NNN `accepted` and add it to `decisions.md`; on `approve, reject ADR-NNN`, mark it `rejected` (keep the file). No second question. Both record `--decision approve`; the reply in `--note` says which.
 4. Append to `hot.md`: `## [DATE] architect-gate-cleared | REQ-NNN-<slug>`.
 5. Tell the user: ready for `/implement REQ-NNN-<slug>` or `/proceed` to continue.
 
@@ -254,11 +283,11 @@ If `revise: ...`:
 
 1. Apply revisions.
 2. Re-run inline validation. If the revision materially changed the approach, task DAG, or blast radius — or was prompted by an adversary finding — re-run step 7 (re-attack the changed surface; a quick re-pass is fine if only a narrow part changed).
-3. Re-emit gate prompt.
+3. Rewrite the marker, re-emit the gate card, and end the turn.
 
 If `abort`:
 
-1. Confirm explicitly.
+1. Ask once, plainly, and end the turn — "This discards the architecture for REQ-NNN; the spec stays. Abort?" — and act only on a yes in the next reply.
 2. Surface the cleanup commands the user must run. The set depends on `pipeline-state.isolation`:
 
    **`branch` mode** (Claude cannot run any of these — all mutate working-tree or branch state):

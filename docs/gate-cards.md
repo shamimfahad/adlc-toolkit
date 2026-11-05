@@ -8,7 +8,7 @@ A gate card is not a report. It's built to answer three questions at a glance, i
 
 1. **What's done?** — the artifacts this phase produced (FYI).
 2. **What needs *you*?** — the decision-bearing items: a proposed decision record (ADR), a stress-test finding that held up, an open question. If nothing, it says so.
-3. **What's the decision?** — the last line, and the only thing you must act on. On Claude it arrives as an `AskUserQuestion` with that gate's real options; the card is the context.
+3. **What's the decision?** — the last line, and the only thing you must act on. The card ends your assistant's turn; you answer by replying — or, with the flightdeck mod, by picking the option in the cockpit beside the evidence.
 
 Every card also carries a one-line **recommendation** (`MY READ`) — the option the pipeline would pick and why — so a clean gate is one keystroke and a risky one is obvious.
 
@@ -47,7 +47,9 @@ CHECKS      ✓ criteria covered · ✓ no cycles · ✓ conventions · ✓ test
 
 MY READ     approve — the flagged risk is fixed; the new decision is low-risk
 
-Decision →  approve (move on to implementation) · revise <what> · abort
+Decision →  approve (recommended — move on; ADR-007 accepted) ·
+            approve, reject ADR-007 (move on; recorded rejected) ·
+            revise <what> · abort
 ```
 
 Note the task order is shown as **compact text**, not a rendered picture: the card must read cleanly in a plain terminal, where Mermaid doesn't render. The full rendered diagram lives in `architecture.md`, where it renders in Obsidian, GitHub, and IDE preview. That's the rule for diagrams everywhere in the pipeline — see the [diagram conventions](fidelity-matrix.md) and the templates.

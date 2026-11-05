@@ -146,7 +146,7 @@ Every 60 seconds (or on user nudge), poll each REQ's `pipeline-state.json`:
 - `terminal == "blocked"` → REQ is blocked, surface to user
 - `terminal == "failed"` → REQ failed, surface to user
 
-Update the sprint registry's `currentGateQueue` with all REQs in `awaiting` state.
+Update the sprint registry's `currentGateQueue` with all REQs in `awaiting` state. For each one, read its `.awaiting-approval`: the runner writes it per GATE-PROTOCOL → *The marker*, so its `Ask:`, `Options:` and `Recommended:` are the gate's real options for the queue entry (a marker without `Options:`, from an older runner, gets the phase's standard options).
 
 ### Presenting the queue
 
@@ -159,6 +159,7 @@ SPRINT GATE QUEUE · SPRINT-...
 
   1. REQ-101-add-export-button
      Phase: architect (gate)
+     Options: approve (recommended) · approve, reject ADR-014 · revise · abort
      Files affected: 6
      ADR proposed: yes (ADR-014)
      Drafted: .adlc/<REQ_PATH>/architecture.md
@@ -166,6 +167,7 @@ SPRINT GATE QUEUE · SPRINT-...
 
   2. REQ-103-fix-cookie-domain
      Phase: implement (gate)
+     Options: approve (recommended) · revise · abort
      Tasks complete: 4/4
      Tests pass: ✓
      Drafted commits: .adlc/<REQ_PATH>/commits-draft.md
@@ -176,6 +178,9 @@ Not yet at gate:
 
 Reply with one of:
   approve <N>       — clear gate N; that runner advances
+  approve <N>, reject ADR-NNN
+                    — architect gates with a proposed ADR: clear it;
+                      the ADR is recorded rejected
   revise <N>: <txt> — send revisions to gate N's runner
   fix <N>: <ids|all> — review gates only; fix the listed findings,
                        or every actionable finding (`all`)
@@ -196,7 +201,7 @@ When the user clears gate N for REQ-X:
 5. The runner advances to its next phase.
 6. After the runner completes the next phase, it pauses at its next gate and the cycle repeats.
 
-If a gate response requires revisions (`revise`, `fix`), the runner applies them and re-emits the gate prompt for the same phase.
+If a gate response requires revisions (`revise`, `fix`), the runner applies them, rewrites the marker with the new options and counts, and re-emits the gate prompt for the same phase.
 
 ### Cross-REQ concerns
 
@@ -253,6 +258,7 @@ When all REQs reach `merged` (or are aborted):
 
 - **The orchestrator itself runs no git writes.** Worktree creation and any commits/pushes happen inside the pipeline-runner agents, governed by `git.mode` (`.adlc/config.yml`, default `manual` — drafts only). Merges always happen via the user running each REQ's `merge-checklist.md`. The orchestrator's job is monitoring and queueing, not git.
 - **Worktree mode is forced.** `/sprint` ignores `config.yml.workflow.isolation` and always runs each REQ in an isolated worktree — parallelism cannot share a checkout. Each pipeline-runner records `isolation: "worktree"` in its REQ's `pipeline-state.json`.
+- **Runners never ask the predict-first or review-summary questions** (`autonomy.predict_first`, `autonomy.review_summary`, 1.11): a `pipeline-runner` has no one to ask. The cockpit shows those sections only for REQs that ran under `/proceed`.
 - **You never collapse multiple gates into one human approval.** "approve all" is not a valid command in any mode. In `manual` and `assisted`, each gate is the user's discrete decision; in `auto`, each gate is individually adjudicated and logged. If queue volume is the pain, the answer is the `autonomy.gates` dial, not a bigger rubber stamp.
 - **You route verdicts; you don't render them.** The fast path is deterministic; everything ambiguous goes to the decision-maker as a real sub-agent. Never approve a slow-path gate from your own judgment, and never run the decision-maker inline.
 - **You never override a runner.** If a pipeline-runner reports a phase complete with a finding the user should see, you surface it — you don't paper over it to keep the sprint moving.

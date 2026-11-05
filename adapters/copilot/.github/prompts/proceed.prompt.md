@@ -1,5 +1,5 @@
 ---
-description: "Run all five phase skills with gates between."
+description: "End-to-end pipeline orchestrator. Runs /spec → /architect → /implement → /review → /wrapup in sequence with gate-pause between every phase. Resumable from any phase via pipeline-state.json. Use this when you want the full pipeline rather than invoking each phase skill separately."
 ---
 
 Toolkit root: .adlc-toolkit

@@ -1,6 +1,6 @@
 ---
 name: codebase-explorer
-description: "One exploration pass: similar existing code, what the change touches, where it hooks in."
+description: "Explores the codebase for a given REQ: finds similar existing code, the files the change will touch (blast radius), where the new code hooks in, and what tests exist. Read-only. Dispatched by /architect and /bugfix."
 model: gemini-3-flash-preview
 ---
 

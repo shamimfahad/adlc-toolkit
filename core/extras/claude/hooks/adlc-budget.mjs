@@ -12,8 +12,8 @@
 //                               read line by line), and deny reading hot.md
 //                               without a `limit` (newest entries are at the
 //                               top; the whole file is 3,800+ lines).
-//   PostToolUse  (Write|Edit)   after a write to now.md, CLAUDE.md, or
-//                               context/*.md, exit 2 if it is over budget so
+//   PostToolUse  (Write|Edit)   after a write to now.md, CLAUDE.md, a record
+//                               (<REQ_PATH>.md, 6KB) or context/*.md, exit 2 if it is over budget so
 //                               Claude fixes it in the same turn. Warn (do not
 //                               block) on an over-budget verification.md.
 //   SubagentStop                if a review-log.md touched in the last 15 min
@@ -31,6 +31,7 @@ const BUDGET = {
   'CLAUDE.md': 5 * KB,
   'context/*.md': 8 * KB,
   'verification.md': 8 * KB, // warn only
+  'record': 6 * KB,          // <REQ_PATH>.md — the one committed file per work item (1.9.0)
 };
 const HOT_MAX_LINES = 500;
 const SECTION_MAX = 12 * KB;
@@ -153,6 +154,10 @@ function postToolUse(payload, vault) {
   }
   if (vrel === 'CLAUDE.md' && size > BUDGET['CLAUDE.md']) {
     over(BUDGET['CLAUDE.md'], 'CLAUDE.md is the rulebook every session loads. Move explanation and history to README.md or context/, keep the rules.');
+  }
+  // A record is `specs/**/REQ-*.md` or `bugs/**/BUG-*.md` — a FILE beside the work folder, never inside it.
+  if (/^(specs|bugs)\/(?:[^/]+\/){0,3}(REQ|BUG)-[^/]+\.md$/.test(vrel) && size > BUDGET['record']) {
+    over(BUDGET['record'], 'A record is IDs and links, not copies: tighten the Goal and What-changed prose; lessons, gotchas and decisions are one line each pointing into knowledge/. The working set keeps the detail.');
   }
   if (/^context\/[^/]+\.md$/.test(vrel) && size > BUDGET['context/*.md']) {
     over(BUDGET['context/*.md'], `context/*.md are loaded at every phase preflight. Keep the rules reviewers enforce; move rationale and history to ${vrel.replace(/\.md$/, '-rationale.md')} (read on demand). \`/config budgets\` does the split.`);

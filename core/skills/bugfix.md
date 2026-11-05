@@ -65,7 +65,7 @@ Emit per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md` (loaded at preflight). A bug-repo
 - **NEEDS YOU** — a missing / still-non-runnable repro, or a label suggesting this is a feature not a defect (→ reframe). Omit if none.
 - **CHECKS** — symptom concise · repro runnable · expected-vs-actual concrete · environment captured.
 - **MY READ** — recommendation + why (never approve without a runnable repro).
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (→ investigate), **revise** (refine the report), **reframe** (convert to a feature REQ — calls `/spec`), **abort** (discard).
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: report`, `Gate: 1/5`): **approve** (→ investigate), **revise** (refine the report), **reframe** (turns this into a feature REQ via `/spec`), **abort** (discard). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 1/5 · Bug report · BUG-NNN-<slug>
@@ -78,8 +78,10 @@ MY READ  approve — repro is clean and reproduces the symptom
 Decision →  approve · revise <what> · reframe · abort
 ```
 
-On `approve`: clear gate, advance.
-On `reframe`: archive `bug.md`, call `/spec` with the bug content as input, exit this skill.
+**Every gate in this skill** (all five) runs the same way. Before its card, write `.adlc/<BUG_PATH>/.awaiting-approval` per GATE-PROTOCOL → *The marker* — `Phase:` and `Gate:` as that gate's **Decision** bullet names them, `REQ: BUG-NNN-<slug>`, `Ask:`, the card's options with their consequences under `Options:`, `Recommended:`, and the files the card names under `Files:` — and set `currentPhase`, `gateState: "awaiting"` and `currentPhaseGate` (the same name as `Phase:`) in `pipeline-state.json`. Then emit the card and end the turn. The answer is the user's next message: read its first words for the option and treat the rest as their note; a reply that names no option gets an answer and the `Decision →` line again, and the marker stays. Record every answer before acting on it: `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <BUG_PATH> --decision <option> --note "<the reply, verbatim>"` (GATE-PROTOCOL → *The trail*). On `approve`, delete the marker, set `gateState: "cleared"`, and advance; on `revise`, apply it, rewrite the marker and re-emit the card; on `abort`, ask once, plainly, and end the turn — act only on a yes in the next reply. If the conversation was compacted since the card, re-read this file, GATE-PROTOCOL and the marker first.
+
+On `approve`: delete the marker, clear the gate, advance.
+On `reframe`: delete the marker, archive `bug.md`, call `/spec` with the bug content as input, exit this skill.
 
 ## Phase 2 — Investigate (gate)
 
@@ -102,7 +104,7 @@ Focus: <function or module suggested by repro>
 Find:
 1. The code path the bug runs through
 2. Existing tests covering the area
-3. Similar past bugs (search hot.md, gotchas.md, lessons/)
+3. Similar past bugs (grep `hot.md`, `gotchas.md`, `knowledge/lessons.md`, and the records `specs/**/REQ-*.md` / `bugs/**/BUG-*.md` for the symptom's component — a record's `## Later` says which bugs already traced to it)
 4. Any gotcha or lesson that applies to the affected file
 
 Write to: .adlc/<BUG_PATH>/investigation.md
@@ -131,7 +133,7 @@ Emit per the gate protocol:
 - **NEEDS YOU** — only if the diagnosis is uncertain or scope is creeping (→ reframe). Omit otherwise.
 - **CHECKS** — diagnosis matches repro · fix in scope (no creep) · regression-test plan concrete.
 - **MY READ** — recommendation + why.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (→ fix), **revise** (refine diagnosis/approach), **reframe** (scope too big → feature REQ), **abort** (halt; cleanup worktree).
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: plan`, `Gate: 2/5`): **approve** (→ fix), **revise** (refine diagnosis/approach), **reframe** (scope too big — turns this into a feature REQ via `/spec`), **abort** (halt; cleanup worktree). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 2/5 · Investigation · BUG-NNN-<slug>
@@ -184,7 +186,7 @@ Emit per the gate protocol:
 - **READY** — `<count>` files changed; regression test `<name>` (fails before, passes after); all tests pass; commit drafted.
 - **CHECKS** — regression test present · original repro no longer triggers · no other tests broke.
 - **MY READ** — recommendation + why.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (→ verify), **revise** (adjust the fix), **abort**.
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: fix`, `Gate: 3/5`): **approve** (→ verify), **revise** (adjust the fix), **abort** (halt; cleanup worktree). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 3/5 · Fix · BUG-NNN-<slug>
@@ -201,7 +203,7 @@ Decision →  approve · revise <what> · abort
 
 ## Phase 4 — Review (gate)
 
-Slimmer than `/review`. Dispatch **only** `correctness-reviewer` and `reflector` (the two most likely to find issues in a bug fix). Skip quality and architecture unless the fix touched layering or introduced significant new code.
+Slimmer than `/review`, but it starts the same way: run `/review` **step 0** — the `verify:` commands from `config.yml`, the regression test included. A `halt_on` failure stops here and goes back to Phase 3; anything else becomes **Deterministic findings** the reviewers receive as facts. Then dispatch **only** `correctness-reviewer` and `reflector` (the two most likely to find issues in a bug fix). Skip quality and architecture unless the fix touched layering or introduced significant new code.
 
 The user commits before this runs — same as `/proceed`'s Phase 4 protocol.
 
@@ -218,7 +220,7 @@ Emit per the gate protocol — findings-led like `/review`, but only two reviewe
 - **Verdict** — "`<total>` findings — `<k>` need a call", or "clean — recommend approve".
 - **FINDINGS** — one line each, `crit / maj / min` + reviewer. This block is the `NEEDS YOU`.
 - **MY READ** — recommendation + why (never approve while a Critical stands).
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (→ ship), **fix** (`<ids>`), **revise**, **abort**.
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: verify`, `Gate: 4/5`): **approve** (→ ship), **fix** (`<ids>` — I fix those, re-check, gate comes back), **revise**, **abort**. Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 4/5 · Review · BUG-NNN-<slug>
@@ -244,7 +246,9 @@ Mirrors `/wrapup`'s "Process candidates" step, but bound to the bugfix folder:
 3. **For each candidate, verdict one of**: `promote` → new lesson, `demote-to-gotcha` → new gotcha entry, `discard` with one-line reason.
 4. **Append a `## Candidate verdicts` table** to the bottom of the candidates file with the verdicts and target/reason for each.
 5. **Mandatory minimum for bugfix:** at least one non-discard verdict (promote OR demote-to-gotcha). A bug fix that produced zero non-discard verdicts is a missed knowledge opportunity — push back on yourself before issuing the gate prompt; if you genuinely conclude there's nothing to keep, surface that explicitly in the gate prompt for the user's call.
-6. Write the resulting lessons (minimum-required fields only per the lesson template) to `knowledge/lessons/` as `LESSON-<BUG_ID>-<n>-<slug>.md` — the ID is namespaced under this bug, scan per `core/VAULT-LAYOUT.md` → `mint(lesson)` with `<WORK_ID>` = the BUG ID — and append gotchas to `knowledge/gotchas.md`. Then rebuild `knowledge/lesson-ledger.md` as `/wrapup` step 4 does.
+6. Write the resulting lessons (the stub's table only, per the lesson template; `Detectable` column in the verdict table as `/wrapup` step 3) to `knowledge/lessons/` as `LESSON-<BUG_ID>-<n>-<slug>.md` — the ID is namespaced under this bug, scan per `core/VAULT-LAYOUT.md` → `mint(lesson)` with `<WORK_ID>` = the BUG ID — and append gotchas to `knowledge/gotchas.md`.
+7. **Write the bug's record** `.adlc/<BUG_PATH>.md` from `templates/record-template.md` exactly as `/wrapup` step 3b (`Path kind: /bugfix`; Goal = the symptom and the root cause in two sentences; Verification = the regression test). If the bug traced back to a REQ, append `- <date> — <BUG_ID> traced to this REQ (<one line>)` under that REQ's record `## Later` — resolve it with `VAULT-LAYOUT.md` → `record(ID)`; that section is the only part of a record anything appends to.
+8. Run the generators: `node $TOOLKIT_PATH/scripts/adlc.mjs lessons --vault .adlc` and `node $TOOLKIT_PATH/scripts/adlc.mjs index --vault .adlc`.
 
 ### Repo-doc sweep
 
@@ -274,7 +278,7 @@ Emit per the gate protocol — mirrors `/wrapup`'s ship gate, bug-scoped:
 - **NEEDS YOU** — a drafted comment for the issue tracker, shown before sending (it is never sent without your OK); or, if no lesson or gotcha was kept at all, a confirmation — bug fixes usually teach something, so confirm that's right or reply `revise: capture` to take another pass through `bug.md` / `investigation.md` / `verification.md`. Omit if neither applies.
 - **CHECKS** — regression test in the diff · commit drafts landed in git log · no debug artifacts.
 - **MY READ** — recommendation + why.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (run the merge checklist), **revise**, **merged** (finalize after you merge), **abort**.
+- **Decision** — the last line, `Decision →`, with the same options in the marker (`Phase: ship`, `Gate: 5/5`): **approve** (run the merge checklist), **revise**, **merged** (finalize after you merge), **abort** (halts without merging). Mark the one `MY READ` names `(recommended)`. Then end your turn.
 
 ```
 GATE 5/5 · Wrap up · BUG-NNN-<slug>
@@ -312,4 +316,4 @@ Per `BUG-NNN-<slug>`:
 - `lesson-candidates.md` (created or appended to across phases 2-4; verdicts appended at Phase 5; persists as decision history)
 - `source-writeback.md` (only when `sources.write` is configured and a write-back was drafted at Phase 5)
 - `pipeline-state.json`
-- Vault updates: gotchas, lessons, lesson-ledger.md (rebuilt), hot.md, index.md
+- The bug's record `.adlc/<BUG_PATH>.md` (+ a `## Later` line on the originating REQ's record, if any); vault updates: gotchas, lesson stubs, hot.md, and the generated `knowledge/lessons.md` / `index.md`

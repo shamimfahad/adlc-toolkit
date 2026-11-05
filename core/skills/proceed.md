@@ -40,7 +40,7 @@ These flags assume `pipeline-state.json` is in sync with git reality. If state h
 5. **Determine starting phase** (no flag set).
    - For a new REQ, start at Phase 1 (spec).
    - For an existing REQ, read `pipeline-state.json.currentPhase` and `.gateState`:
-     - If `gateState: "awaiting"`, you're paused at a gate — re-emit the gate prompt for that phase.
+     - If `gateState: "awaiting"`, you're paused at a gate — re-emit the gate prompt for that phase. `gateState: "awaiting"` or a `.awaiting-approval` marker present — either one — means you are at a gate.
      - If `gateState: "cleared"`, the next phase is ready to run.
      - If `currentPhase == 5` and `gateState: "cleared"`, the REQ is shipped — surface that and ask whether to mark `merged`.
 
@@ -135,7 +135,7 @@ Use when state is in sync but you've decided the most recent phase(s) need to be
    | 2 — Architect | `architecture.md`, `tasks/`, any `exploration.md` content authored by /architect | — |
    | 3 — Implement | per-task implementation notes in `tasks/`; reset task completion flags in pipeline-state | — |
    | 4 — Review    | `verification.md` + `review-log.md` | — |
-   | 5 — Wrap up   | `pr-draft.md`, `merge-checklist.md` | `knowledge/lessons/LESSON-<REQ_ID>-*` files this REQ added (and the rebuilt `lesson-ledger.md`); `knowledge/gotchas.md` `^g##` anchors this REQ added; `architecture/adr-*` files this REQ added |
+   | 5 — Wrap up   | `pr-draft.md`, `merge-checklist.md` | the record `<REQ_PATH>.md`; `knowledge/lessons/LESSON-<REQ_ID>-*` stubs this REQ added (and the regenerated `knowledge/lessons.md` / `index.md`); `knowledge/gotchas.md` `^g##` anchors this REQ added; `architecture/adr-*` files this REQ added |
 
    Knowledge-layer entries authored by /wrapup are **tombstoned, not deleted** — they remain in the vault with a banner: `> **STATUS: retracted on YYYY-MM-DD via /proceed --revert from REQ-NNN-<slug>** — kept for historical reference.` Institutional memory is lossy on the way out, never silently wiped.
 
@@ -287,7 +287,7 @@ For each phase, in order, follow this protocol:
 while currentPhase < 5:
     if gateState == "awaiting":
         re-emit the gate prompt for currentPhase
-        WAIT for user response
+        END THE TURN — the user's reply is the next message
         continue (loop)
 
     if gateState == "cleared":
@@ -295,9 +295,11 @@ while currentPhase < 5:
         invoke the skill for nextPhase
         # The skill writes .awaiting-approval and sets gateState = "awaiting"
         re-emit the gate prompt
-        WAIT for user response
+        END THE TURN — the user's reply is the next message
         continue (loop)
 ```
+
+A gate is not a pause inside your turn; it is the end of it. When the reply arrives, it arrives as a new user message in the same conversation: route it (below), and carry on the loop. Never ask the gate through a question dialog (GATE-PROTOCOL invariant 5).
 
 The phase-to-skill mapping:
 
@@ -317,7 +319,7 @@ Each phase skill knows how to:
 - Update `gateState` to `"awaiting"`
 - Emit its gate prompt
 
-Your job as `/proceed` is the **outer loop**: invoke the skill, wait for user response, route the response (approve / revise / abort) to the right handler.
+Your job as `/proceed` is the **outer loop**: invoke the skill, end the turn at its gate, route the reply (approve / revise / abort) to the right handler.
 
 ### Gate response routing
 
@@ -328,19 +330,21 @@ When the user replies at a gate, route the response:
 - **`fix: <all|all-major|ids>`** (verify phase only) → the verify skill dispatches task-implementer for the resolved set — `all` is every actionable finding; needs-decision findings come back named on the re-emitted card. You stay in the verify phase, re-emit gate prompt after fixes.
 - **`merged`** (ship phase) → the wrapup skill finalizes state. You exit the loop with a "REQ complete" summary.
 - **`abort`** → the phase skill rolls back its work. You exit the loop. The REQ is not deleted (unless the user explicitly confirms), but `pipeline-state.json` reflects the aborted state.
+- **A reply that names no option** (a question about a finding, a remark) → answer it, then end the turn with that gate's `Decision →` line again. The gate stays open; nothing is recorded.
 
-If the user gives a response you don't recognize, ask for clarification — don't guess.
+If a reply might name an option but you cannot tell which, ask which — don't guess — and end the turn there too.
 
 ## Cross-session resumption
 
-Sessions get interrupted. Context compresses. The user closes the window. When `/proceed` is invoked again on the same REQ:
+Sessions get interrupted. Context compresses. The user closes the window. When `/proceed` is invoked again on the same REQ — or a reply arrives after a compaction:
 
-1. Read `pipeline-state.json` — this is the source of truth.
-2. Verify the work path: `pipeline-state.workPath` should exist as a directory. In `worktree` mode, also verify the worktree is still registered (`git -C <repo-path> worktree list`). In `branch` mode, verify the branch ref still exists (`git -C <workPath> rev-parse --verify <branch>`). If anything is missing, ask the user whether to recreate.
-3. Check `.awaiting-approval`:
-   - If present → you're paused at a gate. Re-emit the gate prompt for `pipeline-state.currentPhaseGate`.
+1. **After a compaction, reload the protocol before anything else.** If this conversation carries the knowledge hook's *ADLC working state recovered after compaction* block — or you cannot quote the current phase's gate options from the skill text — re-read in full, by path: `$TOOLKIT_PATH/core/skills/<phase>.md` for `currentPhase` (spec, architect, implement, review, wrapup), `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`, `.adlc/<REQ_PATH>/pipeline-state.json` and `.adlc/<REQ_PATH>/.awaiting-approval`. The engine re-injects an invoked skill cut at about 5,000 tokens; every phase skill is longer than that, and the cut half holds the gate. Then, if the marker is present, re-emit that gate's card from the marker and the artifact files, and end the turn.
+2. Read `pipeline-state.json` — this is the source of truth.
+3. Verify the work path: `pipeline-state.workPath` should exist as a directory. In `worktree` mode, also verify the worktree is still registered (`git -C <repo-path> worktree list`). In `branch` mode, verify the branch ref still exists (`git -C <workPath> rev-parse --verify <branch>`). If anything is missing, ask the user whether to recreate.
+4. Check `.awaiting-approval`:
+   - If present → you're paused at a gate. Re-emit the gate prompt for `pipeline-state.currentPhaseGate`, and end the turn.
    - If absent → the most recent gate was cleared. Advance to the next phase.
-4. Read `hot.md`'s last 20 entries to refresh on what's happened.
+5. Read `hot.md`'s last 20 entries to refresh on what's happened.
 
 Never skip a phase silently. If the state suggests a phase was skipped (e.g., `currentPhase` jumped from 2 to 4), halt and surface.
 

@@ -26,6 +26,16 @@ You are running Phase 4 of the ADLC pipeline: reviewing the implemented code thr
 
 ## Steps
 
+### 0. Run the deterministic gate
+
+Before any reviewer reads a line, run what the project already knows how to check. Read `config.yml` → `verify:`. For each of `format`, `lint`, `typecheck`, `test` that is configured, and every entry under `sensors:`, run the command from `workPath`, capture stdout+stderr, and write the raw output to `.adlc/<REQ_PATH>/verify-output.md` under one `## <name>` heading each (working set — local, never in the packet).
+
+- **A command named in `halt_on` (default `typecheck`, `test`) fails → stop here.** Write `pipeline-state.json` → `gateState: "blocked"`, emit the gate card with `BLOCKED — <name> failed` and that command's last 20 lines, and hand it back to `/implement`. No reviewer is dispatched on code that does not build or pass its own tests; that fix is the implementer's, not a review round. First failure escalates — do not re-run the command, do not retry with flags.
+- Anything else that fails (`format`, `lint`, a sensor) becomes **Deterministic findings**: one `### <name>` block each in the packet (step 1.5), ≤`digest_lines` (default 20) of verbatim tool output — no paraphrase. A sensor that declares `enforces: [L-…]` carries those IDs in its heading so the reflector skips those lessons.
+- Nothing configured → the packet says `Deterministic findings: none configured (config.yml → verify:)` and the gate card repeats it; `/analyze` flags the gap.
+
+Print one line for the gate card and `verification.md`'s Summary: `verify: typecheck ✓ · test ✓ (412) · lint ✗ 3 · sensors 2/2 ✓ — 14s`. The point is where the judgment goes: a Sonnet reviewer re-deriving a lint failure, or four of them passing code that does not compile, is the most expensive way to find out.
+
 ### 1. Initialize verification.md and review-log.md
 
 The review writes **two files** with different jobs. `verification.md` is the **verdict file** — the digest, consolidated findings, summary, and acceptance-criteria check. It's what `/wrapup`, the gate packets, and every later reader load, so keep it lean (target ≤8KB). `review-log.md` is the **narrative log** — the reviewers' full sections, re-review threads, and packet-gap notes. Nothing downstream loads it; it exists for the human and for on-demand archaeology.
@@ -102,6 +112,8 @@ Write `.adlc/<REQ_PATH>/review-packet.md`. This bundles the context all four rev
 Compose from:
 
 - The manifest paragraph at the top (verbatim, including the packet-gap note — reviewers act on this language)
+- **Deterministic findings** from step 0 — the `### <name>` digests, or the one-line `none configured` / `all passing: <list>`. Facts first, so a reviewer cites them instead of re-deriving them.
+- **Rules in scope** — the sections of `context/conventions-paths.md` whose `<!-- paths: … -->` globs match any changed path (match each glob against the `--name-only` list; `**` is any depth, `*` within a segment). List `§<heading> — <globs>` one per line, or `none — no path-scoped section matches this diff`. Computed once here so five reviewers do not each re-derive it; quality- and architecture-reviewer read exactly those sections. Vaults without a `conventions-paths.md` write `none (no conventions-paths.md)`.
 - **The diff — after exclusions, with line-ending noise off.** Read `config.yml` → `review.packet.exclude` (globs; absent means none) and turn each into a `':!<glob>'` pathspec. Then, by what is committed:
   - Committed branch (`git.mode: commit` / `commit+push`): `git -C <workPath> diff <base-branch>...<branch> --unified=99999 --ignore-cr-at-eol -- . ':!<glob>' …`
   - Uncommitted working tree (`git.mode: manual`, the usual case): `git -C <workPath> diff <baseCommit> --unified=99999 --ignore-cr-at-eol -- . ':!<glob>' …` for tracked changes, staged or not; then every path from `git -C <workPath> ls-files --others --exclude-standard` that no exclude glob matches, appended under `## New files (untracked)` with one `### <path>` heading per file. `git diff` cannot see untracked files, and on a manual-mode branch the new files are the feature.
@@ -126,6 +138,21 @@ This packet contains the diff with full file context, the REQ spec, the REQ arch
 **Your own required reading is not a packet gap.** `context/conventions.md`, the vault (lessons, gotchas, ADRs, concepts), and any source file outside the diff that this change interacts with are your mandate. Read them freely; do not report them.
 
 **`Packet-gap` means the packet's own contents fell short** — the diff, spec, or architecture was missing or insufficient for a call you had to make. Then, and only then, add `**Packet-gap:** <path> — <why the packet didn't cover it>` to your section, whether or not it produced a finding. Kept this narrow the signal is actionable and we act on it; applied to your required reading it fires on every run and tells us nothing.
+
+## Deterministic findings
+
+`verify: typecheck ✓ · test ✓ (412) · lint ✗ 3 · sensors 2/2 ✓` — tool output the pipeline already ran. **These are facts**: cite a line here when it supports one of yours; never re-derive it, never restate it as your own finding, never spend a finding on something a listed sensor reports.
+
+### lint
+
+```
+<last ≤20 lines, verbatim>
+```
+
+## Rules in scope
+
+- §API handlers — `src/api/**`, `src/**/*Controller.cs` (read this section of `.adlc/context/conventions-paths.md`)
+- _or:_ none — no path-scoped section matches this diff
 
 ## Diff with full context (vs <base-branch or base-commit>)
 
@@ -235,7 +262,8 @@ For each finding across all reviewer sections (including UI/UX findings when the
 - Lead with a one-row-per-finding digest table (below) so the user can triage at a glance before reading any detail
 - Under the digest, one roster line — `Reviewed by: correctness (balanced) · quality (balanced) · architecture (balanced) · reflector (balanced)` (+ ui when it ran) — taken from each report's `Written by` line; flag any report that arrived without one
 - Give each finding a short ID (C1, M1, m1 by severity) — the gate card and `fix <ids>` replies use these
-- Deduplicate: if two reviewers flagged the same file + line + concern, merge into one entry citing both
+- Deduplicate: if two reviewers flagged the same file + line + concern, merge into one entry citing both — and when they disagreed on severity, keep the higher one and write the other in the `Disagreement` column (`quality: minor`). That column also carries `reflector unsure` when the reflector hedged, and `needs-decision` for the dispositions below; it is empty otherwise. The cockpit lists these rows first, above the verdict, because a disagreement is where the reviewers' fallibility shows and where the user's judgment is actually needed
+- `Where` is a pointer the user can follow (`path:line`; `path` alone only when the finding is about the file as a whole). A finding with no `Where` is not a finding yet — go back to the log and locate it
 - Sort by severity (Critical > Major > Minor > Trivial)
 - Tag with originating reviewer(s)
 - Mark each finding's disposition: **actionable** (a code change a task-implementer can apply) or **needs-decision** — a reflector `vault-stale` (the vault should change, not the code), an `adr-conflict`, a proposed new ADR, or an open design question. `fix all` acts on the actionable set only; needs-decision findings are the user's by definition — an implementer "fixing" one would be making the decision for them.
@@ -244,11 +272,11 @@ For each finding across all reviewer sections (including UI/UX findings when the
 ```markdown
 ## Findings at a glance
 
-| ID | Severity | Finding (one line) | Where | Effort | Fix |
-|----|----------|--------------------|-------|--------|-----|
-| C1 | critical | double-charge path on retry | src/pay/retry.ts:88 | small | yes |
-| M1 | major | duplicated retry helper; extract it | src/pay/retry.ts | small | yes |
-| m1 | minor | ADR-009 conflict: retry lives outside gateway | src/pay/retry.ts | — | your call |
+| ID | Severity | Finding (one line) | Where | Effort | Fix | Disagreement |
+|----|----------|--------------------|-------|--------|-----|--------------|
+| C1 | critical | double-charge path on retry | src/pay/retry.ts:88 | small | yes | |
+| M1 | major | duplicated retry helper; extract it | src/pay/retry.ts | small | yes | quality: minor |
+| m1 | minor | ADR-009 conflict: retry lives outside gateway | src/pay/retry.ts | — | your call | reflector unsure |
 
 ## Consolidated by severity
 
@@ -314,10 +342,21 @@ If any criterion isn't met, flag it as a Critical finding.
 
 ### 8. Write the gate marker
 
+Write `.adlc/<REQ_PATH>/.awaiting-approval` per GATE-PROTOCOL → *The marker*, with this gate's options. Include `fix all` whenever at least one actionable finding exists; set `Recommended:` to the option `MY READ` will name.
+
 ```
 Phase: verify
 REQ: REQ-NNN-<slug>
+Gate: 4/5
 Awaiting: review the findings, decide which to fix.
+Ask: <the verdict line, as a question>
+Options:
+  - approve — accept the findings as they are; moves on to /wrapup
+  - fix all — I fix every actionable finding, re-check, gate comes back
+  - fix <ids|all-major> — the same loop, only the findings you name
+  - revise <what> — other changes to the review
+  - abort — stops this REQ; nothing is committed
+Recommended: <label>
 Files:
   - .adlc/<REQ_PATH>/verification.md
   - .adlc/<REQ_PATH>/review-log.md (full narratives — open on demand)
@@ -331,9 +370,9 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A review gate **leads w
 - **Verdict** — e.g. "`<total>` findings — `<k>` need a call", or "clean — no findings, recommend approve".
 - **FINDINGS** — the consolidated list, one line each, prefixed by severity `crit / maj / min` (drop trivial to a count) and the originating reviewer; group the Critical + Major at the top. Suffix needs-decision findings with `— your call`, so the scope of `fix all` is visible on the card. This block *is* the `NEEDS YOU` for this gate.
 - **READY** (brief) — `<4 or 5>` reviewers ran; `<total>` possible lessons noted (you decide what to keep at `/wrapup`); how the UI was checked + counts (or "UI check skipped — nothing visual changed"; omit entirely when the project has no frontend); when any doc is now out of date, name it ("docs now stale: docs/auth.md — update it in this branch before merging").
-- **CHECKS** — the acceptance-criteria check as one compact `✓ / ⚠` line; call out any special item (a reflector `vault-stale` finding, an `adr-conflict`, an architecture "new ADR needed") on its own line since those need deliberate handling.
+- **CHECKS** — the step-0 `verify:` line first, then the acceptance-criteria check as one compact `✓ / ⚠` line; call out any special item (a reflector `vault-stale` finding, an `adr-conflict`, an architecture "new ADR needed") on its own line since those need deliberate handling. Every pass names where it was seen (invariant 8): `✓ tests 41/41 — verify-output.md:14`, `✓ AC 5/5 — verification.md § Acceptance criteria check`.
 - **MY READ** — recommendation + one-line why. **Never recommend approve while a Critical is unaddressed** — that's a `fix` or `revise`.
-- **Decision** — on Claude, an `AskUserQuestion`: **approve** (accept findings as-is → `/wrapup`), **fix all** (every actionable finding gets fixed, affected reviewers re-run, gate comes back — needs-decision findings return named), **fix** (`<ids>` or `all-major` — same loop, scoped), **revise** (other changes to the review), **abort** (escalate; halt). `fix all` is always offered whenever at least one actionable finding exists. Mark the recommended one per `MY READ`.
+- **Decision** — the last line, `Decision →`, with the same options as the marker: **approve** (accept findings as-is → `/wrapup`), **fix all** (every actionable finding gets fixed, affected reviewers re-run, gate comes back — needs-decision findings return named), **fix** (`<ids>` or `all-major` — same loop, scoped), **revise** (other changes to the review), **abort** (escalate; halt). `fix all` is always offered whenever at least one actionable finding exists. Mark the one `MY READ` names `(recommended)`. Then end your turn: the user's reply is the answer (GATE-PROTOCOL invariant 5).
 
 Example shape:
 
@@ -349,17 +388,23 @@ FINDINGS    critical · correctness — double-charge path on retry
 READY       4 reviewers ran · 3 possible lessons noted (decided at /wrapup)
             UI check skipped — nothing visual changed
 
-CHECKS      ✓ criteria 1–2 met · ⚠ criterion 3 — safe-retry not verified
+CHECKS      verify: typecheck ✓ · test ✓ (412) · lint ✓ · sensors 2/2 ✓
+            ✓ criteria 1–2 met · ⚠ criterion 3 — safe-retry not verified
             ! past-mistakes check: repeats LESSON-REQ-031-1 (retry side effects)
+full view: /flight
 
-MY READ     fix — the critical finding must be fixed before this ships
+MY READ     fix all — the critical finding must be fixed before this ships
 
-Decision →  approve (accept as-is) · fix all (every actionable
-            finding; I fix, then re-check) · fix <ids|all-major> ·
+Decision →  approve (accept as-is) · fix all (recommended — every
+            actionable finding; I fix, then re-check) · fix <ids|all-major> ·
             revise <what> · abort
 ```
 
 ## Gate clearance
+
+**The answer is the user's next message.** Read its first words for the option — `approve`, `fix all`, `fix C1,M1`, `fix all-major`, `revise …`, `abort` — and treat the rest as their note. A reply that names no option is not an answer: respond to it, then end the turn with the `Decision →` line again; the marker stays.
+
+**Record the answer first, whatever it is** — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision <option> --note "<the reply, verbatim>"` — then take the branch below. The trail (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md` → *The trail*) is how the cockpit and the record know what was decided and in whose words. If the conversation was compacted since the card, re-read this file, GATE-PROTOCOL and the marker first (GATE-PROTOCOL → *Compaction at a gate*).
 
 If `approve` (no fixes needed):
 
@@ -370,7 +415,7 @@ If `approve` (no fixes needed):
 
 If `fix: <ids>`, `fix: all-major`, or `fix: all`:
 
-1. **Resolve the set.** `<ids>` — as listed. `all-major` — every critical and major. `all` — every **actionable** finding, all severities. Needs-decision findings (`vault-stale`, `adr-conflict`, a proposed ADR, an open question) are never in the set, whatever was asked — they're decisions, not patches. If the resolved set excluded any, the re-emitted card must name them: `fixed 6 of 8 — 2 need your call: m1, m3`.
+1. **Resolve the set.** `<ids>` — as listed. `all-major` — every critical and major. `all` — every **actionable** finding, all severities. Then record the verdict per finding, one array for the whole digest: `node $TOOLKIT_PATH/scripts/adlc.mjs trail findings --vault .adlc --req <REQ_PATH> --json '[{"id":"CORR-001","severity":"major","decision":"fix"},{"id":"QUAL-003","severity":"minor","decision":"accept","reason":"<why>"}]'` — `fix`, `accept` or `defer`, every finding in the digest, re-run after each round so the last word stands. On `approve` with no fixes, record every finding as `accept`. Needs-decision findings (`vault-stale`, `adr-conflict`, a proposed ADR, an open question) are never in the set, whatever was asked — they're decisions, not patches. If the resolved set excluded any, the re-emitted card must name them: `fixed 6 of 8 — 2 need your call: m1, m3`.
 2. For each finding in the set, dispatch a `task-implementer` agent scoped to that fix:
    ```
    Fix: <finding-id>
@@ -389,11 +434,11 @@ If `fix: <ids>`, `fix: all-major`, or `fix: all`:
    **Slim pipelines follow the same split from round 1.** `/task` and `/bugfix` dispatch fewer reviewers, not a different file layout: narrative in `review-log.md`, digest in `verification.md`, from the first pass. Being a slim pipeline is not a licence to grow the verdict file without bound.
 
    **From round 3, say the number out loud.** Lead the re-emitted gate card with `Re-review round <N> · verdict file <N>KB`. This does not block — the loop is the user's to run, each round on their say-so — but round five should never arrive unannounced.
-5. Refresh `verification.md` — digest rows, consolidated entries, summary counts — from the updated log, then re-emit the gate prompt with updated counts — and, when the set excluded needs-decision findings, carry those into `NEEDS YOU` by ID.
+5. Refresh `verification.md` — digest rows, consolidated entries, summary counts — from the updated log. Rewrite the marker with the new counts and options before the card, then re-emit the gate card with updated counts — and, when the set excluded needs-decision findings, carry those into `NEEDS YOU` by ID — and end the turn.
 
 If `abort`:
 
-1. Confirm explicitly.
+1. Ask once, plainly, and end the turn — "This stops REQ-NNN; nothing is committed. Abort?" — and act only on a yes in the next reply.
 2. Append to `hot.md`: `## [DATE] verify-aborted | REQ-NNN-<slug>`.
 3. Update state to reflect rollback.
 

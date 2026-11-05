@@ -1,6 +1,6 @@
 # Codex custom agent. Verify key names against your Codex version's schema.
 name = "design-system-auditor"
-description = "Static design-system audit — token compliance, scale coherence, component duplication, naming, drift vs design-system.md. Read-only."
+description = "Audits the UI source for design-system problems without running the app — hardcoded values that should be tokens, too many font sizes or spacing values, duplicated components, inconsistent names, screens that disagree with each other, and code that breaks the documented design system (with the cause classified). When no design-system doc exists, writes down the system the code implies, as material for creating one. Whole-UI scope, no browser — the ui-reviewer runs the matching audit in a live browser. Read-only. Dispatched by /ux-doctor."
 model = "gpt-5.3-codex"
 model_reasoning_effort = "medium"
 read_only = false

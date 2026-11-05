@@ -1,0 +1,40 @@
+                                                                  │                                                   ✕
+ ▐▛███▛█   Claude Code v2.1.318                                   │mode="p1"
+▝▜██████▀  Opus 5.5 · Claude Max                                  │presses=["digit","letter","digit"]
+ ▝▝   ▝▝   ~/code/adlc-toolkit                                    │bandOffset=0
+                                                                  │viewedMarks=0
+  Introducing Opus 5.5                                            │p5Open=null
+  Get to finished work sooner with Opus 5.5. Switch anytime with  │p8Submits=[]
+  /model.                                                         │p8Inputs=[]
+                                                                  │measure={"percent":null,"tokens":null,"window":100000
+❯ /probe p1                                                       │0,"keys":["window"],"changed":["context","rateLimits"
+  ⎿  flightdeck-engine-probes: probe mode: p1                     │,"cost"]}
+                                                                  │
+❯ /probe readout                                                  │
+  ⎿  flightdeck-engine-probes: readout pane: {"isPlaced":true}    │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+1: Digit one a: Letter a                                      [-] │
+                                                                  │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle) · PR #1 · ← 1 agent

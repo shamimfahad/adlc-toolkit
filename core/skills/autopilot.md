@@ -42,7 +42,7 @@ Three independent axes, read from `config.yml.autonomy`, overridable by flag:
 - **git** — `read-only` (draft only; equivalent to top-level `git.mode: manual`), `commit` (checkpoint-commit to the feature branch), `commit+push` (also push the feature branch, fast-forward only). Capped by `git.mode` (see step 3). Never `main`, never force, never history rewrite.
 - **escalation** — `cautious` / `balanced` / `aggressive`. Passed to the decision-maker as its bias.
 
-Plus: `rework_cap_per_gate`, `rework_budget_total`, `confidence_floor`, `packet_max_bytes`, `hard_stops[]`, `notify{}`.
+Plus: `rework_cap_per_gate`, `rework_budget_total`, `confidence_floor`, `packet_max_bytes`, `hard_stops[]`, `notify{}`. The two human asks of 1.11 — `/architect`'s predict-first question and `/wrapup`'s review summary (`predict_first`, `review_summary`) — are skipped in this mode whatever the dials say: nobody is there to answer, and a decision-maker answering them would be theatre.
 
 ## Risk profile
 

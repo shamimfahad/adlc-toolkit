@@ -1,0 +1,40 @@
+                                                                                ╭──────────────────────────────────────╮
+ ▐▛███▛█   Claude Code v2.1.318                                                 │ flightdeck-engine-probes             │
+▝▜██████▀  Opus 5.5 · Claude Max                                                │ probe p5: placement=dock             │
+ ▝▝   ▝▝   ~/code/adlc-toolkit                                                  │ (fullscreen=true, cols=66) -> closed │
+                                                                                ╰──────────────────────────────────────╯
+  Introducing Opus 5.5
+  Get to finished work sooner with Opus 5.5. Switch anytime with /model.
+
+❯ /probe p5
+  ⎿  flightdeck-engine-probes: probe mode: p5
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                     tmux detected · scroll with PgUp/PgDn · or add 'set -g mouse on' to ~/.tmux.conf for wheel scroll
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle) · PR #1 · ← 1 agent

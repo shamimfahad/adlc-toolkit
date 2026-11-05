@@ -331,7 +331,7 @@ function buildModel(toolkitPath) {
       `3. **Read-only reviewers.** Review/audit agents are read-only on your code — they write only their own findings, never source. The user decides what gets fixed.`,
       `4. **Knowledge compounds.** Every change leaves the vault smarter — lessons, gotchas, concepts, ADRs.`,
       `5. **Process is explicit.** Skill steps are a protocol, not a guideline. No shortcuts; no \`--no-verify\`.`,
-      `6. **Offer choices, don't ask open-ended questions.** When you need a decision from the user, present discrete labeled options with a recommendation. On Claude, use the \`AskUserQuestion\` tool; elsewhere, a short numbered list inline. The user can always go off-menu.`,
+      `6. **Offer choices, don't ask open-ended questions.** When you need a decision from the user, present discrete labeled options with a recommendation. A gate ends your turn and waits for the reply, never a question dialog; for other choices, on Claude use \`AskUserQuestion\`, elsewhere a short numbered list inline. The user can always go off-menu.`,
       `7. **Speak plainly.** Everything shown to the user follows \`${tp}/core/VOICE.md\`: everyday words, toolkit terms glossed on first use, machine tags beside a plain sentence, every option stating its consequence.`,
       ``,
       `**Git policy — set by \`${manifest.vaultDir}/config.yml\` → \`git.mode\` (default \`manual\`):** In \`manual\`, never run git writes — read git state and draft the commit message, PR body, and merge checklist for the user. In \`commit\`, you may \`git add\`/\`git commit\` on the REQ's feature branch after that phase's gate is approved; in \`commit+push\`, you also \`git push\` that branch (fast-forward only). **Invariant in every mode:** only the REQ's own feature branch — never a protected branch (\`git.protect\`, e.g. main/master/release/*), never force-push, rebase, amend published commits, \`reset --hard\` away commits, delete branches, \`gh pr create\`/\`gh pr merge\`, or \`--no-verify\`. Where any skill or agent below says "the user commits" or "never commit," that is the \`manual\`-mode description.`,
@@ -737,6 +737,15 @@ function cmdSync() {
     writeReceipt(t, scope, ops.map((o) => ({ kind: o.kind, dest: o.dest })));
 
     for (const n of notes) note(n);
+
+    // Claude Code extras (budget / knowledge / notify hooks, statusline) are NOT
+    // wired by sync in either scope. Installing the toolkit is a machine-level
+    // act; turning hooks on is a per-repo, per-developer decision that belongs
+    // with the vault — /init (step 12c) and /config migrate (step 9b) offer it,
+    // writing <repo>/.claude/settings.local.json. sync only says where.
+    if (t === 'claude') {
+      note(`extras (hooks, statusline) are not wired here — /init or /config migrate offers it per repo (writes <repo>/.claude/settings.local.json)`);
+    }
     log('');
   }
 
@@ -781,6 +790,12 @@ function usage() {
   log(`  node scripts/adlc.mjs sync  --tool=<${SUPPORTED.join('|')}|all> [--repo=<path>] [--pull] [--dry-run]`);
   log(`  node scripts/adlc.mjs build --tool=<...|all> [--mode=vendored|global] [--toolkit-path=<p>] [--out=<dir>]`);
   log(`  node scripts/adlc.mjs hooks    (activate the pre-commit adapters/ rebuild)`);
+  log(`  node scripts/adlc.mjs lessons [--vault <dir>] [--check]   rebuild <vault>/knowledge/lessons.md from the lesson files`);
+  log(`  node scripts/adlc.mjs index   [--vault <dir>] [--check]   rebuild <vault>/index.md + decisions.md from records, ADRs, knowledge pages`);
+  log(`  node scripts/adlc.mjs rules   [--vault <dir>] [--check]   generate <repo>/.claude/rules/adlc-*.md from <vault>/context/conventions-paths.md`);
+  log(`  node scripts/adlc.mjs settings --repo <path> [--dry-run] [--no-statusline]   wire the Claude extras (hooks, statusline) into <repo>/.claude/settings.local.json — this repo, this developer only`);
+  log(`  node scripts/adlc.mjs trail gate|findings|show --req <id> …   record a gate answer / findings verdicts into the REQ's pipeline-state.json (1.10; the skills call this)`);
+  log(`  node scripts/adlc.mjs settings --global                                     the same into ~/.claude/settings.json — every session on this machine (opt-in)`);
 }
 
 switch (SUB) {
@@ -793,6 +808,34 @@ switch (SUB) {
   case 'hooks':
     cmdHooks();
     break;
+  case 'settings': {
+    try {
+      execFileSync(process.execPath, [join(__dirname, 'claude-settings.mjs'), ...process.argv.slice(3)], { stdio: 'inherit' });
+    } catch (e) {
+      process.exit(e.status ?? 1);
+    }
+    break;
+  }
+  case 'trail': {
+    try {
+      execFileSync(process.execPath, [join(__dirname, '..', 'core', 'extras', 'claude', 'hooks', 'adlc-trail.mjs'), ...process.argv.slice(3)], { stdio: 'inherit' });
+    } catch (e) {
+      process.exit(e.status ?? 1);
+    }
+    break;
+  }
+  case 'lessons':
+  case 'index':
+  case 'rules':
+  case 'vault-gen': {
+    // Vault generators live in their own module so a vault (not the toolkit) is the cwd that matters.
+    try {
+      execFileSync(process.execPath, [join(__dirname, 'vault-gen.mjs'), SUB, ...process.argv.slice(3)], { stdio: 'inherit' });
+    } catch (e) {
+      process.exit(e.status ?? 1); // --check reports STALE with exit 1; pass it through without a stack trace
+    }
+    break;
+  }
   default:
     usage();
     process.exit(SUB ? 1 : 0);

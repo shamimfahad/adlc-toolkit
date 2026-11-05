@@ -1,5 +1,5 @@
 ---
-description: "Dispatch reviewers, consolidate findings. Phase 4."
+description: "Multi-perspective code review for a REQ. Phase 4 of /proceed. Dispatches 4 read-only review agents in parallel (correctness, quality, architecture, reflector) — plus a 5th ui-reviewer that runs the app in a browser when the change touches a UI surface — consolidates findings by severity, and ends in the verify gate."
 ---
 
 Toolkit root: .adlc-toolkit
