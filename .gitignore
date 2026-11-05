@@ -1,2 +1,29 @@
 dist/
 .claude/settings.local.json
+
+# ADLC — per-developer scratch state. Shared knowledge files stay committed;
+# the shared logs (hot.md, decisions.md, glossary.md) are committed too.
+# A work item's FOLDER is the local working set; its RECORD (REQ-042-slug.md,
+# beside the folder) is the one committed file per item.
+.adlc/now.md
+.adlc/local.yml
+.claude/settings.local.json
+.adlc/specs/**/REQ-*/
+.adlc/bugs/**/BUG-*/
+.adlc/specs/**/pipeline-state.json
+.adlc/specs/**/.awaiting-approval
+.adlc/specs/**/commits-draft.md
+.adlc/specs/**/pr-draft.md
+.adlc/specs/**/merge-checklist.md
+.adlc/specs/**/source-writeback.md
+.adlc/specs/**/last-seen.json
+.adlc/bugs/**/pipeline-state.json
+.adlc/bugs/**/.awaiting-approval
+.adlc/bugs/**/commits-draft.md
+.adlc/bugs/**/pr-draft.md
+.adlc/bugs/**/bug-fix-pr-draft.md
+.adlc/bugs/**/merge-checklist.md
+.adlc/bugs/**/source-writeback.md
+.adlc/bugs/**/last-seen.json
+.adlc/sprints/**/*.json
+.adlc/ui-auth.env

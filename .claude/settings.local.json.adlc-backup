@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits"
+  },
+  "sandbox": {
+    "enabled": true,
+    "network": {
+      "allowedDomains": ["github.com", "*.npmjs.org", "registry.npmjs.org"]
+    }
+  }
+}
