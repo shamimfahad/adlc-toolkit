@@ -339,7 +339,14 @@ function parseConventionPaths(file) {
     if (h) { if (cur) sections.push(cur); cur = { title: h[1], paths: [], body: [] }; continue; }
     if (!cur) continue;
     const pm = l.match(/^<!--\s*paths:\s*(.+?)\s*-->\s*$/);
-    if (pm && !cur.paths.length && !cur.body.some((b) => b.trim())) { cur.paths = pm[1].split(',').map((p) => p.trim().replace(/^["']|["']$/g, '')).filter(Boolean); continue; }
+    if (pm && !cur.paths.length && !cur.body.some((b) => b.trim())) {
+      // split on commas outside braces: `src/{api,web}/**` is one glob, not two
+      const globs = pm[1].split(/,(?![^{]*\})/).map((p) => p.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+      const bad = globs.filter((g) => (g.match(/\{/g) || []).length !== (g.match(/\}/g) || []).length);
+      if (bad.length) console.error(`rules: §${cur.title} has unbalanced braces in paths (${bad.join(', ')}) — skipped`);
+      cur.paths = globs.filter((g) => !bad.includes(g));
+      continue;
+    }
     cur.body.push(l);
   }
   if (cur) sections.push(cur);

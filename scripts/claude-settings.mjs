@@ -74,7 +74,10 @@ const fwd = (p) => p.replace(/\\/g, '/');
 const HOOKS_DIR = fwd(join(TOOLKIT, 'core', 'extras', 'claude', 'hooks'));
 const STATUS = fwd(join(TOOLKIT, 'core', 'extras', 'claude', 'statusline', 'adlc-statusline.mjs'));
 const OUR_SCRIPTS = /adlc-(budget|knowledge|notify|trail)\.mjs/;
-const cmd = (script) => `node ${HOOKS_DIR}/${script}`;
+// Heap cap + timeout: a runaway hook dies small and loud instead of growing to GBs in silence.
+const HOOK_HEAP_MB = 256;
+const HOOK_TIMEOUT = 10; // seconds (Claude Code default is 60)
+const cmd = (script) => `node --max-old-space-size=${HOOK_HEAP_MB} ${HOOKS_DIR}/${script}`;
 
 // matcher: null = no matcher key (fires for every event of that kind)
 const WANT = [
@@ -111,7 +114,7 @@ function mergeSettings(settings, { toolkit = TOOLKIT, statusline = !NO_STATUS } 
         const script = m[0];
         const wanted = WANT.some(([e, matcher, s]) => e === event && s === script && (matcher ?? undefined) === (entry.matcher ?? undefined));
         if (!wanted || !shipped(script)) { changes.push(`removed ${event}${entry.matcher ? `[${entry.matcher}]` : ''} → ${script} (no longer shipped at this event)`); return false; }
-        if (h.command !== cmd(script)) { changes.push(`repointed ${event}${entry.matcher ? `[${entry.matcher}]` : ''} → ${script}`); h.command = cmd(script); }
+        if (h.command !== cmd(script) || h.timeout !== HOOK_TIMEOUT) { changes.push(`repointed ${event}${entry.matcher ? `[${entry.matcher}]` : ''} → ${script}`); h.command = cmd(script); h.timeout = HOOK_TIMEOUT; }
         return true;
       });
     }
@@ -127,7 +130,7 @@ function mergeSettings(settings, { toolkit = TOOLKIT, statusline = !NO_STATUS } 
     if (has) continue;
     let entry = list.find((e) => (e.matcher ?? undefined) === (matcher ?? undefined) && Array.isArray(e.hooks));
     if (!entry) { entry = matcher ? { matcher, hooks: [] } : { hooks: [] }; list.push(entry); }
-    entry.hooks.push({ type: 'command', command: cmd(script) });
+    entry.hooks.push({ type: 'command', command: cmd(script), timeout: HOOK_TIMEOUT });
     changes.push(`added ${event}${matcher ? `[${matcher}]` : ''} → ${script}`);
   }
   if (!Object.keys(out.hooks).length) delete out.hooks;

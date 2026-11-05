@@ -164,7 +164,13 @@ function globToRegex(glob) {
     const c = glob[i];
     if (c === '*') { if (glob[i + 1] === '*') { re += '.*'; i++; if (glob[i + 1] === '/') i++; } else re += '[^/]*'; }
     else if (c === '?') re += '[^/]';
-    else if (c === '{') { const j = glob.indexOf('}', i); re += '(' + glob.slice(i + 1, j).split(',').join('|') + ')'; i = j; }
+    else if (c === '{') {
+      const j = glob.indexOf('}', i);
+      if (j === -1) { re += '\\{'; continue; }                       // unmatched: literal (was i = -1 → infinite loop)
+      const esc = (s) => s.replace(/[.+^$()|[\]\\]/g, '\\$&');
+      re += '(' + glob.slice(i + 1, j).split(',').map(esc).join('|') + ')';
+      i = j;
+    }
     else re += c.replace(/[.+^$()|[\]\\]/g, '\\$&');
   }
   return new RegExp('^' + re + '$');
@@ -175,7 +181,7 @@ function ruleFor(vault, rel) {
   for (const name of readdirSync(dir)) {
     if (!/^adlc-.*\.md$/.test(name)) continue;
     const text = readFileSync(join(dir, name), 'utf8');
-    const fm = text.match(/^---\n([\s\S]*?)\n---\n/);
+    const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
     if (!fm) continue;
     const globs = [...fm[1].matchAll(/-\s*"?([^"\n]+)"?/g)].map(m => m[1].trim());
     if (globs.some(g => globToRegex(g).test(rel))) {
@@ -312,7 +318,10 @@ try {
     case 'PostToolUseFailure': if (ev.tool_name === 'Bash') postToolUseFailureBash(ev); break;
     default: break;
   }
-} catch { /* silent by design */ }
+} catch (e) {
+  // never blocks, but leaves a trace: a silent failure here once cost GBs unnoticed
+  try { const d = join(tmpdir(), 'adlc-knowledge'); mkdirSync(d, { recursive: true }); appendFileSync(join(d, 'errors.log'), `${new Date().toISOString()} ${(e && e.stack) || e}\n`); } catch {}
+}
 process.exit(0);
 
 // ---- settings.json wiring (adapters/claude/extras/README.md) --------------------
