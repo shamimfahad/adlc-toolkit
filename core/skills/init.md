@@ -16,7 +16,7 @@ You are bootstrapping a new project's `.adlc/` vault. Invoke this skill once per
 
 ## Preflight
 
-1. Determine the toolkit installation path (`$TOOLKIT_PATH`) — the directory that contains `core/`, `templates/`, and `ETHOS.md`. Your command/adapter was generated with this path embedded (look for a "Toolkit root:" line in the command that invoked you, or an `ADLC_TOOLKIT_PATH` value). If it is not already known, ask the user where the adlc-toolkit is installed.
+1. Determine the toolkit installation path (`$TOOLKIT_PATH`) — the directory that contains `core/`, `templates/`, and `ETHOS.md`. Your command/adapter was generated with this path embedded (look for a "Toolkit root:" line in the command that invoked you). If that folder doesn't exist on this machine, try `.adlc/local.yml` → `toolkit.path`, then an `ADLC_TOOLKIT_PATH` value. If it is still not known, ask the user where the adlc-toolkit is installed. Resolve it to an absolute path — step 12a records it.
 2. Determine the repo root: assume cwd unless the user specifies otherwise.
 3. Check whether `.adlc/` exists in the repo.
    - **Does not exist** → proceed.
@@ -27,7 +27,7 @@ You are bootstrapping a new project's `.adlc/` vault. Invoke this skill once per
 
 ### 0. Read the vault layout
 
-Load `$TOOLKIT_PATH/core/VAULT-LAYOUT.md`. This skill creates the vault's directory tree and proposes its `.gitignore` block, and both come from that file — copy the 18-line pattern set from it rather than retyping (single-`*` globs silently stop matching the moment a vault buckets, and start committing per-developer state with no error).
+Load `$TOOLKIT_PATH/core/VAULT-LAYOUT.md`. This skill creates the vault's directory tree and proposes its `.gitignore` block, and both come from that file — copy the pattern set from it rather than retyping (single-`*` globs silently stop matching the moment a vault buckets, and start committing per-developer state with no error).
 
 ### 1. Gather project info from the user
 
@@ -227,6 +227,7 @@ In the files copied at steps 5 and 6, replace placeholder tokens with the gather
 - `{{USER_EMAIL}}` → from `git config user.email`, fall back to "(not set)"
 - `{{DATE}}` → today's date in `YYYY-MM-DD`
 - `{{PATH}}` → repo root absolute path
+- `{{TOOLKIT_REPO}}` → where teammates get the toolkit: the toolkit clone's `origin` (`git -C $TOOLKIT_PATH remote get-url origin`, rewritten to its `https://` form without `.git`), falling back to `repository` in `$TOOLKIT_PATH/core/manifest.json`. A fork's URL wins over upstream on purpose — the team should install the toolkit this project actually runs on. It lands in `config.yml` → `toolkit.repo` and the vault `README.md`, both committed.
 
 Apply across all copied vault files. Don't touch the template files in `.adlc/templates/` — those keep their placeholders for future use.
 
@@ -366,6 +367,7 @@ If `.gitignore` exists at the repo root, **propose** (don't auto-write) appendin
 # A work item's FOLDER is the local working set; its RECORD (REQ-042-slug.md,
 # beside the folder) is the one committed file per item.
 .adlc/now.md
+.adlc/local.yml
 .claude/settings.local.json
 .adlc/specs/**/REQ-*/
 .adlc/bugs/**/BUG-*/
@@ -394,10 +396,15 @@ Notes on edge cases:
 - `hot.md` is the shared activity log. It's **committed** and carries `merge=union` from `.adlc/.gitattributes`, so concurrent appends on different branches combine instead of conflicting — teams get a single shared history with no merge pain. (Newest-first ordering may interleave across a union merge, but every entry is dated, so the log stays readable.) `decisions.md` and `glossary.md` work the same way.
 - `knowledge/lessons/` is one committed stub per lesson (the write side), and each lesson's ID is namespaced under the REQ that produced it (`LESSON-REQ-042-1`) — so two developers promoting lessons on parallel branches can't mint the same ID. `knowledge/lessons.md` is the generated read side — one line per lesson, the only thing agents read; it carries `merge=union` (a duplicated line after a merge is cleared by the next rebuild). `index.md` and `decisions.md` are generated too and deliberately *not* union-merged: a conflict there is resolved by rebuilding.
 - `now.md` is the **active-focus view** — small, mutable, edited in place, and therefore conflict-prone. It's gitignored and per-developer; `/status` and `/recover` regenerate the active-REQ picture from each REQ's `pipeline-state.json`, which is the real source of truth. Don't commit it.
+- `.adlc/local.yml` records where *this* developer's toolkit clone lives (step 12a). Each teammate has their own path, so it's never committed; the shared half — where to get the toolkit — is `config.yml` → `toolkit.repo`.
 - `.adlc/ui-auth.env` holds local UI test credentials for the ui-reviewer (`ui.auth` in config) — per-developer, never committed.
 - Solo developers can additionally ignore `hot.md` if they don't want it in history; on a team, keep it committed for shared visibility — the union driver makes that safe.
 
 If the user replies `add`, append the block. If `add except <pattern>`, append the block minus the named lines. If `skip`, leave `.gitignore` untouched and surface a one-line reminder that pipeline-state files will appear as unstaged churn until they decide.
+
+### 12a. Record where your toolkit lives
+
+Write `.adlc/local.yml` with the absolute `$TOOLKIT_PATH` resolved at preflight — the shape is in `VAULT-LAYOUT.md` → *The per-developer file*. Show the file before writing. It lets this developer's stubs and skills find the toolkit even when a stub's baked-in root doesn't exist on this machine (project-local installs, a clone moved later). If the user skipped or trimmed the `.gitignore` block so `.adlc/local.yml` isn't ignored, say so in one line: the file holds a machine path and shouldn't be committed. Never write it with a relative path.
 
 ### 12b. Generate the path-scoped rules
 
@@ -453,6 +460,7 @@ Suggest the user `cd .adlc` and open the vault in Obsidian if they want the view
 ## Done condition
 
 - All directory structure exists
+- `.adlc/local.yml` records this developer's absolute toolkit path; `config.yml` → `toolkit.repo` and the vault README carry the toolkit URL
 - All bootstrap files copied with placeholders substituted
 - `config.yml` exists with primary fields filled
 - All approved sources have been imported with `STATUS: needs verification` banners and source citations

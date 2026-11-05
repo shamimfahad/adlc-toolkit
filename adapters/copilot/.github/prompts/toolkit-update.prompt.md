@@ -3,6 +3,7 @@ description: "Update the ADLC toolkit install itself from upstream and reconcile
 ---
 
 Toolkit root: .adlc-toolkit
+(If that folder doesn't exist on this machine, read `toolkit.path` from `.adlc/local.yml` — this developer's own, gitignored; inside a git worktree it is in the main checkout: `$(git rev-parse --path-format=absolute --git-common-dir)/../.adlc/local.yml`. Use that path in place of the root everywhere below. If neither exists, ask the user where their toolkit clone is and offer to record it there.)
 
 Execute the ADLC **toolkit-update** protocol — defined in `.adlc-toolkit/core/skills/toolkit-update.md` — against the `.adlc/` vault in the current repository.
 

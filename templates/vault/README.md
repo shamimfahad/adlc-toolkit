@@ -2,6 +2,15 @@
 
 This directory is the project's knowledge vault and ADLC workspace. It's an Obsidian-compatible vault — open it in Obsidian for graph view and backlinks, or just edit the markdown directly.
 
+## New to this project?
+
+This repo runs on the **ADLC toolkit** — get it from {{TOOLKIT_REPO}} (clone it anywhere, then follow its README → *Install*). A global install needs nothing more. If the project's commands can't find your clone, tell them where it is in `.adlc/local.yml` — yours alone, gitignored, never committed:
+
+```yaml
+toolkit:
+  path: /absolute/path/to/your/adlc-toolkit
+```
+
 ## Read this first
 
 - [[CLAUDE]] — the rulebook: how Claude reads and writes this vault. Claude reads this at the start of every session.
@@ -23,7 +32,8 @@ This directory is the project's knowledge vault and ADLC workspace. It's an Obsi
 | `specs/` | Per requirement: a **record** `specs/REQ-042-slug.md` (one committed file, written once at wrap-up, ≤6KB — goal, criteria, what changed, decisions, verdict, knowledge IDs, follow-ups) beside its **working set** `specs/REQ-042-slug/` (everything the pipeline produced; local, gitignored, deleted on `merged` when you say so). Bucketed vaults keep the same tail: `specs/2026-08/sf/REQ-042-slug.md` + `/` |
 | `specs/_archive/` | Working sets you chose to **keep** after merge, moved here whole (offered at `merged` only when the folder was kept). Records never move — they are the history |
 | `templates/` | Per-project copies of toolkit templates |
-| `config.yml` | Stack config — deploy targets, repo layout |
+| `config.yml` | Stack config — deploy targets, repo layout, `toolkit.repo` (where to get the toolkit) |
+| `local.yml` | **Yours only, gitignored.** `toolkit.path` — where your toolkit clone lives on this machine |
 
 ### Month and author buckets
 

@@ -7,7 +7,7 @@ Everything about getting the toolkit onto a machine, keeping it current, and reg
 **One command does install _and_ update**, global by default — the pipeline becomes available in every repo you open:
 
 ```bash
-git clone <repo-url> ~/code/adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git ~/code/adlc-toolkit
 cd ~/code/adlc-toolkit
 node scripts/adlc.mjs sync --tool=copilot     # or claude · codex · gemini · cursor · all
 ```

@@ -6,6 +6,14 @@ project:
   name: <project-name>
   description: <one-line description>
 
+# The ADLC toolkit this project runs on. Committed, so a teammate who clones
+# the project knows where to get it: clone this URL, run its installer, done.
+# Point it at your fork if the team runs one. WHERE your own clone lives is
+# per-developer and is NOT set here — it's .adlc/local.yml → toolkit.path
+# (gitignored; /init and /config migrate write it).
+toolkit:
+  repo: "{{TOOLKIT_REPO}}"
+
 # How REQ (and BUG) IDs are chosen. Matters most for teams: the default
 # `sequential` scheme picks the next number by scanning the vault, so two people
 # branching at the same time can both mint REQ-042 and collide at merge.

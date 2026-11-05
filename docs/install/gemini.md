@@ -23,7 +23,7 @@ Global install symlinks commands into `~/.gemini/commands/`, agents into `~/.gem
 
 **macOS / Linux**
 ```bash
-git clone <repo-url> .adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git .adlc-toolkit
 node .adlc-toolkit/scripts/adlc.mjs build --tool=gemini --toolkit-path=.adlc-toolkit   # only if path differs
 cp -R .adlc-toolkit/adapters/gemini/.gemini ./.gemini
 cp    .adlc-toolkit/adapters/gemini/GEMINI.md ./GEMINI.md
@@ -31,7 +31,7 @@ cp    .adlc-toolkit/adapters/gemini/GEMINI.md ./GEMINI.md
 
 **Windows (PowerShell)**
 ```powershell
-git clone <repo-url> .adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git .adlc-toolkit
 node .adlc-toolkit\scripts\adlc.mjs build --tool=gemini --toolkit-path=.adlc-toolkit
 Copy-Item -Recurse -Force .adlc-toolkit\adapters\gemini\.gemini .\.gemini
 Copy-Item -Force .adlc-toolkit\adapters\gemini\GEMINI.md .\GEMINI.md
@@ -42,7 +42,7 @@ If the repo already has `.gemini/` or `GEMINI.md`, copy the contents / merge the
 ## Manual — global (all repos)
 
 ```bash
-git clone <repo-url> ~/code/adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git ~/code/adlc-toolkit
 node ~/code/adlc-toolkit/scripts/adlc.mjs build --tool=gemini --mode=global --toolkit-path="$HOME/code/adlc-toolkit"
 mkdir -p ~/.gemini/commands ~/.gemini/agents
 cp ~/code/adlc-toolkit/adapters/gemini/.gemini/commands/*.toml ~/.gemini/commands/

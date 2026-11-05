@@ -61,6 +61,7 @@ Repository path: <repo-path from config.yml>
 WORKTREE PATH (mandatory): <repo-path>/.worktrees/REQ-NNN-<slug>
 Subagent mode: true (you cannot dispatch sub-agents)
 Base branch: <base from config.yml>
+Toolkit root: <absolute $TOOLKIT_PATH, as you resolved it>
 
 Run the full /proceed pipeline for this REQ per your skill instructions.
 Pause at every gate; emit terminal claim `gate-blocked:<phase>` when paused.
@@ -68,7 +69,7 @@ Do NOT run git mutations beyond worktree creation.
 Update pipeline-state.json after every phase.
 ```
 
-Write the REQ folder out in full — the runner resolves nothing. The worktree path is not a vault path: worktrees live in the repo, so name each one by REQ ID and slug, never by `<REQ_PATH>`.
+Write the REQ folder and the toolkit root out in full — the runner resolves nothing. The root must be absolute: the runner works in a worktree, where a relative `.adlc-toolkit` and the gitignored `.adlc/local.yml` may not exist. The worktree path is not a vault path: worktrees live in the repo, so name each one by REQ ID and slug, never by `<REQ_PATH>`.
 
 Dispatch all runners in a single message so they run concurrently. **Dispatch by exact agent name.** If the agent type isn't available (not installed, or the sync hasn't run since it was added), **stop and tell the user**: "`<agent>` isn't installed — run the toolkit sync, then re-run this step." Never absorb the agent's work into the main session as a fallback: inline work runs at the session's model instead of the agent's tier (a haiku-priced exploration silently becomes an opus-priced one), and for reviewers it destroys the independence the gate depends on — the same context that wrote the code would be reviewing it.
 

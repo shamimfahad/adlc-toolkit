@@ -1,6 +1,7 @@
 description = "Standalone UX & design-system audit of the whole app or a chosen part of it. Sizes the UI surface first — small apps get one pass; large apps get a gated segment plan run in phases (system pass → per-segment passes → cross-segment consolidation) with durable progress that survives sessions (/ux-doctor resume). Dispatches the design-system-auditor (static pass over the UI source) and the ui-reviewer in standalone-audit mode (runtime pass in a browser) in parallel, consolidates their findings into a dated severity-by-effort report in .adlc/audits/, and maintains .adlc/context/design-system.md. No pipeline state, no gates; fixes route to /task or /spec."
 prompt = """
 Toolkit root: .adlc-toolkit
+(If that folder doesn't exist on this machine, read `toolkit.path` from `.adlc/local.yml` — this developer's own, gitignored; inside a git worktree it is in the main checkout: `$(git rev-parse --path-format=absolute --git-common-dir)/../.adlc/local.yml`. Use that path in place of the root everywhere below. If neither exists, ask the user where their toolkit clone is and offer to record it there.)
 
 Execute the ADLC **ux-doctor** protocol — defined in `.adlc-toolkit/core/skills/ux-doctor.md` — against the `.adlc/` vault in the current repository.
 

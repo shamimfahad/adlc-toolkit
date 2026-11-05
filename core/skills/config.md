@@ -10,7 +10,7 @@ It exists for one reason hand-editing YAML can't satisfy: some settings have a *
 ## Preconditions
 
 - `.adlc/config.yml` must exist. If it doesn't, tell the user to run `/init` first and stop.
-- Determine `$TOOLKIT_PATH` (the "Toolkit root:" line in the command that invoked you) — needed to read canonical templates when re-syncing derived files.
+- Determine `$TOOLKIT_PATH` (the "Toolkit root:" line in the command that invoked you; if that folder doesn't exist on this machine, `.adlc/local.yml` → `toolkit.path`) — needed to read canonical templates when re-syncing derived files.
 - If the user asked for `migrate`, or is setting any `layout.*` key, read `$TOOLKIT_PATH/core/VAULT-LAYOUT.md` first — it owns the path grammar the layout step rearranges.
 
 ## Modes of invocation
@@ -21,7 +21,7 @@ It exists for one reason hand-editing YAML can't satisfy: some settings have a *
 
 **C. Interactive (any other free text, or a bare request to "change settings").** Present the editable groups as labeled options (ETHOS principle 6 — use the assistant's structured-question UI if it has one). When the user picks a setting, present its **allowed values as options** with the current one marked. Confirm the before→after, then apply.
 
-**D. Migrate (`migrate`, `update`, or "pick up new settings after updating the toolkit").** Add keys/blocks the toolkit has gained since this vault was created, without changing any existing value; append any `.gitattributes` lines the toolkit has gained; append the missing `.gitignore` lines (the 1.9.0 working-set patterns); regenerate `knowledge/lessons.md`, `index.md`, `decisions.md` and the `.claude/rules/adlc-*.md` files; offer records for merged folders that have none; then **offer** a template refresh (mode E). See "Migrate" below. This is the supported way to refresh an existing `.adlc/` after a `git pull` of the toolkit — `/init` is one-shot and won't touch a populated vault.
+**D. Migrate (`migrate`, `update`, or "pick up new settings after updating the toolkit").** Add keys/blocks the toolkit has gained since this vault was created, without changing any existing value; append any `.gitattributes` lines the toolkit has gained; append the missing `.gitignore` lines (the 1.9.0 working-set patterns, and `.adlc/local.yml`); record this developer's toolkit path in `.adlc/local.yml`; regenerate `knowledge/lessons.md`, `index.md`, `decisions.md` and the `.claude/rules/adlc-*.md` files; offer records for merged folders that have none; then **offer** a template refresh (mode E). See "Migrate" below. This is the supported way to refresh an existing `.adlc/` after a `git pull` of the toolkit — `/init` is one-shot and won't touch a populated vault.
 
 **E. Refresh templates (`templates`, `refresh-templates`, or offered at the end of `migrate`).** Update this vault's `.adlc/templates/` copies to match the toolkit's current `templates/` after an update — gated, per file, never silent. See "Template refresh" below.
 
@@ -41,6 +41,8 @@ Validate against this. Allowed values are closed sets unless noted "free text."
 |---|---|---|
 | `project.name` | free text | non-empty |
 | `project.description` | free text | one line |
+| `toolkit.repo` | URL | where teammates get the toolkit — committed, shown in the vault README. Point it at your fork if the team runs one. Not where *your* clone lives — that's `toolkit.path`. |
+| `toolkit.path` | absolute path | **written to `.adlc/local.yml`, never `config.yml`** — this developer's toolkit clone, gitignored. Validate: absolute, and `<path>/core/manifest.json` exists; refuse a relative path. If `.adlc/local.yml` isn't in `.gitignore`, offer to add it in the same step. Shown by `show` under its own *This machine* line. |
 | `git.mode` | `manual` \| `commit` \| `commit+push` | **derived-file sync** (see below). Lowering it below `autonomy.git` silently caps `/autopilot`; mention that. |
 | `git.protect` | list of branch globs | must be non-empty; warn (don't block) if `main`/`master` is removed |
 | `workflow.isolation` | `auto` \| `branch` \| `worktree` | explain the trade-off when changing (branch keeps the editor session; worktree tolerates a dirty checkout) |
@@ -115,7 +117,7 @@ Durable artifacts — lessons, ADRs, concept pages — reference REQs by **ID**,
    - **Top-level blocks** present in the template but absent in the project file (e.g. a whole `sources:` block).
    - **Sub-keys** missing inside a block the project already has (e.g. `edits:` under an existing `workflow:`, or `sources:`/`notify:` lines inside an existing `autonomy:`).
    - **New entries in templated lists** that are pure scaffolding (e.g. a new `hard_stops:` category). Offer these but don't assume — the user may have intentionally trimmed a list.
-   Ignore the project's `<placeholder>` values, custom keys, and any value differences — those are the user's, not drift.
+   Ignore the project's `<placeholder>` values, custom keys, and any value differences — those are the user's, not drift. A block you insert that carries `{{TOOLKIT_REPO}}` gets it filled the way `/init` step 7 does (the toolkit's `origin` as `https://`, else `core/manifest.json` → `repository`).
 3. **Preserve the commented/default shape.** If the template ships a block commented-out (like `sources:`), insert it commented-out too — migration makes the option *available*, it doesn't enable it. Setting a real value is a separate `/config <key>=<value>` action afterward.
 4. **Preview before writing.** Show the user the exact additions (as a unified-diff-style preview), grouped by block, with a one-line note on what each new setting does. Nothing is written until they confirm. Offer `add all`, `add except <block>`, or `skip`.
 5. **Insert surgically.** Place each addition next to its sibling keys in the same order the template uses (e.g. `workflow.edits` right after `workflow.isolation`), comments intact. Keep the file valid YAML.
@@ -128,6 +130,8 @@ If the project config is already current, say so and write nothing.
 8. **Regenerate the generated files** — part of derived-file sync (below): `node $TOOLKIT_PATH/scripts/adlc.mjs lessons --vault .adlc` and `node $TOOLKIT_PATH/scripts/adlc.mjs index --vault .adlc`. `knowledge/lessons.md` replaced `lesson-ledger.md` in 1.9.0: when a `lesson-ledger.md` exists, move it to `.adlc/_archive/` (never delete) and say so; `index.md` keeps its `## Reference` section and loses the hand tables — show the before/after sizes (a measured vault went 216KB → ~12KB). Legacy lesson files (the pre-1.9.0 40-line template) are read as-is by the generator; **offer, don't force,** rewriting their headers into the 9-row stub (one gated batch: the generator's output is identical either way, so the rewrite is cosmetic until a lesson is edited). A vault whose generated files are already current produces byte-identical output — that's the no-op; say so rather than logging a change.
 
 9. **Append the 1.9.0 `.gitignore` lines** (`.adlc/specs/**/REQ-*/`, `.adlc/bugs/**/BUG-*/`) if absent — additive, shown first, one approve; the old per-file lines stay. Explain in one sentence: from now on a work item's folder is the local working set and only its record `<REQ_PATH>.md` is committed. Files already tracked under those folders stay tracked until the user runs `git rm -r --cached` on them (print the exact command in the summary; never run it — it is a git write).
+
+9a. **Record where this developer's toolkit lives.** If `.adlc/local.yml` is missing, or its `toolkit.path` no longer holds `core/`, offer to write it with the absolute `$TOOLKIT_PATH` (shape: `VAULT-LAYOUT.md` → *The per-developer file*); show it first, one approve. If `.adlc/local.yml` is absent from `.gitignore`, append it in the same step as step 9's lines — it holds a machine path and must not be committed. Never touch another developer's file; there is only ever this one.
 
 9b. **Offer the per-repo Claude extras** (Claude Code only): if `<repo>/.claude/settings.local.json` does not carry the ADLC hooks, offer `node $TOOLKIT_PATH/scripts/adlc.mjs settings --repo <repo-root>` — this repo and this developer only, never the global file. Quote its summary; mention hooks load next session.
 

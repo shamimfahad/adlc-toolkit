@@ -3,6 +3,7 @@ description: "Design the architecture and task breakdown for a REQ. Phase 2 of /
 ---
 
 Toolkit root: .adlc-toolkit
+(If that folder doesn't exist on this machine, read `toolkit.path` from `.adlc/local.yml` — this developer's own, gitignored; inside a git worktree it is in the main checkout: `$(git rev-parse --path-format=absolute --git-common-dir)/../.adlc/local.yml`. Use that path in place of the root everywhere below. If neither exists, ask the user where their toolkit clone is and offer to record it there.)
 
 Execute the ADLC **architect** protocol — defined in `.adlc-toolkit/core/skills/architect.md` — against the `.adlc/` vault in the current repository.
 

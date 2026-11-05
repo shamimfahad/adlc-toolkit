@@ -252,6 +252,8 @@ function buildModel(toolkitPath) {
   }));
 
   // Point each stub at the resolved source: local/ override if present, else core/.
+  // Where the toolkit is when the baked-in root isn't on this machine (VAULT-LAYOUT → The per-developer file).
+  const fallback = (what, ask = 'ask the user where their toolkit clone is and offer to record it there') => `(If ${what} doesn't exist on this machine, read \`toolkit.path\` from \`${manifest.vaultDir}/local.yml\` — this developer's own, gitignored; inside a git worktree it is in the main checkout: \`$(git rev-parse --path-format=absolute --git-common-dir)/../${manifest.vaultDir}/local.yml\`. Use that path in place of the root everywhere below. If neither exists, ${ask}.)`;
   const skillRef = (n) => `${tp}/${hasLocal(`skills/${n}.md`) ? 'local' : 'core'}/skills/${n}.md`;
   const agentRef = (n) => `${tp}/${hasLocal(`agents/${n}.md`) ? 'local' : 'core'}/agents/${n}.md`;
   const yamlStr = (s) => `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
@@ -273,6 +275,7 @@ function buildModel(toolkitPath) {
   function protocolBody(tool, s) {
     const lines = [
       `Toolkit root: ${tp}`,
+      fallback('that folder'),
       ``,
       `Execute the ADLC **${s.name}** protocol — defined in \`${skillRef(s.name)}\` — against the \`.adlc/\` vault in the current repository.`,
       ``,
@@ -299,7 +302,9 @@ function buildModel(toolkitPath) {
     return [
       `You are the **${a.name}** agent in the ADLC pipeline.`,
       ``,
-      `Read and fully adopt the role defined in \`${agentRef(a.name)}\`, then carry it out for the inputs you are given.`,
+      `Read and fully adopt the role defined in \`${agentRef(a.name)}\`, then carry it out for the inputs you are given. Toolkit root: \`${tp}\` — if the dispatching prompt names a toolkit root, use that instead.`,
+      ``,
+      fallback('that root', 'stop and report that the toolkit could not be found — do not guess a path'),
       ``,
       ro,
     ].join('\n');
@@ -323,7 +328,7 @@ function buildModel(toolkitPath) {
       ``,
       `This repository uses the **ADLC toolkit**: a spec-driven development pipeline with a human approval gate at every phase boundary. You are running inside ${toolLabel}.`,
       ``,
-      `**Knowledge vault:** \`${manifest.vaultDir}/\` holds specs, architecture, conventions, decisions (ADRs), lessons, gotchas, and glossary. Read \`${manifest.vaultDir}/context/conventions.md\`, \`${manifest.vaultDir}/context/project-overview.md\`, and \`${manifest.vaultDir}/now.md\` before non-trivial work. The toolkit itself lives at \`${tp}/\`. Work records under \`specs/\`, \`bugs/\`, and \`sprints/\` may be flat or bucketed by month and author — \`${tp}/core/VAULT-LAYOUT.md\` is the only place that grammar is written down; resolve paths through it rather than assuming a shape.`,
+      `**Knowledge vault:** \`${manifest.vaultDir}/\` holds specs, architecture, conventions, decisions (ADRs), lessons, gotchas, and glossary. Read \`${manifest.vaultDir}/context/conventions.md\`, \`${manifest.vaultDir}/context/project-overview.md\`, and \`${manifest.vaultDir}/now.md\` before non-trivial work. The toolkit itself lives at \`${tp}/\` (on a machine where it doesn't, \`${manifest.vaultDir}/local.yml\` → \`toolkit.path\` says where this developer keeps it; source: ${manifest.repository}). Work records under \`specs/\`, \`bugs/\`, and \`sprints/\` may be flat or bucketed by month and author — \`${tp}/core/VAULT-LAYOUT.md\` is the only place that grammar is written down; resolve paths through it rather than assuming a shape.`,
       ``,
       `**The seven principles (full text: \`${tp}/ETHOS.md\`):**`,
       `1. **You decide; the assistant drafts.** Every phase boundary pauses for the user. Git writes follow \`${manifest.vaultDir}/config.yml\` → \`git.mode\` (default \`manual\` = the assistant drafts; you run git).`,

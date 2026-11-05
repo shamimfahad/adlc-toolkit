@@ -1,5 +1,7 @@
 # ADLC Toolkit
 
+**Repo:** <https://github.com/shamimfahad/adlc-toolkit>
+
 **A spec-driven pipeline that makes building with AI fast, accountable, and cumulative.** ADLC (AI Development Life Cycle) turns any AI coding assistant into a disciplined engineering partner: the assistant drafts specs, architecture, code, and reviews; you approve at every phase gate; and what it learns about your codebase compounds in a knowledge vault instead of evaporating with the session.
 
 Works with **Claude Code, Cursor, GitHub Copilot, OpenAI Codex, and Gemini CLI**, on **macOS, Windows, and Linux**, for **teams or solo**. One workflow, one shared knowledge vault, five AI tools.
@@ -215,7 +217,7 @@ Agents are assigned a capability **tier** — `fast`, `balanced`, or `deep` — 
 One command does install _and_ update, global by default — the pipeline becomes available in every repo you open:
 
 ```bash
-git clone <repo-url> ~/code/adlc-toolkit
+git clone https://github.com/shamimfahad/adlc-toolkit.git ~/code/adlc-toolkit
 cd ~/code/adlc-toolkit
 node scripts/adlc.mjs sync --tool=claude     # or cursor · copilot · codex · gemini · all
 ```
@@ -309,6 +311,13 @@ Unique IDs don't stop the folder list from growing; a year in, `specs/` is a hun
 <summary><b>A shared history that never conflicts</b> — union-merged logs</summary>
 
 The activity log (`.adlc/hot.md`, plus `decisions.md` and `glossary.md`) is **committed** and carries `merge=union` via the vault's `.gitattributes`, so parallel branches' appends combine instead of conflicting — the team shares one history with zero merge pain. The mutable active-focus view (`now.md`) and per-developer pipeline state stay gitignored and are regenerated from each REQ's `pipeline-state.json` by `/status`. `/init` proposes the right `.gitignore` split automatically.
+
+</details>
+
+<details>
+<summary><b>Teammates find the toolkit, each keeps it where they like</b> — <code>toolkit.repo</code> + <code>.adlc/local.yml</code></summary>
+
+Where to *get* the toolkit is shared: `/init` writes the URL into `.adlc/config.yml` → `toolkit.repo` and the vault README, so anyone who clones the project sees it. Where each person *keeps* their clone is not: it goes in `.adlc/local.yml` → `toolkit.path`, one gitignored file per developer. Stubs fall back to it when their built-in toolkit path doesn't exist on that machine — which is what makes project-local (`--repo`) installs work across a team. `/config migrate` adds both to an existing vault.
 
 </details>
 
