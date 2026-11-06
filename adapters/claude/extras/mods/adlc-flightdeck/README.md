@@ -126,21 +126,27 @@ then sends. Beside it, the context fill.
 Settings → *auto compact* does the same without the toggle, for approve answers only (0.9.0):
 
 - `off` (default) — nothing changes.
-- `on approve` — an answer whose option is `approve` (including `approve, reject ADR-NNN`) compacts first,
-  then is sent. `revise`, `fix …`, `abort` and `merged` never compact, and the ship gate never does —
-  there is no next phase.
+- `on approve` — an answer that is just `approve` or `approve, reject ADR-NNN` compacts first, then is
+  sent. An approve with a note after it (`approve, but rename X first`, or typed
+  `approve <but rename X first>`) is rework the next phase needs its context for, so it does not; nor do `revise`, `fix …`, `abort` and `merged`, and the ship gate never
+  does — there is no next phase.
 - `past compact at` — the same, but only when the context is at or past *compact at*.
 
 Pressed or typed, it works the same. A typed approve is held for the seconds compaction takes — the
 prompt says `compacting first — your reply follows` — and then sent by the mod as your own message;
 the round is recorded once. It is held only when no turn is running and no reply is already on its way;
 mid-turn the engine queues it as usual. While a compaction runs, another typed gate reply is not sent:
-it goes back in the prompt box (`still compacting — your reply is back in the box`), so a later
-`revise` can never overtake the held `approve`.
+it goes back in the prompt box (`still compacting — your reply is back in the box`), and a pressed
+option or the ring is refused with a toast, so a later `revise` can never overtake the held `approve`.
+One compaction runs at a time. One still running after 60 seconds is given up on: the held reply goes
+back in the box (`compaction is taking too long (it may still finish) — your reply is back in the box`)
+and is never sent on its own. Until that compaction does finish, no second one starts — a pressed
+answer that would compact, the ring and a typed approve are refused — and when it finishes,
+*compact first* is used up as usual.
 
 A reply is never lost. A compaction that is vetoed or refused (a turn running) still sends, with a
 toast `not compacted — sent as is (<why>)`. If the send itself fails, the reply goes back in the box
-(`not sent — your reply is back in the box`). One case loses it: the mod reloading while a typed
+(`not sent — your reply is back in the box`), compacted or not. One case loses it: the mod reloading while a typed
 approve is held; type it again.
 
 Settings → *compact mode*: `button` (default), `suggest` (dim until the context is past *compact at*,
@@ -157,7 +163,8 @@ after a compaction.
 
 Pressing it compacts now — with the REQ's instructions when a REQ is focused (else the one shown), a bare
 compaction with none. Mid-turn it does nothing but say `Claude is working — compact when the turn ends`;
-a skipped or refused compaction says `not compacted (<why>)`. Pressing the ring is always your choice, so
+while another compaction runs, or a reply is on its way, it says so and does nothing; a skipped or
+refused compaction says `not compacted (<why>)`. Pressing the ring is always your choice, so
 `compact mode: never` leaves it in place.
 
 ### Agent numbers

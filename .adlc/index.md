@@ -11,7 +11,8 @@ A table of contents for the vault, built from the files themselves. Each row lin
 
 | ID | Title | Status | Kind | Merged | Path |
 |---|---|---|---|---|---|
-| REQ-001 | [[specs/2026-11/sf/REQ-001-flightdeck-compact-ring|Flightdeck: auto-compact at phase boundaries, a context ring, numbered agents]] | in flight — phase 2 (cleared) | — | — | `specs/2026-11/sf/REQ-001-flightdeck-compact-ring/` |
+| REQ-001 | [[specs/2026-11/sf/REQ-001-flightdeck-compact-ring|Flightdeck: auto-compact at phase boundaries, a context ring, numbered agents]] | ready-to-merge | /proceed | — | `specs/2026-11/sf/REQ-001-flightdeck-compact-ring.md` |
+| REQ-002 | [[specs/2026-11/sf/REQ-002-debrief|The debrief: the story of a REQ you can retell, in the gate]] | in flight — phase 1 (cleared) | — | — | `specs/2026-11/sf/REQ-002-debrief/` |
 
 ## ADRs
 
@@ -32,7 +33,7 @@ Full ledger with supersession chains: [[decisions]].
 
 | Page | One-line summary |
 |---|---|
-| _(empty)_ | |
+| [[knowledge/components/adlc-flightdeck|adlc-flightdeck — the cockpit mod]] | Draws the ADLC pipeline above the prompt: the REQs in flight, phase tabs, each gate's evidence and its options to answer from. It reads t… |
 
 ## Reference
 

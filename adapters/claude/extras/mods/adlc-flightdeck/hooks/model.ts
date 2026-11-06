@@ -242,12 +242,19 @@ export function ringGlyph(pct: number): string {
   return pct < 13 ? '○' : pct < 38 ? '◔' : pct < 63 ? '◑' : pct < 88 ? '◕' : '●'
 }
 
-/** The reply's first word is `approve` — `approve`, `approve, reject ADR-002`, `approve — looks right`.
- *  Not `approved`, not `revise`, `fix …`, `abort` or `merged`. Placeholders (`<…>`) and case ignored. */
-export function isApproveLike(label: string): boolean {
-  const head = label.replace(/<[^>]*>/g, '').trim().toLowerCase()
-  return head.startsWith('approve') && !/[a-z0-9]/.test(head.charAt('approve'.length))
+/** The reply is a plain approve and nothing else: `approve`, or `approve, reject ADR-NNN`, optionally followed by
+ *  the pane's `[flightdeck] …` trailer line. A note after it (`approve, but rename X first`, `approve — looks right`)
+ *  is rework the next phase needs its context for, so it is not. Nor `approved`, `revise`, `fix …`, `abort`,
+ *  `merged`. Case and spacing ignored. Placeholders (`<…>`) are dropped from an option's label only: typed, a
+ *  bracketed part is the person's own note (`approve <but rename X first>`), so it is not approve-like. */
+export function isApproveLike(text: string, from: 'label' | 'typed' = 'label'): boolean {
+  const bare = text.replace(/\n\s*\[flightdeck\][^\n]*\s*$/, '')
+  const body = (from === 'label' ? bare.replace(/<[^>]*>/g, '') : bare).replace(/\s+/g, ' ').trim().toLowerCase()
+  return /^approve(?: ?, ?reject adr-\d+)?$/.test(body)
 }
+
+/** A compaction still running after this is given up on: a held reply goes back in the box. */
+export const COMPACT_TIMEOUT_MS = 60_000
 
 /** The ship gate: nothing follows it, so nothing is worth compacting for. */
 const LAST_PHASE = 5
@@ -258,9 +265,10 @@ export function autoCompactApplies(
   pct: number | null,
   label: string,
   phase: number,
+  from: 'label' | 'typed' = 'label',
 ): boolean {
   if (settings.compact === 'never' || settings.autoCompact === 'off') return false
-  if (phase >= LAST_PHASE || !isApproveLike(label)) return false
+  if (phase >= LAST_PHASE || !isApproveLike(label, from)) return false
   if (settings.autoCompact === 'past') return pct !== null && pct >= settings.compactAt
   return true
 }

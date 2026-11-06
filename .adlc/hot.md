@@ -17,6 +17,23 @@ Grep-friendly format: `## [YYYY-MM-DD] kind | description` with optional metadat
 
 <!-- Newest entries below this line, newest first. Each entry is a level-2 heading. -->
 
+## [2026-11-07] req-ready-to-merge | REQ-001-flightdeck-compact-ring | flightdeck auto compact, context ring, agent numbers (mod 0.9.0)
+## [2026-11-07] lesson | L-REQ-001-1 — a flag that holds user input needs one owner
+## [2026-11-07] lesson | L-REQ-001-2 — recover a failed send in the one send function
+## [2026-11-07] lesson | L-REQ-001-3 — record engine-behaviour bets where the decision lives
+## [2026-11-07] lesson | L-REQ-001-4 — test helpers span every mode
+## [2026-11-07] gotcha | G01 — `h` is the JSX factory in the flightdeck mod
+## [2026-11-07] gotcha | G02 — model.ts must not import values from vault.ts
+## [2026-11-07] gotcha | G03 — the mod test kit has no defaults you'd expect
+## [2026-11-07] gotcha | G04 — type-check the mods with the bun cache's native tsc
+## [2026-11-07] component | adlc-flightdeck — first captured
+
+## [2026-11-07] work-path-set | REQ-002-debrief | worktree at .worktrees/REQ-002-debrief (off main; REQ-001 lands before implement)
+
+## [2026-11-07] verify-gate-cleared | REQ-001-flightdeck-compact-ring | findings: C0/M1/m2 (4 review rounds)
+
+## [2026-11-07] spec-gate-cleared | REQ-002-debrief
+
 ## [2026-11-07] implement-gate-cleared | REQ-001-flightdeck-compact-ring
 
 ## [2026-11-07] architect-gate-cleared | REQ-001-flightdeck-compact-ring

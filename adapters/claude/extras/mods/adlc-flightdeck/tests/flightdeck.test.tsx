@@ -3,7 +3,7 @@ import { describe, expect, mock, test, type TestBody } from 'claude-code/testing
 
 import type { FlightDeck, FlightGateAsk, FlightGit, FlightItem, FlightLane, FlightTrail } from '../types'
 import {
-  autoCompactApplies, buildReq, describeTool, eta, idOf, isApproveLike, markSpans, parseDispatch, parseGateCard, ringGlyph, runs, splitFolder, taskGlyphs,
+  COMPACT_TIMEOUT_MS, autoCompactApplies, buildReq, describeTool, eta, idOf, isApproveLike, markSpans, parseDispatch, parseGateCard, ringGlyph, runs, splitFolder, taskGlyphs,
   timeline,
 } from '../hooks/model'
 import {
@@ -112,9 +112,18 @@ describe('model', () => {
     expect(at([88, 99, 100])).toBe('●●●')
   })
 
-  test('approve-like: the first word is approve, nothing else is', () => {
-    for (const l of ['approve', 'Approve', '  approve ', 'approve, reject ADR-002', 'approve — looks right', 'approve\n\n[flightdeck] pane']) expect(isApproveLike(l)).toBe(true)
+  test('approve-like: a plain approve (or approve, reject ADR-NNN), nothing after it', () => {
+    for (const l of ['approve', 'Approve', '  approve ', 'approve, reject ADR-002', 'approve,  Reject adr-014',
+      'approve\n\n[flightdeck] pane', 'approve, reject ADR-002\n\n[flightdeck] viewed 3/4 files']) expect(isApproveLike(l)).toBe(true)
     for (const l of ['approved', 'approves', 'revise <what>', 'fix all', 'fix <ids|all-major>', 'abort', 'merged', '', 'not approve']) expect(isApproveLike(l)).toBe(false)
+    // A note after the approve is rework the next phase needs its context for: not approve-like.
+    for (const l of ['approve, but rename X first', 'approve — looks right', 'approve. also tighten AC2', 'approve, reject ADR-002 and rename X',
+      'approve [flightdeck] pane', 'approve\n\n[flightdeck] pane\nand one more thing']) expect(isApproveLike(l)).toBe(false)
+    // Placeholders are dropped from an option's label only: typed, a bracketed part is the person's own note.
+    expect(isApproveLike('approve <note>')).toBe(true)
+    expect(isApproveLike('approve <but rename X first>', 'typed')).toBe(false)
+    expect(isApproveLike('approve\n\n[flightdeck] pane', 'typed')).toBe(true)
+    expect(autoCompactApplies({ compact: 'button', compactAt: 70, autoCompact: 'approve' }, null, 'approve <but rename X first>', 2, 'typed')).toBe(false)
   })
 
   test('auto compact: off, never, the ship gate and non-approve answers never compact; past needs a known percent at the threshold', () => {
@@ -743,19 +752,28 @@ const typedAt = (text: string) => ({ text, wait: false, origin: { kind: 'compose
 
 describe('auto compact', () => {
   /** A gate with auto compact on: records every call the flow makes, in order. */
-  const autoGate = ($: Parameters<TestBody>[0], on: On, auto: 'off' | 'approve' = 'approve') => {
-    atGate(on, { settings: { ...settings, autoCompact: auto }, gate: { 'REQ-042': parseMarker(AUTO_MARKER) }, trail: undefined })
+  const autoGate = ($: Parameters<TestBody>[0], on: On, auto: 'off' | 'approve' | 'past' = 'approve', pct = 40, extra: Partial<Record<Key, unknown>> = {}) => {
+    atGate(on, { settings: { ...settings, autoCompact: auto }, gate: { 'REQ-042': parseMarker(AUTO_MARKER) }, trail: undefined, ...extra })
     const log: string[] = []
     const fills: string[] = []
     const toasts: string[] = []
     const trails: unknown[] = []
+    const layouts: { compactFirst?: boolean }[] = []
     let compact: 'ok' | 'skip' | 'reject' = 'ok'
     let beforeCompact = async () => {}
     let failSend = false
+    let refuseTimeout = false
+    let beforeSend = async () => {}
     on('turn.start', async () => ({ turnId: 't1' }))
     on('turn.complete', async () => ({ text: '' }))
-    on('clock.after', async () => ({ value: undefined }) as never) // the timer fires as soon as asked
-    on('session.usage', async () => ({ value: { startedAt: 0, context: { window: 200_000, percent: 40 }, rateLimits: [] } }) as never)
+    // A timer fires as soon as asked; the compaction timeout only when the test says so.
+    const timeouts: (() => void)[] = []
+    on('clock.after', async ($, e) => {
+      if (refuseTimeout && (e as { ms: number }).ms >= COMPACT_TIMEOUT_MS) throw new Error('timer refused')
+      if ((e as { ms: number }).ms >= COMPACT_TIMEOUT_MS) await new Promise<void>(r => { timeouts.push(r) })
+      return { value: undefined } as never
+    })
+    on('session.usage', async () => ({ value: { startedAt: 0, context: { window: 200_000, percent: pct }, rateLimits: [] } }) as never)
     on('session.compact', async () => {
       log.push('compact')
       await beforeCompact()
@@ -765,20 +783,30 @@ describe('auto compact', () => {
     })
     on('prompt.submit', async ($, e) => {
       if (failSend && e.origin.kind === 'plugin') throw new Error('engine refused')
+      if (e.origin.kind === 'plugin') await beforeSend()
       log.push(`submit:${e.origin.kind === 'plugin' && e.origin.asUser === true ? 'plugin' : e.origin.kind}:${e.text.split('\n')[0]}`)
       return { text: e.text }
     })
     on('prompt.fill', async ($, e) => { fills.push(e.text); return { isFilled: true } as never })
     on('ui.toast', async ($, e) => { toasts.push(e.text); return { value: undefined } as never })
-    on('state.set', async ($, e, next) => { if ((e as { key: string }).key === 'trail') trails.push((e as { value: unknown }).value); return next(e) })
+    on('state.set', async ($, e, next) => {
+      const { key, value } = e as { key: string; value: unknown }
+      if (key === 'trail') trails.push(value)
+      if (key === 'layout') layouts.push(value as { compactFirst?: boolean })
+      return next(e)
+    })
     const rounds = () => ((trails.at(-1) as FlightTrail | undefined)?.['REQ-042']?.['implement']?.rounds ?? []).map(r => `${r.decision}:${r.via}`)
     return {
-      log, fills, toasts, rounds,
+      log, fills, toasts, rounds, layouts,
       setCompact: (c: typeof compact) => { compact = c },
       setFailSend: (f: boolean) => { failSend = f },
+      refuseTimeout: () => { refuseTimeout = true },
+      onSend: (f: () => Promise<void>) => { beforeSend = f }, // runs as the engine takes the mod's own send
       // The main loop's turn ends: clears `busy` and the pending reply (the real state; sendReply writes it).
       endTurn: () => $.turn.complete({ turnId: 't1', usage: {}, reason: 'end', isAborted: false, answer: '' } as never),
       onCompact: (f: () => Promise<void>) => { beforeCompact = f },
+      // The compaction timeout runs out (once its timer was asked for).
+      timeOut: async () => { await settle(() => timeouts.length > 0); timeouts.splice(0).forEach(f => f()) },
     }
   }
 
@@ -817,7 +845,7 @@ describe('auto compact', () => {
     await settle(() => g.log.some(l => l.startsWith('submit')))
     expect(g.log).toEqual(['compact', 'submit:plugin:approve'])
     await settle(() => g.rounds().length > 0)
-    expect(g.rounds()).toEqual(['approve:pane'])
+    expect(g.rounds()).toEqual(['approve:typed']) // typed, though the mod resent it
   })
 
   test('typed revise and fix all: no hold, no compaction, recorded as typed', async ($, on) => {
@@ -844,8 +872,27 @@ describe('auto compact', () => {
     await $.prompt.submit(typedAt('approve'))
     await settle(() => g.fills.length > 0)
     expect(g.fills).toEqual(['approve'])
-    expect(g.toasts).toContain('not sent — your reply is back in the box')
+    expect(g.toasts.filter(t => t === 'not sent — your reply is back in the box').length).toBe(1) // one toast, not two
     expect(g.log.filter(l => l.startsWith('submit'))).toEqual([])
+  })
+
+  test('pressed answer, no compaction: a failed send puts the reply back in the box, with one toast', async ($, on) => {
+    const g = autoGate($, on)
+    g.setFailSend(true)
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'opt-revise' })
+    await settle(() => g.fills.length > 0)
+    await ui.unmount()
+    expect(g.log).toEqual([]) // never compacted, never sent
+    expect(g.fills.length).toBe(1)
+    expect(g.fills[0]).toMatch(/^revise/)
+    expect(g.toasts.filter(t => t === 'not sent — your reply is back in the box').length).toBe(1)
+  })
+
+  test('typed approve with a bracketed note: not held, not compacted', async ($, on) => {
+    const g = autoGate($, on)
+    expect((await $.prompt.submit(typedAt('approve <but rename X first>')) as { drop?: string }).drop).toBeUndefined()
+    expect(g.log).toEqual(['submit:composer:approve <but rename X first>'])
   })
 
   test('typed approve mid-turn or with a reply pending: passes through, not held', async ($, on) => {
@@ -876,6 +923,131 @@ describe('auto compact', () => {
     release()
     await settle(() => g.log.some(l => l.startsWith('submit')))
     expect(g.log.filter(l => l.startsWith('submit'))).toEqual(['submit:plugin:approve'])
+  })
+
+  test('typed approve with a note: not held, not compacted', async ($, on) => {
+    const g = autoGate($, on)
+    expect((await $.prompt.submit(typedAt('approve, but rename X first')) as { drop?: string }).drop).toBeUndefined()
+    expect(g.log).toEqual(['submit:composer:approve, but rename X first'])
+  })
+
+  test('held typed approve: a pressed answer and the ring are refused with a toast; the approve is sent once', async ($, on) => {
+    const g = autoGate($, on)
+    let release = () => {}
+    const gate = new Promise<void>(r => { release = r })
+    g.onCompact(() => gate)
+    await $.prompt.submit(typedAt('approve'))
+    await settle(() => g.log.includes('compact'))
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'opt-revise' })
+    await ui.press({ key: 'ring' })
+    await settle(() => g.toasts.length > 1)
+    expect(g.toasts).toEqual(['still compacting — your held reply goes first', 'still compacting — try again when it ends'])
+    release()
+    await settle(() => g.log.some(l => l.startsWith('submit')))
+    await ui.unmount()
+    expect(g.log).toEqual(['compact', 'submit:plugin:approve'])
+  })
+
+  test('a compaction that never settles: given up after the timeout, the approve back in the box and never sent', async ($, on) => {
+    const g = autoGate($, on)
+    let release = () => {}
+    const gate = new Promise<void>(r => { release = r })
+    g.onCompact(() => gate)
+    await $.prompt.submit(typedAt('approve'))
+    await settle(() => g.log.includes('compact'))
+    await g.timeOut()
+    await settle(() => g.fills.length > 0)
+    expect(g.fills).toEqual(['approve'])
+    expect(g.toasts).toContain('compaction is taking too long (it may still finish) — your reply is back in the box')
+    // The deck is free again: a typed reply is no longer dropped as "still compacting".
+    expect((await $.prompt.submit(typedAt('revise tighten AC2')) as { drop?: string }).drop).toBeUndefined()
+    release() // the late compaction settles: the reply it held is not sent behind the person's back
+    await settle(() => false)
+    expect(g.log.filter(l => l.startsWith('submit'))).toEqual(['submit:composer:revise tighten AC2'])
+  })
+
+  test('after the give-up the compaction still runs: no second one starts; its late settle still clears compact first', async ($, on) => {
+    const g = autoGate($, on, 'approve', 40, { layout: { height: 'max', narrow: false, compactFirst: true } })
+    let release = () => {}
+    const gate = new Promise<void>(r => { release = r })
+    g.onCompact(() => gate)
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'opt-approve' })
+    await settle(() => g.log.includes('compact'))
+    await g.timeOut()
+    await settle(() => g.fills.length > 0)
+    expect(g.fills[0]).toMatch(/^approve/)
+    // The engine is still compacting: a pressed approve, the ring and a typed approve are all refused.
+    await ui.press({ key: 'opt-approve' })
+    await ui.press({ key: 'ring' })
+    await settle(() => g.toasts.filter(t => t === 'still compacting — try again when it ends').length > 1)
+    expect((await $.prompt.submit(typedAt('approve')) as { drop?: string }).drop).toBe('still compacting — your reply is back in the box')
+    expect(g.log).toEqual(['compact'])
+    release() // the late compaction settles: nothing is sent, and compact first is used up as on the normal path
+    await settle(() => g.layouts.some(l => l.compactFirst === false))
+    await ui.unmount()
+    expect(g.layouts.at(-1)?.compactFirst).toBe(false)
+    expect(g.log).toEqual(['compact'])
+  })
+
+  test('a clock that refuses the give-up timer: the approve still goes out, nothing stays stuck, later presses work', async ($, on) => {
+    const g = autoGate($, on)
+    g.refuseTimeout()
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'opt-approve' })
+    await settle(() => g.log.some(l => l.startsWith('submit')))
+    expect(g.log).toEqual(['compact', 'submit:plugin:approve'])
+    await g.endTurn()
+    // Both flags cleared: the ring compacts again, with no "still compacting" refusal.
+    await ui.press({ key: 'ring' })
+    await settle(() => g.log.length > 2)
+    await ui.unmount()
+    expect(g.log).toEqual(['compact', 'submit:plugin:approve', 'compact'])
+    expect(g.toasts.filter(t => /still compacting/.test(t))).toEqual([])
+  })
+
+  test('a second typed approve while the held one is being sent: refused and filled back, never compacted again', async ($, on) => {
+    const g = autoGate($, on)
+    let sending = false
+    let release = () => {}
+    const gate = new Promise<void>(r => { release = r })
+    // The engine is still taking the held approve (compaction settled, send under way) when the person types approve again.
+    g.onSend(async () => { sending = true; await gate })
+    expect((await $.prompt.submit(typedAt('approve')) as { drop?: string }).drop).toBe('compacting first — your reply follows')
+    await settle(() => sending)
+    const second = await $.prompt.submit(typedAt('approve')) as { drop?: string }
+    expect(second.drop).toBe('still compacting — your reply is back in the box')
+    release()
+    await settle(() => g.log.some(l => l.startsWith('submit')) && g.fills.length > 0)
+    expect(g.fills).toEqual(['approve'])
+    expect(g.log).toEqual(['compact', 'submit:plugin:approve'])
+  })
+
+  test('past compact at: below the threshold an approve goes as is, pressed or typed', async ($, on) => {
+    const g = autoGate($, on, 'past', 40) // compact at 70
+    expect((await $.prompt.submit(typedAt('approve')) as { drop?: string }).drop).toBeUndefined()
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'opt-approve' })
+    await settle(() => g.log.length > 1)
+    await ui.unmount()
+    expect(g.log).toEqual(['submit:composer:approve', 'submit:plugin:approve'])
+  })
+
+  test('past compact at: at or above the threshold an approve compacts first, typed', async ($, on) => {
+    const g = autoGate($, on, 'past', 70)
+    expect((await $.prompt.submit(typedAt('approve')) as { drop?: string }).drop).toBe('compacting first — your reply follows')
+    await settle(() => g.log.some(l => l.startsWith('submit')))
+    expect(g.log).toEqual(['compact', 'submit:plugin:approve'])
+  })
+
+  test('past compact at: at or above the threshold an approve compacts first, pressed', async ($, on) => {
+    const g = autoGate($, on, 'past', 85)
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'opt-approve' })
+    await settle(() => g.log.some(l => l.startsWith('submit')))
+    await ui.unmount()
+    expect(g.log).toEqual(['compact', 'submit:plugin:approve'])
   })
 
   test('auto off: typed approve passes; pressed approve sends without compacting; the toggle still compacts', async ($, on) => {

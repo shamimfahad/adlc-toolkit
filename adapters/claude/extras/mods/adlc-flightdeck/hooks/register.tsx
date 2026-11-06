@@ -51,7 +51,7 @@ import {
   sumFuel, summaryGaps, tiersOf, type PlanRow, type TaskDoc,
 } from './evidence'
 import {
-  ID_SRC, autoCompactApplies, bar, buildReq, clip, clock, describeTool, idOf, isActive, isLanded, kindOf, markSpans, parseDispatch, parseGateCard, pulse, ringGlyph,
+  COMPACT_TIMEOUT_MS, ID_SRC, autoCompactApplies, bar, buildReq, clip, clock, describeTool, idOf, isActive, isLanded, kindOf, markSpans, parseDispatch, parseGateCard, pulse, ringGlyph,
   spinFrame, splitFolder, tokens, typicalCost, type PipelineState,
 } from './model'
 import {
@@ -96,6 +96,7 @@ const NARROW_AT = 84 // default: band body columns below which chips shrink and 
 const STATUS_AT = 110 // band body columns from which each phase tab carries its one-line status
 const USAGE_EVERY_MS = 5000
 const AGENTS_EVERY_MS = 2000 // how long one `$.agent.list()` answer numbers the lanes
+const RING_W = 9 // the header ring at its widest, `● 100%`, and the ` · ` after it
 /**
  * Keys the pane binds. `Button.hotkey` takes one digit or one lowercase letter and refuses
  * anything else (claude-code types, ButtonProps.hotkey), so the plan's `[` / `]` and its
@@ -150,7 +151,8 @@ let usageSeen: { at: number; percent: number | null } = { at: 0, percent: null }
 // dropped keeps the last number it was drawn with, dimmed. Self-contained: agentPlaces + laneNo + two call sites.
 let agentsSeen: { at: number; places: Map<string, number> | null } = { at: 0, places: null }
 const lastPlace = new Map<string, number>() // lane id → the number it was last drawn with
-let compacting = false // a typed approve is held while compaction runs; its reply follows (prompt.submit)
+let compacting = false // a reply is held for a compaction (compactThenSend): typed replies, buttons and the ring wait for it
+let compactInFlight = false // the engine's compaction has not settled — it can outlive the give-up: no second one starts
 
 type Dollar = Parameters<Hook<'session.start'>>[0]
 
@@ -578,7 +580,7 @@ async function contextPercent($: Dollar): Promise<number | null> {
  * next main-loop turn completes. The session must be idle for the turn to start; a reply sent
  * while a background agent runs waits for it, and the bar says so.
  */
-async function sendReply($: Dollar, r: FlightReq, text: string, options: FlightOption[]): Promise<boolean> {
+async function sendReply($: Dollar, r: FlightReq, text: string, options: FlightOption[], via: 'pane' | 'typed' = 'pane'): Promise<boolean> {
   if (await read($, pendingA)) return false
   const at = await $.clock.now()
   await update($, pendingA, () => ({ req: r.id, at }))
@@ -586,21 +588,26 @@ async function sendReply($: Dollar, r: FlightReq, text: string, options: FlightO
   try {
     await $.prompt.submit({ text, asUser: true })
     // Recorded here; the prompt.submit observer skips this plugin's own submits so it is never counted twice.
-    await recordRound($, r, text, options, 'pane').catch(() => {})
+    await recordRound($, r, text, options, via).catch(() => {})
     return true
   } catch {
     await update($, pendingA, () => null)
-    $.ui.toast('could not send — type it in the prompt')
+    refill($, text) // never lost: whoever called, the reply goes back in the box
+    $.ui.toast('not sent — your reply is back in the box')
     return false
   }
 }
 
-/** Compacts at a gate with instructions built from the REQ's state. Rejects mid-turn; resolves `{ skip }` when a hook vetoes. */
-async function compactNow($: Dollar, r: FlightReq): Promise<{ ok: boolean; why?: string }> {
+/**
+ * Compacts: with instructions built from the REQ's state when one is given, a bare compact otherwise.
+ * Rejects mid-turn; resolves `{ ok: false, why }` when a hook vetoes or the engine refuses.
+ */
+async function compactNow($: Dollar, r: FlightReq | null): Promise<{ ok: boolean; why?: string }> {
   if (busy) return { ok: false, why: 'Claude is working — compact when the turn ends' }
-  const ask = (await read($, gateA))[r.id]
   try {
-    const res = await $.session.compact({ instructions: compactBrief(r, stateOf.get(r.id), ask, folderOf.get(r.id), vault) })
+    const res = r
+      ? await $.session.compact({ instructions: compactBrief(r, stateOf.get(r.id), (await read($, gateA))[r.id], folderOf.get(r.id), vault) })
+      : await $.session.compact()
     if ('skip' in res && res.skip) return { ok: false, why: res.skip }
     usageSeen = { at: 0, percent: null } // the window just shrank: ask again on the next draw
     return { ok: true }
@@ -612,21 +619,63 @@ function refill($: Dollar, text: string) {
   $.clock.after(0, () => { void $.prompt.fill({ text, mode: 'replace' }).catch(() => {}) })
 }
 
+/** A gate reply waiting on a compaction: its text, the gate's options, and how it was given. Its REQ is compactThenSend's. */
+type HeldReply = { text: string; options: FlightOption[]; via: 'pane' | 'typed' }
+
 /**
- * The second half of a held typed approve: compact, then send it as the user. A failed
- * compaction still sends; a failed send puts the text back. Never loses the reply.
+ * The one compact-then-send path: a pressed answer (the toggle or auto compact), a held typed approve, and the
+ * ring (no reply). One compaction at a time: none starts while `compactInFlight`, which clears only when the
+ * engine's compaction settles. `compacting` (a reply is held) clears only once sendReply has returned — by then the
+ * pending reply guards a double send, so no gap lets a second approve through — or after COMPACT_TIMEOUT_MS, when
+ * the reply goes back in the box and is never sent on its own. Both flags are set inside the try, so a clock that
+ * refuses the give-up timer never leaves them stuck: the compaction runs without a ceiling. A failed compaction
+ * still sends; a failed send is put back by sendReply. Never loses the reply. Resolves whether it compacted, even
+ * when it settles after the give-up.
  */
-async function compactThenSend($: Dollar, r: FlightReq, text: string, options: FlightOption[]) {
-  try {
-    const res = await compactNow($, r)
-    if (!res.ok) $.ui.toast(`not compacted — sent as is${res.why ? ` (${clip(res.why, 60)})` : ''}`)
-    if (!(await sendReply($, r, text, options))) throw new Error('not sent')
-  } catch {
-    await $.prompt.fill({ text, mode: 'replace' }).catch(() => {})
-    $.ui.toast('not sent — your reply is back in the box')
-  } finally {
-    compacting = false
+async function compactThenSend($: Dollar, r: FlightReq, reply: HeldReply): Promise<boolean>
+async function compactThenSend($: Dollar, r: FlightReq | null, reply: null): Promise<boolean>
+async function compactThenSend($: Dollar, r: FlightReq | null, reply: HeldReply | null): Promise<boolean> {
+  if (compacting || compactInFlight) {
+    if (reply?.via === 'typed') { refill($, reply.text); $.ui.toast('still compacting — your reply is back in the box') }
+    else $.ui.toast('still compacting — try again when it ends')
+    return false
   }
+  const hold = { settled: false, gaveUp: false } // a box: the timer reads and writes it too
+  let timer: { cancel: () => void } | null = null
+  let res: { ok: boolean; why?: string }
+  let done = false
+  try {
+    compacting = true
+    compactInFlight = true
+    try {
+      timer = $.clock.after(COMPACT_TIMEOUT_MS, () => {
+        if (hold.settled) return
+        hold.gaveUp = true // the deck is free again for replies; the engine's compaction may still finish
+        compacting = false
+        if (reply) { refill($, reply.text); $.ui.toast('compaction is taking too long (it may still finish) — your reply is back in the box') }
+        else $.ui.toast('compaction is taking too long — it may still finish')
+      })
+    } catch {} // no timer: the compaction still runs and the reply still goes out, just without the give-up
+    res = await compactNow($, r)
+    done = true
+  } finally {
+    hold.settled = true
+    compactInFlight = false
+    timer?.cancel()
+    if (!done) compacting = false // nothing to send: never leave the hold up behind a throw
+  }
+  if (hold.gaveUp) return res.ok // a late settle: never sends, but says whether it compacted (compacting was cleared at the give-up)
+  try {
+    if (!reply || !r) {
+      if (!res.ok) $.ui.toast(`not compacted${res.why ? ` (${clip(res.why, 60)})` : ''}`)
+      return res.ok
+    }
+    if (!res.ok) $.ui.toast(`not compacted — sent as is${res.why ? ` (${clip(res.why, 60)})` : ''}`)
+    await sendReply($, r, reply.text, reply.options, reply.via)
+  } finally {
+    compacting = false // the reply is pending (or back in the box): from here the pending reply guards a double send
+  }
+  return res.ok
 }
 
 type Els = ReturnType<Dollar['ui']['resolve']>
@@ -648,16 +697,8 @@ function ringOf($: Dollar, els: Els, pct: number | null, compactAt: number, r: F
  */
 async function pressRing($: Dollar, r: FlightReq | null) {
   if (busy) { $.ui.toast('Claude is working — compact when the turn ends'); return }
-  let res: { ok: boolean; why?: string }
-  if (r) res = await compactNow($, r)
-  else {
-    try {
-      const out = await $.session.compact()
-      res = 'skip' in out && out.skip ? { ok: false, why: out.skip } : { ok: true }
-      if (res.ok) usageSeen = { at: 0, percent: null }
-    } catch (err) { res = { ok: false, why: String(err instanceof Error ? err.message : err) } }
-  }
-  if (!res.ok) $.ui.toast(`not compacted${res.why ? ` (${clip(res.why, 60)})` : ''}`)
+  if (await read($, pendingA)) { $.ui.toast('a reply is on its way — compact when its turn ends'); return }
+  await compactThenSend($, r, null)
 }
 
 /** The options of a REQ's open gate, as the pane would draw them. */
@@ -775,10 +816,15 @@ export const register: Register = on => {
         if (!busy && !(await read($, pendingA))) {
           const settings = { ...DEFAULTS, ...(await read($, settingsA)) }
           const pct = settings.autoCompact === 'past' ? await contextPercent($) : null
-          if (autoCompactApplies(settings, pct, e.text, r.phase)) {
-            compacting = true
-            const text = e.text
-            $.clock.after(0, () => { void compactThenSend($, r, text, options) })
+          if (autoCompactApplies(settings, pct, e.text, r.phase, 'typed')) {
+            // A compaction given up on may still be running in the engine: no second one on top of it.
+            if (compactInFlight) {
+              refill($, e.text)
+              return { drop: 'still compacting — your reply is back in the box' }
+            }
+            const reply: HeldReply = { text: e.text, options, via: 'typed' }
+            // `compacting` is set inside: a refused timer leaves nothing stuck.
+            $.clock.after(0, () => { void compactThenSend($, r, reply).catch(() => {}) })
             return { drop: 'compacting first — your reply follows' }
           }
         }
@@ -1096,12 +1142,8 @@ export const register: Register = on => {
 }
 
 
-// ---------- the cockpit: the band, opened ----------
-// One tree in the AbovePrompt band, laid out as the flightdeck mockup draws it:
-//   level 1   ✈ the in-flight REQs as chips · the context ring · history · settings · ⤢ · ×
-//   level 2   the five phase tabs, a one-line status under each from 110 columns, a rule (narrow: the list home)
-//   the page  GATE first — its state, and at an open gate the summary, the options, the consequence of the
-//             recommended one and compact first — then the phase's evidence, one titled block each, a blank row apart.
+// ---------- agent numbers: the place in `$.agent.list()` ----------
+
 async function agentPlaces($: Dollar): Promise<Map<string, number> | null> {
   const now = await $.clock.now()
   if (now - agentsSeen.at < AGENTS_EVERY_MS && agentsSeen.at > 0) return agentsSeen.places
@@ -1129,6 +1171,13 @@ function laneNo(places: Map<string, number> | null, id: string): { n: number; dr
   return last === undefined ? null : { n: last, dropped: true }
 }
 
+
+// ---------- the cockpit: the band, opened ----------
+// One tree in the AbovePrompt band, laid out as the flightdeck mockup draws it:
+//   level 1   ✈ the in-flight REQs as chips · the context ring · history · settings · ⤢ · ×
+//   level 2   the five phase tabs, a one-line status under each from 110 columns, a rule (narrow: the list home)
+//   the page  GATE first — its state, and at an open gate the summary, the options, the consequence of the
+//             recommended one and compact first — then the phase's evidence, one titled block each, a blank row apart.
 // Called by the band's render hook when the height is open or max.
 
 /** The mockup's palette, as theme keys so light and dark themes both hold. */
@@ -1295,7 +1344,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     // A chip never shrinks (a squeezed chip wraps its label down the rows): as many as fit the width, the selected one
     // always among them, then `+n more` — which opens the whole list.
     const label = (s: FlightStripEntry) => (narrow ? shortId(s.id) : `${s.id} ${s.here ? (s.ended ? 'ship' : s.phaseName) : 'not on this machine'}`)
-    const room = W - 2 - (narrow ? 14 : 30) - (usagePct !== null ? 8 : 0) - (narrow ? 7 : 12) // ✈, the right-hand controls (the ring too), the `+n more ▾` chip
+    const room = W - 2 - (narrow ? 14 : 30) - (usagePct !== null ? RING_W : 0) - (narrow ? 7 : 12) // ✈, the right-hand controls (the ring too), the `+n more ▾` chip
     const widthOf = (s: FlightStripEntry) => label(s).length + 4
     const sel = Math.max(0, all.findIndex(s => s.id === reqId))
     let start = 0
@@ -1491,13 +1540,16 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     const choose = (o: FlightOption) => {
       if (dimAll || pending) return
       if (o.needsArg) { void $.prompt.fill({ text: `${optionHead(o.label)} `, mode: 'replace' }).catch(() => {}); return }
+      // A held typed approve goes first: nothing pressed may overtake it.
+      if (compacting) { $.ui.toast('still compacting — your held reply goes first'); return }
       const text = replyFor(o, null, c.n, viewedArg)
       void (async () => {
+        if (await read($, pendingA)) return // a reply already on its way: one click, one reply
         // The toggle, or auto compact on an approve. A failed compaction never holds the reply back.
         if ((compactFirst && mode !== 'never') || autoCompactApplies(settings, usagePct, o.label, c.n)) {
-          const res = await compactNow($, live)
-          if (!res.ok) $.ui.toast(`not compacted — sent as is${res.why ? ` (${clip(res.why, 60)})` : ''}`)
-          else if (compactFirst) await update($, layoutA, l => ({ ...l, compactFirst: false })).catch(() => {})
+          const compacted = await compactThenSend($, live, { text, options, via: 'pane' })
+          if (compacted && compactFirst) await update($, layoutA, l => ({ ...l, compactFirst: false })).catch(() => {})
+          return
         }
         await sendReply($, live, text, options)
       })().catch(() => {})
@@ -1852,7 +1904,8 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
   }
 
   // ----- one thing opened from a phase page: a back control, then the thing -----
-  const header = (title: string, right: unknown = null, lead: unknown = null) => (
+  /** `right`: drawn at the far end of the row; `lead`: drawn just before the title (a lane's `#n`). */
+  const header = (title: string, { right = null, lead = null }: { right?: unknown; lead?: unknown } = {}) => (
     <Box flexDirection="row" justifyContent="space-between">
       <Box flexDirection="row" flexShrink={1}><Button key="back" plain label="‹ back" onPress={back} /><Text>  </Text>{lead as never}<Text bold color={C.v} wrap="truncate">{title}</Text></Box>
       <Box flexDirection="row" flexShrink={0}>{right as never}</Box>
@@ -1868,7 +1921,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     } catch {}
     return (
       <Box flexDirection="column">
-        {header(title, text !== null ? ref('open-editor', path, undefined, 'open in editor ↗') : null)}
+        {header(title, { right: text !== null ? ref('open-editor', path, undefined, 'open in editor ↗') : null })}
         <Box marginTop={1} flexDirection="column" paddingLeft={2}>
           {listing ? listing.map(f => <Button key={`doc-file-${f}`} plain label={f} onPress={() => sub({ kind: 'doc', path: `${path}/${f}`, title: f })} />) : null}
           {text !== null ? <Markdown key={`doc-${path}`} text={text} /> : listing ? null : dim('could not read that file')}
@@ -1889,7 +1942,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     const seen = !!marks?.[k] && marks[k] === g?.hashes[k]
     return (
       <Box flexDirection="column">
-        {header(clip(path, W - 40), <Box flexDirection="row">{ref('open-editor', path, undefined, 'open in editor ↗')}<Text>  </Text><Text color={seen ? C.ok : C.amber}>{seen ? '◉ viewed' : 'marking viewed'}</Text></Box>)}
+        {header(clip(path, W - 40), { right: <Box flexDirection="row">{ref('open-editor', path, undefined, 'open in editor ↗')}<Text>  </Text><Text color={seen ? C.ok : C.amber}>{seen ? '◉ viewed' : 'marking viewed'}</Text></Box> })}
         <Box paddingLeft={2}>{faint(`${isNew ? 'new file' : `vs ${g?.baseName ?? 'HEAD'}`}${g?.authors[k] ? ` · last: ${g.authors[k]}` : ''}${source && source.length >= DIFF_MAX ? ' · cut at 90KB' : ''}`)}</Box>
         <Box marginTop={1}>
           {!d ? dim('reading the diff…') : source === null ? dim('git could not show that file') : isNew ? <Code source={source} path={path} startLine={1} /> : source.trim() ? <Code source={source} format="diff" path={path} /> : dim('no difference against the base')}
@@ -1914,7 +1967,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     const c = reqId ? trail[reqId]?.[phase]?.card : null
     return (
       <Box flexDirection="column">
-        {header(`gate card · ${phase}`, c ? faint(`seen ${dateOf(c.at)} ${timeOf(c.at)}`) : null)}
+        {header(`gate card · ${phase}`, { right: c ? faint(`seen ${dateOf(c.at)} ${timeOf(c.at)}`) : null })}
         <Box marginTop={1}>{c ? <Markdown key={`card-${reqId}-${phase}`} text={c.text} /> : dim('no card captured on this machine for that phase')}</Box>
       </Box>
     )
@@ -1926,7 +1979,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     const room = Math.max(5, e.props.maxRows - 8)
     return (
       <Box flexDirection="column">
-        {header(l?.agent ?? r?.agent ?? id, null, numOf(id))}
+        {header(l?.agent ?? r?.agent ?? id, { lead: numOf(id) })}
         <Box flexDirection="column" paddingLeft={2}>
           {l ? faint(`${l.label} · ${clock((l.endedAt ?? now) - l.startedAt)}${l.tokens ? ` · ${tokens(l.tokens)} fresh · ${tokens(l.wrote)} wrote` : ''}`) : null}
           {r && !l ? faint(`${r.task ?? ''} · ${clock(r.endedAt - r.startedAt)} · ${tokens(r.tokens)} fresh · ${r.isFailed ? 'failed' : 'landed'} ${dateOf(r.endedAt)} ${timeOf(r.endedAt)}`) : null}
