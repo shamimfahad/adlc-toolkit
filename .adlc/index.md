@@ -11,7 +11,7 @@ A table of contents for the vault, built from the files themselves. Each row lin
 
 | ID | Title | Status | Kind | Merged | Path |
 |---|---|---|---|---|---|
-| _(empty)_ | | | | | |
+| REQ-001 | [[specs/2026-11/sf/REQ-001-flightdeck-compact-ring|Flightdeck: auto-compact at phase boundaries, a context ring, numbered agents]] | in flight — phase 2 (cleared) | — | — | `specs/2026-11/sf/REQ-001-flightdeck-compact-ring/` |
 
 ## ADRs
 
@@ -20,6 +20,7 @@ Full ledger with supersession chains: [[decisions]].
 | ID | Title | Status | Decided |
 |---|---|---|---|
 | ADR-001 | [[architecture/adr-001-tiered-vault-loading|Tiered vault loading for reflector and architect]] | accepted | (not recorded — created 2026-07-22; implemented in 1.9.0) |
+| ADR-002 | [[architecture/adr-002-opt-in-auto-compact|Opt-in auto compaction after an approved gate]] | accepted | 2026-11-07 |
 
 ## Concepts
 

@@ -17,6 +17,16 @@ Grep-friendly format: `## [YYYY-MM-DD] kind | description` with optional metadat
 
 <!-- Newest entries below this line, newest first. Each entry is a level-2 heading. -->
 
+## [2026-11-07] implement-gate-cleared | REQ-001-flightdeck-compact-ring
+
+## [2026-11-07] architect-gate-cleared | REQ-001-flightdeck-compact-ring
+
+## [2026-11-07] adr-accepted | ADR-002 opt-in auto compaction after an approved gate
+
+## [2026-11-07] work-path-set | REQ-001-flightdeck-compact-ring | branch at /Users/shamimfahad/code/adlc-toolkit
+
+## [2026-11-07] spec-gate-cleared | REQ-001-flightdeck-compact-ring
+
 ## [2026-11-06] init-import | docs/adr-tiered-vault-loading.md → architecture/adr-001-tiered-vault-loading.md
 ## [2026-11-06] init-import | README.md → context/project-overview.md
 ## [2026-11-06] init | Vault initialized

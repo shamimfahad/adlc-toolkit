@@ -20,11 +20,12 @@ mods draw in the band stays: the flightdeck draws first and theirs follows under
 **band** — one row about the REQ you are flying:
 
 ```
-✈ REQ-sf-034 · review · gate: fix all? · 2 in flight · 1 at gate                         ⤢ [-]
+✈ REQ-sf-034 · review · gate: fix all? · 2 in flight · 1 at gate                   ◔ 30%  ⤢ [-]
 ```
 
 Clicking the text or `⤢` opens the flightdeck. `resume` appears before `⤢` only for a gate this
 session has no card for (opened in another session): it runs `/proceed <id>`, which re-emits it.
+The context ring (`◔ 30%`, before `resume` and `⤢`) is described under *The context ring* below.
 `[-]` is the engine's own mark (ctrl+x ctrl+a): it collapses the band.
 
 **open** — the summary: the header, the tabs and the GATE card, with a `⤢ FINDINGS · …` line naming
@@ -35,7 +36,7 @@ window (wheel or keys, with its `n more` row). `⤢` / `⤡` toggles, `×` colla
 here removes the band (the engine's own `[-]` and `/flight band` do).
 
 ```
-✈ REQ-sf-033 ✓ ship · REQ-sf-034 ● review · REQ-sf-035 ○ spec     history · settings · ⤢ · ×
+✈ REQ-sf-033 ✓ ship · REQ-sf-034 ● review · REQ-sf-035 ○ spec  ◔ 30% · history · settings · ⤢ · ×
 1 spec ✓          2 architect ✓     3 implement ✓      4 review ●         5 ship ○
 approve · 1 round approve · 2 rounds 2 rounds · viewed… 15 findings · 7 n… opens after review
 GATE ● awaiting — review · round 1
@@ -43,8 +44,8 @@ GATE ● awaiting — review · round 1
 ```
 
 Level 1 is the REQ strip and the global views: `✈`, one chip per REQ in flight by ID number (the
-current one highlighted), then `history` and `settings`, which sit above the phases and toggle back to
-them. `✈` goes to the REQ in flight: while a sprint runs, its first member still flying; else the REQ this
+current one highlighted), then the context ring, `history` and `settings`, which sit above the phases
+and toggle back to them. `✈` goes to the REQ in flight: while a sprint runs, its first member still flying; else the REQ this
 session is flying; else the first one at a gate.
 Level 2 is the five phase tabs, each with a one-line status under it from 110 columns. No key
 hints in either header.
@@ -72,7 +73,7 @@ Every tab opens with **GATE**: `● awaiting — review · round 2` with, under 
 need a call, files not viewed, the marker's ask), the options inline (`a: fix all (recommended)  b: …`),
 the consequence of the recommended one, and `[⟳ compact first]` with the context fill. A cleared gate is one
 line (`✓ cleared · approve · round 1 · 10-22 14:05 · viewed 4/7`), a phase in progress says so and lists the
-agents flying for it under **SO FAR**, and a phase not reached says when it opens and shows nothing else.
+agents flying for it under **SO FAR**, each numbered `#1`, `#2` … (see *Agent numbers*), and a phase not reached says when it opens and shows nothing else.
 Then the evidence, built from the files the templates already mandate plus git:
 
 | Tab | Evidence |
@@ -120,11 +121,55 @@ typed into an empty prompt, so a digit there would answer a gate by accident.
 A gate is the cheapest place to compact: the phase is on disk and the next has not started. Under the
 options, `[⟳ compact first]` is a toggle: on, the next option you press compacts first — with
 instructions built from the REQ (what to keep verbatim, what is on disk, what to re-read after) — and
-then sends. A compaction that is vetoed or refused (a turn running) sends nothing. Beside it, the context
-fill.
+then sends. Beside it, the context fill.
+
+Settings → *auto compact* does the same without the toggle, for approve answers only (0.9.0):
+
+- `off` (default) — nothing changes.
+- `on approve` — an answer whose option is `approve` (including `approve, reject ADR-NNN`) compacts first,
+  then is sent. `revise`, `fix …`, `abort` and `merged` never compact, and the ship gate never does —
+  there is no next phase.
+- `past compact at` — the same, but only when the context is at or past *compact at*.
+
+Pressed or typed, it works the same. A typed approve is held for the seconds compaction takes — the
+prompt says `compacting first — your reply follows` — and then sent by the mod as your own message;
+the round is recorded once. It is held only when no turn is running and no reply is already on its way;
+mid-turn the engine queues it as usual. While a compaction runs, another typed gate reply is not sent:
+it goes back in the prompt box (`still compacting — your reply is back in the box`), so a later
+`revise` can never overtake the held `approve`.
+
+A reply is never lost. A compaction that is vetoed or refused (a turn running) still sends, with a
+toast `not compacted — sent as is (<why>)`. If the send itself fails, the reply goes back in the box
+(`not sent — your reply is back in the box`). One case loses it: the mod reloading while a typed
+approve is held; type it again.
 
 Settings → *compact mode*: `button` (default), `suggest` (dim until the context is past *compact at*,
-60–90%, default 70), `never`.
+60–90%, default 70), `never`. `never` hides the gate page's compact buttons and turns auto compact off;
+it does not hide the context ring.
+
+### The context ring
+
+How full the context is, on every header: `○` under 13%, `◔` under 38%, `◑` under 63%, `◕` under 88%,
+`●` above, with the percent beside it (`◔ 30%`), narrow mode included. It sits before `history` on the
+REQ strip, and before `resume` / `⤢` on the one-row band. It turns amber at or past *compact at*. It shows
+whenever the engine reports a percent; the percent is asked at most every 5 seconds, and drops at once
+after a compaction.
+
+Pressing it compacts now — with the REQ's instructions when a REQ is focused (else the one shown), a bare
+compaction with none. Mid-turn it does nothing but say `Claude is working — compact when the turn ends`;
+a skipped or refused compaction says `not compacted (<why>)`. Pressing the ring is always your choice, so
+`compact mode: never` leaves it in place.
+
+### Agent numbers
+
+Each agent under **SO FAR** is numbered `#1`, `#2` … by its place in the
+engine's own agent list, asked at most every 2 seconds. Numbers are worked out when drawing, so when an
+earlier agent leaves the list, the later ones move up, as the engine's do. An agent no longer in the
+list keeps the last number it was drawn with, dimmed — so a dimmed `#1` and a live `#1` can show
+together. If the list cannot be read, no numbers show.
+
+STATUS: needs verification — the engine's types state no order for its agent list; whether it matches
+the list under the prompt is checked live, not by the tests.
 
 ### Narrow
 
@@ -186,8 +231,8 @@ engine presses one from an empty prompt. The keys are `KEYS` and `OPTION_KEYS` i
 ### Settings
 
 Per user, per machine (`$.store`), never in the vault: the editor link template
-(`vscode://file/{path}:{line}:{col}`, Cursor, Rider, `file://`, or your own), compact mode and compact at,
-narrow below, open on session start, gate cards, show all unshipped, and buttons that forget this vault's
+(`vscode://file/{path}:{line}:{col}`, Cursor, Rider, `file://`, or your own), compact mode, compact at and
+auto compact (`off`, `on approve`, `past compact at`), narrow below, open on session start, gate cards, show all unshipped, and buttons that forget this vault's
 trail and its viewed marks — each a row of `[choices]`, the current one in the accent. History's filter
 sits on the History view. `/flight band` hides or shows the whole flightdeck.
 

@@ -51,7 +51,7 @@ import {
   sumFuel, summaryGaps, tiersOf, type PlanRow, type TaskDoc,
 } from './evidence'
 import {
-  ID_SRC, bar, buildReq, clip, clock, describeTool, idOf, isActive, isLanded, kindOf, markSpans, parseDispatch, parseGateCard, pulse,
+  ID_SRC, autoCompactApplies, bar, buildReq, clip, clock, describeTool, idOf, isActive, isLanded, kindOf, markSpans, parseDispatch, parseGateCard, pulse, ringGlyph,
   spinFrame, splitFolder, tokens, typicalCost, type PipelineState,
 } from './model'
 import {
@@ -69,7 +69,7 @@ const focusA = atom({ plugin: 'adlc-flightdeck', key: 'focus' } as const, null a
 const viewA = atom({ plugin: 'adlc-flightdeck', key: 'view' } as const, { req: null, tab: 1, sub: { kind: 'page' }, home: true } as FlightView)
 const itemsA = atom({ plugin: 'adlc-flightdeck', key: 'items' } as const, [] as FlightItem[])
 const trailA = atom({ plugin: 'adlc-flightdeck', key: 'trail' } as const, {} as FlightTrail)
-const DEFAULTS: FlightSettings = { openOnStart: false, band: true, cards: true, narrowAt: 84, showAll: false, history: 'all', editorUri: EDITOR_PRESETS[0]?.value ?? 'vscode://file/{path}:{line}:{col}', compact: 'button', compactAt: 70 }
+const DEFAULTS: FlightSettings = { openOnStart: false, band: true, cards: true, narrowAt: 84, showAll: false, history: 'all', editorUri: EDITOR_PRESETS[0]?.value ?? 'vscode://file/{path}:{line}:{col}', compact: 'button', compactAt: 70, autoCompact: 'off' }
 const settingsA = atom({ plugin: 'adlc-flightdeck', key: 'settings' } as const, DEFAULTS)
 const filtersA = atom({ plugin: 'adlc-flightdeck', key: 'filters' } as const, { author: null, text: '' } as { author: string | null; text: string })
 const gitA = atom({ plugin: 'adlc-flightdeck', key: 'git' } as const, {} as Record<string, FlightGit>)
@@ -95,6 +95,7 @@ const MARKER_MAX = 4096
 const NARROW_AT = 84 // default: band body columns below which chips shrink and the tab row becomes the list home
 const STATUS_AT = 110 // band body columns from which each phase tab carries its one-line status
 const USAGE_EVERY_MS = 5000
+const AGENTS_EVERY_MS = 2000 // how long one `$.agent.list()` answer numbers the lanes
 /**
  * Keys the pane binds. `Button.hotkey` takes one digit or one lowercase letter and refuses
  * anything else (claude-code types, ButtonProps.hotkey), so the plan's `[` / `]` and its
@@ -145,6 +146,11 @@ const gitBusy = new Set<string>()
 const mermaidCache = new Map<string, string | null>()
 let busy = false // a main-loop turn is running: set on turn.start, cleared on its turn.complete ($.session.compact rejects mid-turn)
 let usageSeen: { at: number; percent: number | null } = { at: 0, percent: null }
+// Agent numbers (#n): the place in `$.agent.list()`, worked out at draw. Never stored in state; a lane the list
+// dropped keeps the last number it was drawn with, dimmed. Self-contained: agentPlaces + laneNo + two call sites.
+let agentsSeen: { at: number; places: Map<string, number> | null } = { at: 0, places: null }
+const lastPlace = new Map<string, number>() // lane id → the number it was last drawn with
+let compacting = false // a typed approve is held while compaction runs; its reply follows (prompt.submit)
 
 type Dollar = Parameters<Hook<'session.start'>>[0]
 
@@ -596,8 +602,62 @@ async function compactNow($: Dollar, r: FlightReq): Promise<{ ok: boolean; why?:
   try {
     const res = await $.session.compact({ instructions: compactBrief(r, stateOf.get(r.id), ask, folderOf.get(r.id), vault) })
     if ('skip' in res && res.skip) return { ok: false, why: res.skip }
+    usageSeen = { at: 0, percent: null } // the window just shrank: ask again on the next draw
     return { ok: true }
   } catch (err) { return { ok: false, why: String(err instanceof Error ? err.message : err) } }
+}
+
+/** Puts a reply back in the prompt box, after the drop that took it has settled. */
+function refill($: Dollar, text: string) {
+  $.clock.after(0, () => { void $.prompt.fill({ text, mode: 'replace' }).catch(() => {}) })
+}
+
+/**
+ * The second half of a held typed approve: compact, then send it as the user. A failed
+ * compaction still sends; a failed send puts the text back. Never loses the reply.
+ */
+async function compactThenSend($: Dollar, r: FlightReq, text: string, options: FlightOption[]) {
+  try {
+    const res = await compactNow($, r)
+    if (!res.ok) $.ui.toast(`not compacted — sent as is${res.why ? ` (${clip(res.why, 60)})` : ''}`)
+    if (!(await sendReply($, r, text, options))) throw new Error('not sent')
+  } catch {
+    await $.prompt.fill({ text, mode: 'replace' }).catch(() => {})
+    $.ui.toast('not sent — your reply is back in the box')
+  } finally {
+    compacting = false
+  }
+}
+
+type Els = ReturnType<Dollar['ui']['resolve']>
+
+/** The header's context ring, `◔ 42%`: amber at or above *compact at*; a plain button, no key. Nothing while the percent is unknown. */
+function ringOf($: Dollar, els: Els, pct: number | null, compactAt: number, r: FlightReq | null) {
+  if (pct === null) return null
+  const { Button, Text } = els
+  return (
+    <Button key="ring" plain onPress={() => void pressRing($, r).catch(() => {})}>
+      <Text color={pct >= compactAt ? C.amber : undefined}>{`${ringGlyph(pct)} ${Math.round(pct)}%`}</Text>
+    </Button>
+  )
+}
+
+/**
+ * The header's context ring, pressed: compact now, with the REQ's brief when one is flown, a bare compact otherwise.
+ * Always the person's own choice, so `compact: never` does not stop it. Mid-turn the engine would reject it: say so.
+ */
+async function pressRing($: Dollar, r: FlightReq | null) {
+  if (busy) { $.ui.toast('Claude is working — compact when the turn ends'); return }
+  let res: { ok: boolean; why?: string }
+  if (r) res = await compactNow($, r)
+  else {
+    try {
+      const out = await $.session.compact()
+      res = 'skip' in out && out.skip ? { ok: false, why: out.skip } : { ok: true }
+      if (res.ok) usageSeen = { at: 0, percent: null }
+    } catch (err) { res = { ok: false, why: String(err instanceof Error ? err.message : err) } }
+  }
+  if (!res.ok) $.ui.toast(`not compacted${res.why ? ` (${clip(res.why, 60)})` : ''}`)
 }
 
 /** The options of a REQ's open gate, as the pane would draw them. */
@@ -702,7 +762,28 @@ export const register: Register = on => {
     if (!e.command && !own) {
       const focus = await read($, focusA)
       const r = deck.reqs.find(x => x.id === named && x.waiting) ?? deck.reqs.find(x => x.id === focus && x.waiting)
-      if (r) await recordRound($, r, e.text, await gateOptions($, r), /\[flightdeck\]/.test(e.text) ? 'pane' : 'typed')
+      if (r) {
+        // A reply held for compaction is still waiting: nothing typed may overtake it. Put it back.
+        if (compacting) {
+          refill($, e.text)
+          return { drop: 'still compacting — your reply is back in the box' }
+        }
+        const options = await gateOptions($, r)
+        // Auto compact: hold a typed approve, compact, then send it ourselves. Only when the session
+        // is idle (mid-turn the engine queues it) and no reply is pending. No round recorded here:
+        // sendReply records the one round when it resends.
+        if (!busy && !(await read($, pendingA))) {
+          const settings = { ...DEFAULTS, ...(await read($, settingsA)) }
+          const pct = settings.autoCompact === 'past' ? await contextPercent($) : null
+          if (autoCompactApplies(settings, pct, e.text, r.phase)) {
+            compacting = true
+            const text = e.text
+            $.clock.after(0, () => { void compactThenSend($, r, text, options) })
+            return { drop: 'compacting first — your reply follows' }
+          }
+        }
+        await recordRound($, r, e.text, options, /\[flightdeck\]/.test(e.text) ? 'pane' : 'typed')
+      }
     }
     return next(e)
   }).catch(($, e, next) => next(e)) // an observer: a failure never touches the prompt
@@ -834,7 +915,10 @@ export const register: Register = on => {
     if (!r) { if (below) return below; const { Box: Empty } = $.ui.resolve(e); return <Empty /> } // nothing beneath, nothing in flight: an empty band
     const lanes = await read($, lanesA)
     const now = (await read($, nowA)) || (await $.clock.now())
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const els = $.ui.resolve(e)
+    const { Box, Text, Button } = els
+    const settings = { ...DEFAULTS, ...(await read($, settingsA)) }
+    const pct = await contextPercent($) // the ring: every height, not only at a gate
     const busyLanes = lanes.filter(l => l.endedAt === null && (l.req === r.id || l.req === null)).length
     const done = r.tasks.filter(t => isLanded(t.status)).length
     const atGate = flyingReqs.filter(x => x.waiting).length
@@ -861,6 +945,8 @@ export const register: Register = on => {
           </Button>
         </Box>
         <Box flexDirection="row" flexShrink={0}>
+          {pct !== null ? <Text> </Text> : null}
+          {ringOf($, els, pct, settings.compactAt, r)}
           {r.waiting && !seen && !e.props.isWorking && <Text> </Text>}
           {r.waiting && !seen && !e.props.isWorking && (
             <Button key={`resume-${r.id}`} plain label="resume"
@@ -1012,10 +1098,37 @@ export const register: Register = on => {
 
 // ---------- the cockpit: the band, opened ----------
 // One tree in the AbovePrompt band, laid out as the flightdeck mockup draws it:
-//   level 1   ✈ the in-flight REQs as chips · history · settings · ⤢ · ×
+//   level 1   ✈ the in-flight REQs as chips · the context ring · history · settings · ⤢ · ×
 //   level 2   the five phase tabs, a one-line status under each from 110 columns, a rule (narrow: the list home)
 //   the page  GATE first — its state, and at an open gate the summary, the options, the consequence of the
 //             recommended one and compact first — then the phase's evidence, one titled block each, a blank row apart.
+async function agentPlaces($: Dollar): Promise<Map<string, number> | null> {
+  const now = await $.clock.now()
+  if (now - agentsSeen.at < AGENTS_EVERY_MS && agentsSeen.at > 0) return agentsSeen.places
+  agentsSeen = { at: now, places: agentsSeen.places }
+  try {
+    const list = await $.agent.list()
+    agentsSeen = { at: now, places: new Map(list.map((a, i) => [a.id, i + 1])) }
+  } catch {
+    agentsSeen = { at: now, places: null } // no list: rows go unnumbered
+  }
+  return agentsSeen.places
+}
+
+/** A lane's number: its place in the list, else the last one it was drawn with (dropped). Null when the list failed. */
+function laneNo(places: Map<string, number> | null, id: string): { n: number; dropped: boolean } | null {
+  if (!places) return null
+  const n = places.get(id)
+  if (n !== undefined) {
+    lastPlace.delete(id) // re-set below so the map stays in drawn order and the oldest goes first
+    lastPlace.set(id, n)
+    if (lastPlace.size > 64) lastPlace.delete(lastPlace.keys().next().value as string)
+    return { n, dropped: false }
+  }
+  const last = lastPlace.get(id)
+  return last === undefined ? null : { n: last, dropped: true }
+}
+
 // Called by the band's render hook when the height is open or max.
 
 /** The mockup's palette, as theme keys so light and dark themes both hold. */
@@ -1075,7 +1188,14 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
   }
   // The gate's options take their letters (OPTION_KEYS) only while the open gate's page is on screen.
   const gateOnScreen = !!live?.waiting && view.sub.kind === 'page' && (view.tab === live.phase) && !(narrow && view.home !== false)
-  const usagePct = settings.compact !== 'never' && live?.waiting ? await contextPercent($) : null
+  // Asked on every draw (cached 5 s): the header's ring shows it at any height. The gate page still hides its own line on `never`.
+  const usagePct = await contextPercent($)
+  const places = await agentPlaces($) // read, never written: lane numbers are worked out here
+  const numOf = (id: string) => {
+    const no = laneNo(places, id)
+    return no ? <Text dimColor={no.dropped}>#{no.n} </Text> : null
+  }
+  const ringReq = deck.reqs.find(r => r.id === focus) ?? live
   const showHome = narrow && view.home !== false && view.sub.kind === 'page' && typeof view.tab === 'number'
   const verification = folder ? await cached($, `${folder}/verification.md`) : null
   const allFindings = findingsOf(verification).sort((a, b) => severityRank(a.severity) - severityRank(b.severity))
@@ -1175,7 +1295,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     // A chip never shrinks (a squeezed chip wraps its label down the rows): as many as fit the width, the selected one
     // always among them, then `+n more` — which opens the whole list.
     const label = (s: FlightStripEntry) => (narrow ? shortId(s.id) : `${s.id} ${s.here ? (s.ended ? 'ship' : s.phaseName) : 'not on this machine'}`)
-    const room = W - 2 - (narrow ? 14 : 30) - (narrow ? 7 : 12) // ✈, the right-hand controls, the `+n more ▾` chip
+    const room = W - 2 - (narrow ? 14 : 30) - (usagePct !== null ? 8 : 0) - (narrow ? 7 : 12) // ✈, the right-hand controls (the ring too), the `+n more ▾` chip
     const widthOf = (s: FlightStripEntry) => label(s).length + 4
     const sel = Math.max(0, all.findIndex(s => s.id === reqId))
     let start = 0
@@ -1219,6 +1339,8 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
           {all.length === 0 ? dim('nothing in flight') : null}
         </Box>
         <Box flexDirection="row" flexShrink={0}>
+          {ringOf($, els, usagePct, settings.compactAt, ringReq)}
+          {usagePct !== null ? faint(' · ') : null}
           <Button key="tab-history" plain label={narrow ? 'h' : 'history'} dimColor={!navOn('history')} onPress={nav('history')} />
           {faint(' · ')}
           <Button key="tab-settings" plain label={narrow ? 's' : 'settings'} dimColor={!navOn('settings')} onPress={nav('settings')} />
@@ -1371,10 +1493,11 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
       if (o.needsArg) { void $.prompt.fill({ text: `${optionHead(o.label)} `, mode: 'replace' }).catch(() => {}); return }
       const text = replyFor(o, null, c.n, viewedArg)
       void (async () => {
-        if (compactFirst && mode !== 'never') {
+        // The toggle, or auto compact on an approve. A failed compaction never holds the reply back.
+        if ((compactFirst && mode !== 'never') || autoCompactApplies(settings, usagePct, o.label, c.n)) {
           const res = await compactNow($, live)
-          if (!res.ok) { $.ui.toast(`not compacted — nothing sent${res.why ? ` (${clip(res.why, 60)})` : ''}`); return }
-          await update($, layoutA, l => ({ ...l, compactFirst: false })).catch(() => {}) // the reply goes out regardless
+          if (!res.ok) $.ui.toast(`not compacted — sent as is${res.why ? ` (${clip(res.why, 60)})` : ''}`)
+          else if (compactFirst) await update($, layoutA, l => ({ ...l, compactFirst: false })).catch(() => {})
         }
         await sendReply($, live, text, options)
       })().catch(() => {})
@@ -1458,7 +1581,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     if (!flying.length && !(c.n === 3 && tasks.length)) return null
     return Sec('SO FAR', c.n === 3 && tasks.length ? `${done}/${tasks.length} tasks` : null,
       ...flying.map(l => (
-        <Text wrap="truncate"><Text color={C.link}>{spinFrame(now)}</Text> {l.agent}{l.task ? ` · ${l.task}` : ''} <Text color={C.faint}>· {clock(now - l.startedAt)} ·</Text> {l.doing}</Text>
+        <Text wrap="truncate"><Text color={C.link}>{spinFrame(now)}</Text> {numOf(l.id)}{l.agent}{l.task ? ` · ${l.task}` : ''} <Text color={C.faint}>· {clock(now - l.startedAt)} ·</Text> {l.doing}</Text>
       )),
       flying.length ? null : dim('no agent flying right now'))
   }
@@ -1729,9 +1852,9 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
   }
 
   // ----- one thing opened from a phase page: a back control, then the thing -----
-  const header = (title: string, right: unknown = null) => (
+  const header = (title: string, right: unknown = null, lead: unknown = null) => (
     <Box flexDirection="row" justifyContent="space-between">
-      <Box flexDirection="row" flexShrink={1}><Button key="back" plain label="‹ back" onPress={back} /><Text>  </Text><Text bold color={C.v} wrap="truncate">{title}</Text></Box>
+      <Box flexDirection="row" flexShrink={1}><Button key="back" plain label="‹ back" onPress={back} /><Text>  </Text>{lead as never}<Text bold color={C.v} wrap="truncate">{title}</Text></Box>
       <Box flexDirection="row" flexShrink={0}>{right as never}</Box>
     </Box>
   )
@@ -1803,16 +1926,16 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     const room = Math.max(5, e.props.maxRows - 8)
     return (
       <Box flexDirection="column">
-        {header(l?.agent ?? r?.agent ?? id)}
+        {header(l?.agent ?? r?.agent ?? id, null, numOf(id))}
         <Box flexDirection="column" paddingLeft={2}>
           {l ? faint(`${l.label} · ${clock((l.endedAt ?? now) - l.startedAt)}${l.tokens ? ` · ${tokens(l.tokens)} fresh · ${tokens(l.wrote)} wrote` : ''}`) : null}
           {r && !l ? faint(`${r.task ?? ''} · ${clock(r.endedAt - r.startedAt)} · ${tokens(r.tokens)} fresh · ${r.isFailed ? 'failed' : 'landed'} ${dateOf(r.endedAt)} ${timeOf(r.endedAt)}`) : null}
           {r ? <Box marginTop={1}><Text wrap="wrap">{r.verdict || '(no last line)'}</Text></Box> : null}
-          {l ? l.trail.slice(-room).reverse().map(h => (
+          {l ? l.trail.slice(-room).reverse().map(hit => ( // not `h`: that is the JSX factory, and shadowing it breaks the row
             <Box flexDirection="row">
-              <Cell w={8}>{faint(`-${clock(now - h.t)}`)}</Cell>
-              <Text color={h.err ? TONE.err : TONE[h.k]}>{h.err ? '✗ ' : '▆ '}</Text>
-              <Text wrap="truncate">{h.d}</Text>
+              <Cell w={8}>{faint(`-${clock(now - hit.t)}`)}</Cell>
+              <Text color={hit.err ? TONE.err : TONE[hit.k]}>{hit.err ? '✗ ' : '▆ '}</Text>
+              <Text wrap="truncate">{hit.d}</Text>
             </Box>
           )) : null}
           {!l && !r ? dim('That agent is not on this machine’s trail.') : null}
@@ -1892,12 +2015,12 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
         <Box flexDirection="row" flexGrow={1}>{control as never}{hint ? <Text color={C.faint} wrap="truncate">  {hint}</Text> : null}</Box>
       </Box>
     )
-    const seg = <T extends string,>(key: string, values: readonly T[], cur: T, set: (v: T) => void) => (
+    const seg = <T extends string,>(key: string, values: readonly T[], cur: T, set: (v: T) => void, labels?: Readonly<Record<T, string>>) => (
       <Box flexDirection="row">
         {values.map(v => (
           <Box marginRight={1}>
             <Button key={`${key}-${v}`} plain onPress={() => set(v)}>
-              <Text color={C.faint}>[</Text><Text color={v === cur ? C.v : undefined}>{v}</Text><Text color={C.faint}>]</Text>
+              <Text color={C.faint}>[</Text><Text color={v === cur ? C.v : undefined}>{labels?.[v] ?? v}</Text><Text color={C.faint}>]</Text>
             </Button>
           </Box>
         ))}
@@ -1919,6 +2042,8 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
           onSubmit={(v: string) => { if (v.trim()) void setSettings($, s => ({ ...s, editorUri: v.trim() })) }} />, '{path} {line} {col}') : null,
         row('compact mode', seg('set-compact', ['button', 'suggest', 'never'] as const, settings.compact, v => void setSettings($, s => ({ ...s, compact: v })))),
         row('compact at', seg('set-compact-at', ['60', '70', '80', '90'] as const, String(settings.compactAt) as '60', v => void setSettings($, s => ({ ...s, compactAt: Number(v) }))), '% context'),
+        row('auto compact', seg('set-auto-compact', ['off', 'approve', 'past'] as const, settings.autoCompact, v => void setSettings($, s => ({ ...s, autoCompact: v })),
+          { off: 'off', approve: 'on approve', past: 'past compact at' }), 'an approve compacts first'),
         row('narrow below', seg('set-narrow', ['72', '84', '96', '110'] as const, String(settings.narrowAt || NARROW_AT) as '84', v => void setSettings($, s => ({ ...s, narrowAt: Number(v) }))), 'cols of flightdeck width'),
         row('open on start', onOff('set-open', settings.openOnStart, v => void setSettings($, s => ({ ...s, openOnStart: v }))), 'when a REQ is in flight'),
         row('gate cards', onOff('set-cards', settings.cards, v => void setSettings($, s => ({ ...s, cards: v }))), 'gate text drawn as a card'),

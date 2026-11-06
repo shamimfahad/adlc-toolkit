@@ -107,6 +107,8 @@ export type FlightSettings = {
   compact: 'button' | 'suggest' | 'never'
   /** Context-window percent from which `suggest` highlights the compact buttons. */
   compactAt: number
+  /** An approve answer at a gate compacts first: never, on every approve, or only once the context is past `compactAt`. `compact: 'never'` turns it off too. */
+  autoCompact: 'off' | 'approve' | 'past'
 }
 
 /** A gate round the mod saw: what was chosen, what was typed. */

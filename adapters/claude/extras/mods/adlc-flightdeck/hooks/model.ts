@@ -1,5 +1,5 @@
 // Pure helpers: no `$`, no state. Everything here is unit-tested.
-import type { FlightFuel, FlightHit, FlightKind, FlightPhase, FlightReq } from '../types'
+import type { FlightFuel, FlightHit, FlightKind, FlightPhase, FlightReq, FlightSettings } from '../types'
 import type { VaultPhase } from './vault'
 
 export const REQ_PHASES = ['spec', 'architect', 'implement', 'review', 'ship']
@@ -234,6 +234,36 @@ export function typicalCost(fuel: FlightFuel, phase: string, exclude: string): {
 const SPIN = '◐◓◑◒'
 export const spinFrame = (now: number) => SPIN[Math.floor(now / 250) % 4] ?? '◐'
 export const pulse = (now: number) => Math.floor(now / 600) % 2 === 0
+
+// ---------- compaction: the context ring and the auto-compact rule ----------
+
+/** The context ring for a window percent: ○ 0–12 · ◔ 13–37 · ◑ 38–62 · ◕ 63–87 · ● 88+. */
+export function ringGlyph(pct: number): string {
+  return pct < 13 ? '○' : pct < 38 ? '◔' : pct < 63 ? '◑' : pct < 88 ? '◕' : '●'
+}
+
+/** The reply's first word is `approve` — `approve`, `approve, reject ADR-002`, `approve — looks right`.
+ *  Not `approved`, not `revise`, `fix …`, `abort` or `merged`. Placeholders (`<…>`) and case ignored. */
+export function isApproveLike(label: string): boolean {
+  const head = label.replace(/<[^>]*>/g, '').trim().toLowerCase()
+  return head.startsWith('approve') && !/[a-z0-9]/.test(head.charAt('approve'.length))
+}
+
+/** The ship gate: nothing follows it, so nothing is worth compacting for. */
+const LAST_PHASE = 5
+
+/** Whether an answer at a gate compacts before it is sent. `past` needs a known percent at or above `compactAt`. */
+export function autoCompactApplies(
+  settings: Pick<FlightSettings, 'compact' | 'compactAt' | 'autoCompact'>,
+  pct: number | null,
+  label: string,
+  phase: number,
+): boolean {
+  if (settings.compact === 'never' || settings.autoCompact === 'off') return false
+  if (phase >= LAST_PHASE || !isApproveLike(label)) return false
+  if (settings.autoCompact === 'past') return pct !== null && pct >= settings.compactAt
+  return true
+}
 
 export function taskGlyphs(tasks: { id: string; status: string }[], running: Set<string>, now: number): string {
   return tasks

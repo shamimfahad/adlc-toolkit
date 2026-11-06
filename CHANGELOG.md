@@ -4,6 +4,21 @@ All notable changes to the ADLC toolkit. The toolkit version lives in `core/mani
 
 Labels used below: **[breaking]** needs action on update, **[protocol]** changes how a skill behaves, **[vault-format]** changes on-disk vault layout, **[tooling]** install/build only.
 
+## [Unreleased]
+
+### Compact on approve, a context ring, agent numbers (`adlc-flightdeck` v0.9.0) **[protocol]** **[tooling]**
+
+Long `/proceed` runs filled the context and the compact button was easy to forget, so the engine's own auto-compact hit mid-phase. ADR-002 lets the cockpit compact on its own — only when you opt in, only after an approve, and never at the cost of your answer.
+
+- **Settings → _auto compact_** `off` (default) · `on approve` · `past compact at`. An `approve`-like answer (`approve, reject ADR-NNN` included) compacts first, then is sent; `revise`, `fix …`, `abort`, `merged` and the ship gate never compact. Pressed or typed alike: a typed approve is held (`compacting first — your reply follows`), then sent by the mod as your own message, one round recorded. Not held mid-turn or with a reply already pending; while compacting, another typed gate reply goes back in the prompt box so it cannot overtake the approve. `compact mode: never` turns it off.
+- **A failed compaction still sends** — on the `compact first` toggle too, with `not compacted — sent as is (<why>)`. Before, a vetoed or refused compaction sent nothing. If the send fails, the reply is filled back into the prompt box.
+- **Context ring** (`○ ◔ ◑ ◕ ●` + percent) before `history` on the REQ strip and before `resume` / `⤢` on the one-row band; amber at or past _compact at_; press to compact (bare compaction with no REQ focused; a toast mid-turn). Shown even with `compact mode: never`. The percent is now asked on every draw (5 s cache) and resets after a compaction.
+- **Agent numbers** `#1 #2 …` under SO FAR, from the engine's `$.agent.list()` order (2 s cache); an agent that left keeps its last number, dimmed. The list's order against the one under the prompt is checked live, not by tests.
+- Fix: the unreachable lane view crashed on any lane with a trail (`.map(h => …)` shadowed the JSX factory `h`).
+- **`core/GATE-PROTOCOL.md` → _Compaction at a gate_**: "never on its own" becomes "with _auto compact_ on, it compacts after you approve, then sends your answer." ADR-002.
+- Mod 0.8.1 → 0.9.0; README _Compact at a gate_, _The context ring_, _Agent numbers_, _Settings_. Mod tests: 87 → 113. Adapters regenerated.
+- **On update:** update the mod (`/plugin` → adlc-mods → update). Nothing changes until you turn _auto compact_ on.
+
 ## [1.13.0]
 
 ### Where the toolkit lives, and where to get it **[vault-format]** **[tooling]**

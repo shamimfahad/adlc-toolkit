@@ -3,7 +3,8 @@ import { describe, expect, mock, test, type TestBody } from 'claude-code/testing
 
 import type { FlightDeck, FlightGateAsk, FlightGit, FlightItem, FlightLane, FlightTrail } from '../types'
 import {
-  buildReq, describeTool, eta, idOf, markSpans, parseDispatch, parseGateCard, runs, splitFolder, taskGlyphs, timeline,
+  autoCompactApplies, buildReq, describeTool, eta, idOf, isApproveLike, markSpans, parseDispatch, parseGateCard, ringGlyph, runs, splitFolder, taskGlyphs,
+  timeline,
 } from '../hooks/model'
 import {
   filterItems, firstLine, hotFor, hotTail, notesFor, optionsFromDecision, parseHot, parseMarker, parseRecord, partsOf, phaseOf,
@@ -100,6 +101,35 @@ describe('model', () => {
 
   test('gate card: prose that only mentions a gate is left alone', () => {
     expect(parseGateCard('We are at GATE 2/5 now, see above.')).toBe(null)
+  })
+
+  test('context ring: one glyph per bucket, edges included', () => {
+    const at = (xs: number[]) => xs.map(ringGlyph).join('')
+    expect(at([0, 12, 12.5])).toBe('○○○')
+    expect(at([13, 25, 37])).toBe('◔◔◔')
+    expect(at([38, 50, 62])).toBe('◑◑◑')
+    expect(at([63, 75, 87])).toBe('◕◕◕')
+    expect(at([88, 99, 100])).toBe('●●●')
+  })
+
+  test('approve-like: the first word is approve, nothing else is', () => {
+    for (const l of ['approve', 'Approve', '  approve ', 'approve, reject ADR-002', 'approve — looks right', 'approve\n\n[flightdeck] pane']) expect(isApproveLike(l)).toBe(true)
+    for (const l of ['approved', 'approves', 'revise <what>', 'fix all', 'fix <ids|all-major>', 'abort', 'merged', '', 'not approve']) expect(isApproveLike(l)).toBe(false)
+  })
+
+  test('auto compact: off, never, the ship gate and non-approve answers never compact; past needs a known percent at the threshold', () => {
+    const s = (autoCompact: 'off' | 'approve' | 'past', compact: 'button' | 'suggest' | 'never' = 'button') => ({ compact, compactAt: 70, autoCompact })
+    expect(autoCompactApplies(s('off'), 95, 'approve', 2)).toBe(false)
+    expect(autoCompactApplies(s('approve', 'never'), 95, 'approve', 2)).toBe(false)
+    expect(autoCompactApplies(s('past', 'never'), 95, 'approve', 2)).toBe(false)
+    expect(autoCompactApplies(s('approve'), 95, 'approve', 5)).toBe(false) // ship: no next phase
+    expect(autoCompactApplies(s('approve'), 95, 'revise keep 3 retries', 2)).toBe(false)
+    expect(autoCompactApplies(s('approve'), 95, 'fix all', 4)).toBe(false)
+    expect(autoCompactApplies(s('approve'), null, 'approve', 2)).toBe(true) // on approve: the percent does not matter
+    expect(autoCompactApplies(s('approve', 'suggest'), 10, 'approve, reject ADR-002', 1)).toBe(true)
+    expect(autoCompactApplies(s('past'), 70, 'approve', 3)).toBe(true) // at the threshold counts
+    expect(autoCompactApplies(s('past'), 69, 'approve', 3)).toBe(false)
+    expect(autoCompactApplies(s('past'), null, 'approve', 3)).toBe(false) // unknown percent: not past anything
   })
 
   test('marker spans carry tone', () => {
@@ -288,7 +318,7 @@ const trail: FlightTrail = {
     },
   },
 }
-const settings = { openOnStart: false, band: true, cards: true, narrowAt: 84, showAll: false, history: 'all' as const, editorUri: 'vscode://file/{path}:{line}:{col}', compact: 'button' as const, compactAt: 70 }
+const settings = { openOnStart: false, band: true, cards: true, narrowAt: 84, showAll: false, history: 'all' as const, editorUri: 'vscode://file/{path}:{line}:{col}', compact: 'button' as const, compactAt: 70, autoCompact: 'off' as const }
 const mountPane = ($: Parameters<TestBody>[0], surface: 'terminal' | 'desktop') =>
   $.ui.mount({ plugin: 'adlc-flightdeck', surface, component: 'AbovePrompt', props: PANE_PROPS, viewport: { columns: 124, rows: 800 } })
 
@@ -317,6 +347,69 @@ describe('cockpit pane', () => {
       expect(await ui.find({ type: 'Text', text: /BUG-016/ })).toBeUndefined()
       await ui.unmount()
     }
+  })
+
+  // Agent numbers: the place in $.agent.list(), worked out at draw (2 s cache), so each look moves the clock past it.
+  describe('agent numbers', () => {
+    const laneA: FlightLane = { ...lane, id: 'num-a', agent: 'alpha-agent', task: 'TASK-001' }
+    const laneB: FlightLane = { ...lane, id: 'num-b', agent: 'beta-agent', task: 'TASK-002' }
+    const flying = (on: On, clock: () => number, list: () => { id: string }[], sub: unknown = { kind: 'page' }) => {
+      on('clock.now', async () => ({ value: clock() }))
+      on('agent.list', async () => ({ value: list() }) as never)
+      state(on, 'deck', vaultDeck)
+      state(on, 'focus', 'REQ-042')
+      state(on, 'lanes', [laneA, laneB])
+      state(on, 'items', items)
+      state(on, 'trail', trail)
+      state(on, 'settings', settings)
+      state(on, 'layout', { height: 'max', narrow: false })
+      state(on, 'view', { req: 'REQ-042', tab: 3, sub })
+    }
+    const num = async (ui: Awaited<ReturnType<typeof mountPane>>, n: number) => ui.find({ type: 'Text', text: new RegExp(`^#${n} $`) })
+
+    test('SO FAR numbers each lane by its place in the list', async ($, on) => {
+      flying(on, () => 100_000, () => [{ id: 'num-b' }, { id: 'num-a' }])
+      const ui = await mountPane($, 'terminal')
+      expect(await ui.find({ type: 'Text', text: /#1 beta-agent · TASK-002/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /#2 alpha-agent · TASK-001/ })).toBeDefined()
+      expect((await num(ui, 1))?.props.dimColor).toBeFalsy()
+      await ui.unmount()
+    })
+
+    test('an earlier agent leaves the list: the later one renumbers, the dropped one keeps its number, dimmed', async ($, on) => {
+      let t = 200_000
+      let list = [{ id: 'num-a' }, { id: 'num-b' }]
+      flying(on, () => t, () => list)
+      const first = await mountPane($, 'terminal')
+      expect(await first.find({ type: 'Text', text: /#1 alpha-agent/ })).toBeDefined()
+      expect(await first.find({ type: 'Text', text: /#2 beta-agent/ })).toBeDefined()
+      await first.unmount()
+      list = [{ id: 'num-b' }]
+      t += 3000 // past the 2 s cache
+      const ui = await mountPane($, 'terminal')
+      expect(await ui.find({ type: 'Text', text: /#1 beta-agent/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /#1 alpha-agent/ })).toBeDefined() // the last number it was drawn with
+      expect(await ui.find({ type: 'Text', text: /#2 / })).toBeUndefined()
+      expect((await ui.findAll({ type: 'Text', text: /^#1 $/ })).map(t => !!t.props.dimColor).sort()).toEqual([false, true]) // only the dropped one dim
+      await ui.unmount()
+    })
+
+    test('the list throws: rows draw without numbers, nothing breaks', async ($, on) => {
+      flying(on, () => 300_000, () => { throw new Error('no list') })
+      const ui = await mountPane($, 'terminal')
+      expect(await ui.find({ type: 'Text', text: /^SO FAR$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /alpha-agent · TASK-001/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /#\d+ / })).toBeUndefined()
+      await ui.unmount()
+    })
+
+    test('the lane view header carries the number too', async ($, on) => {
+      flying(on, () => 400_000, () => [{ id: 'num-b' }, { id: 'num-a' }], { kind: 'lane', id: 'num-a' })
+      const ui = await mountPane($, 'terminal')
+      expect(await num(ui, 2)).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^alpha-agent$/ })).toBeDefined()
+      await ui.unmount()
+    })
   })
 
   test('a cleared phase: the decision, the rounds, on the tab and on the GATE line', async ($, on) => {
@@ -383,11 +476,39 @@ describe('cockpit pane', () => {
     state(on, 'view', { req: 'REQ-042', tab: 'settings', sub: { kind: 'page' } })
     const ui = await mountPane($, 'terminal')
     expect(await ui.find({ key: 'set-editor' })).toBeDefined()
-    for (const k of ['set-compact-button', 'set-compact-suggest', 'set-compact-never', 'set-compact-at-70', 'set-narrow-84', 'set-open-off', 'set-cards-on', 'set-show-all-off', 'set-forget', 'set-forget-viewed']) {
+    for (const k of ['set-compact-button', 'set-compact-suggest', 'set-compact-never', 'set-compact-at-70', 'set-auto-compact-off', 'set-auto-compact-approve', 'set-auto-compact-past', 'set-narrow-84', 'set-open-off', 'set-cards-on', 'set-show-all-off', 'set-forget', 'set-forget-viewed']) {
       expect(await ui.find({ key: k })).toBeDefined()
     }
     expect(await ui.find({ key: 'set-columns' })).toBeUndefined() // no pane, no pane width
     expect(await ui.find({ type: 'Text', text: /^KEYS$/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('settings: auto compact offers three choices, the current one in accent, and a press is kept in the store', async ($, on) => {
+    on('clock.now', async () => ({ value: 5000 }))
+    state(on, 'deck', vaultDeck)
+    state(on, 'focus', 'REQ-042')
+    state(on, 'items', items)
+    state(on, 'trail', {})
+    state(on, 'layout', { height: 'max', narrow: false })
+    state(on, 'view', { req: 'REQ-042', tab: 'settings', sub: { kind: 'page' } })
+    const stored: { key: string; value: unknown }[] = []
+    on('store.set', async ($, e, next) => { stored.push({ key: e.key, value: e.value }); return next(e) })
+    const ui = await mountPane($, 'terminal') // settings left to the real state: the defaults, then the press
+    // Each choice's label Text — the one between the faint brackets — and its colour.
+    const label = async (v: string) => {
+      const kids = ((await ui.find({ key: `set-auto-compact-${v}` }))?.children ?? []) as { type?: string; props?: { color?: unknown }; children?: unknown[] }[]
+      const t = kids.find(k => k.type === 'Text' && !(k.children ?? []).includes('['))
+      return { text: (t?.children ?? []).join(''), color: t?.props?.color }
+    }
+    expect(await label('off')).toEqual({ text: 'off', color: 'autoAccept' }) // the default
+    expect(await label('approve')).toEqual({ text: 'on approve', color: undefined })
+    expect(await label('past')).toEqual({ text: 'past compact at', color: undefined })
+    await ui.press({ key: 'set-auto-compact-approve' })
+    await settle(() => stored.some(x => x.key === 'settings'))
+    expect((stored.find(x => x.key === 'settings')?.value as { autoCompact?: string }).autoCompact).toBe('approve')
+    expect((await label('approve')).color).toBe('autoAccept')
+    expect((await label('off')).color).toBeUndefined()
     await ui.unmount()
   })
 })
@@ -578,11 +699,12 @@ describe('0.6.0', () => {
     expect((await look()).first).toBeUndefined()
   })
 
-  test('compact first, then an option: compacts, then sends; a skipped or rejected compact sends nothing', async ($, on) => {
+  test('compact first, then an option: compacts, then sends; a skipped or rejected compact still sends, with a toast', async ($, on) => {
     atGate(on, { layout: { height: 'max', narrow: false, compactFirst: true } })
     let answer: 'skip' | 'reject' | 'ok' = 'skip'
     let compacted = 0
     const sent: string[] = []
+    const toasts: string[] = []
     on('session.usage', async () => ({ value: { startedAt: 0, context: { window: 200_000, percent: 40 }, rateLimits: [] } }) as never)
     on('session.compact', async ($, e) => {
       if (answer === 'reject') throw new Error('turn running')
@@ -591,18 +713,179 @@ describe('0.6.0', () => {
       expect(e.instructions ?? '').toMatch(/ADLC gate compaction\. Resuming REQ-042/)
       return { messages: [{ role: 'user', text: 'summary', toolUses: [] }] }
     })
-    on('ui.toast', async () => ({ value: undefined }) as never)
+    on('ui.toast', async ($, e) => { toasts.push(e.text); return { value: undefined } as never })
     on('prompt.submit', async ($, e) => { sent.push(e.text); return { text: e.text } })
+    on('turn.complete', async () => ({ text: '' }))
     for (const a of ['skip', 'reject', 'ok'] as const) {
       answer = a
+      const before = sent.length
       const ui = await mountPane($, 'terminal')
       await ui.press({ key: 'opt-approve' })
-      await settle(() => sent.length > 0)
+      await settle(() => sent.length > before)
       await ui.unmount()
-      if (a !== 'ok') expect(sent.length).toBe(0)
+      await $.turn.complete({ turnId: 't1', usage: {}, reason: 'end', isAborted: false, answer: '' } as never) // the turn ends: the pending reply clears
+      expect(sent.length).toBe(before + 1) // never lost: the reply goes out whatever compaction did
     }
     expect(compacted).toBe(1)
-    expect(sent).toEqual(['approve\n\n[flightdeck] viewed 1/2 files'])
+    expect(toasts.filter(t => /^not compacted — sent as is/.test(t)).length).toBe(2)
+    expect(toasts[0]).toBe('not compacted — sent as is (vetoed)') // a rejection's reason is the engine's wording
+  })
+})
+
+// ---------- 0.9.0: auto compact on an approve, pressed or typed ----------
+
+const AUTO_MARKER = [
+  'Phase: implement', 'REQ: REQ-042-payment-retries', 'Gate: 3/5', 'Awaiting: review the code.', 'Ask: 7/7 tasks landed. Run the commits?',
+  'Options:', '  - approve — run the commits, then /review', '  - revise — I change the code, re-check, ask again', '  - fix all — fix every finding',
+  '  - abort — discards the uncommitted code', 'Recommended: approve',
+].join('\n')
+const typedAt = (text: string) => ({ text, wait: false, origin: { kind: 'composer' } }) as never // a prompt as the person types it
+
+describe('auto compact', () => {
+  /** A gate with auto compact on: records every call the flow makes, in order. */
+  const autoGate = ($: Parameters<TestBody>[0], on: On, auto: 'off' | 'approve' = 'approve') => {
+    atGate(on, { settings: { ...settings, autoCompact: auto }, gate: { 'REQ-042': parseMarker(AUTO_MARKER) }, trail: undefined })
+    const log: string[] = []
+    const fills: string[] = []
+    const toasts: string[] = []
+    const trails: unknown[] = []
+    let compact: 'ok' | 'skip' | 'reject' = 'ok'
+    let beforeCompact = async () => {}
+    let failSend = false
+    on('turn.start', async () => ({ turnId: 't1' }))
+    on('turn.complete', async () => ({ text: '' }))
+    on('clock.after', async () => ({ value: undefined }) as never) // the timer fires as soon as asked
+    on('session.usage', async () => ({ value: { startedAt: 0, context: { window: 200_000, percent: 40 }, rateLimits: [] } }) as never)
+    on('session.compact', async () => {
+      log.push('compact')
+      await beforeCompact()
+      if (compact === 'reject') throw new Error('turn running')
+      if (compact === 'skip') return { skip: 'vetoed' }
+      return { messages: [{ role: 'user', text: 'summary', toolUses: [] }] }
+    })
+    on('prompt.submit', async ($, e) => {
+      if (failSend && e.origin.kind === 'plugin') throw new Error('engine refused')
+      log.push(`submit:${e.origin.kind === 'plugin' && e.origin.asUser === true ? 'plugin' : e.origin.kind}:${e.text.split('\n')[0]}`)
+      return { text: e.text }
+    })
+    on('prompt.fill', async ($, e) => { fills.push(e.text); return { isFilled: true } as never })
+    on('ui.toast', async ($, e) => { toasts.push(e.text); return { value: undefined } as never })
+    on('state.set', async ($, e, next) => { if ((e as { key: string }).key === 'trail') trails.push((e as { value: unknown }).value); return next(e) })
+    const rounds = () => ((trails.at(-1) as FlightTrail | undefined)?.['REQ-042']?.['implement']?.rounds ?? []).map(r => `${r.decision}:${r.via}`)
+    return {
+      log, fills, toasts, rounds,
+      setCompact: (c: typeof compact) => { compact = c },
+      setFailSend: (f: boolean) => { failSend = f },
+      // The main loop's turn ends: clears `busy` and the pending reply (the real state; sendReply writes it).
+      endTurn: () => $.turn.complete({ turnId: 't1', usage: {}, reason: 'end', isAborted: false, answer: '' } as never),
+      onCompact: (f: () => Promise<void>) => { beforeCompact = f },
+    }
+  }
+
+  test('pressed approve: compacts, then sends; revise and fix all never compact', async ($, on) => {
+    const g = autoGate($, on)
+    for (const key of ['opt-revise', 'opt-fix all', 'opt-approve']) {
+      const before = g.log.length
+      const ui = await mountPane($, 'terminal')
+      await ui.press({ key })
+      await settle(() => g.log.slice(before).some(l => l.startsWith('submit')))
+      await ui.unmount()
+      await g.endTurn()
+    }
+    expect(g.log).toEqual(['submit:plugin:revise', 'submit:plugin:fix all', 'compact', 'submit:plugin:approve'])
+  })
+
+  test('pressed approve: a vetoed or rejected compaction still sends, with a toast', async ($, on) => {
+    const g = autoGate($, on)
+    for (const c of ['skip', 'reject'] as const) {
+      g.setCompact(c)
+      const before = g.log.length
+      const ui = await mountPane($, 'terminal')
+      await ui.press({ key: 'opt-approve' })
+      await settle(() => g.log.slice(before).some(l => l.startsWith('submit')))
+      await ui.unmount()
+      await g.endTurn()
+    }
+    expect(g.log).toEqual(['compact', 'submit:plugin:approve', 'compact', 'submit:plugin:approve'])
+    expect(g.toasts.filter(t => /^not compacted — sent as is/.test(t)).length).toBe(2)
+  })
+
+  test('typed approve: held once, compacted, resent as the user by the mod; one round recorded', async ($, on) => {
+    const g = autoGate($, on)
+    const res = await $.prompt.submit(typedAt('approve')) as { drop?: string }
+    expect(res.drop).toBe('compacting first — your reply follows')
+    await settle(() => g.log.some(l => l.startsWith('submit')))
+    expect(g.log).toEqual(['compact', 'submit:plugin:approve'])
+    await settle(() => g.rounds().length > 0)
+    expect(g.rounds()).toEqual(['approve:pane'])
+  })
+
+  test('typed revise and fix all: no hold, no compaction, recorded as typed', async ($, on) => {
+    const g = autoGate($, on)
+    expect((await $.prompt.submit(typedAt('revise keep the default')) as { drop?: string }).drop).toBeUndefined()
+    expect((await $.prompt.submit(typedAt('fix all')) as { drop?: string }).drop).toBeUndefined()
+    expect(g.log).toEqual(['submit:composer:revise keep the default', 'submit:composer:fix all'])
+    await settle(() => g.rounds().length > 1)
+    expect(g.rounds()).toEqual(['revise:typed', 'fix all:typed'])
+  })
+
+  test('typed approve: a vetoed compaction still sends, with a toast', async ($, on) => {
+    const g = autoGate($, on)
+    g.setCompact('skip')
+    await $.prompt.submit(typedAt('approve'))
+    await settle(() => g.log.some(l => l.startsWith('submit')))
+    expect(g.log).toEqual(['compact', 'submit:plugin:approve'])
+    expect(g.toasts.some(t => /^not compacted — sent as is \(vetoed\)/.test(t))).toBe(true)
+  })
+
+  test('typed approve: sendReply failing → the text back in the box, with a toast', async ($, on) => {
+    const g = autoGate($, on)
+    g.setFailSend(true) // the engine refuses the resend: sendReply answers false
+    await $.prompt.submit(typedAt('approve'))
+    await settle(() => g.fills.length > 0)
+    expect(g.fills).toEqual(['approve'])
+    expect(g.toasts).toContain('not sent — your reply is back in the box')
+    expect(g.log.filter(l => l.startsWith('submit'))).toEqual([])
+  })
+
+  test('typed approve mid-turn or with a reply pending: passes through, not held', async ($, on) => {
+    const g = autoGate($, on)
+    await $.turn.start({ text: 'x', turnId: 't1' } as never)
+    expect((await $.prompt.submit(typedAt('approve')) as { drop?: string }).drop).toBeUndefined()
+    await g.endTurn()
+    // A reply sent from the pane is pending until its turn ends.
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'opt-revise' })
+    await settle(() => g.log.length > 1)
+    await ui.unmount()
+    expect((await $.prompt.submit(typedAt('approve')) as { drop?: string }).drop).toBeUndefined()
+    expect(g.log).toEqual(['submit:composer:approve', 'submit:plugin:revise', 'submit:composer:approve'])
+  })
+
+  test('a second typed reply while compacting: dropped and filled back; the held approve is sent once', async ($, on) => {
+    const g = autoGate($, on)
+    let release = () => {}
+    const gate = new Promise<void>(r => { release = r })
+    g.onCompact(() => gate)
+    expect((await $.prompt.submit(typedAt('approve')) as { drop?: string }).drop).toBe('compacting first — your reply follows')
+    await settle(() => g.log.includes('compact'))
+    const second = await $.prompt.submit(typedAt('revise tighten AC2')) as { drop?: string }
+    expect(second.drop).toBe('still compacting — your reply is back in the box')
+    await settle(() => g.fills.length > 0)
+    expect(g.fills).toEqual(['revise tighten AC2'])
+    release()
+    await settle(() => g.log.some(l => l.startsWith('submit')))
+    expect(g.log.filter(l => l.startsWith('submit'))).toEqual(['submit:plugin:approve'])
+  })
+
+  test('auto off: typed approve passes; pressed approve sends without compacting; the toggle still compacts', async ($, on) => {
+    const g = autoGate($, on, 'off')
+    expect((await $.prompt.submit(typedAt('approve')) as { drop?: string }).drop).toBeUndefined()
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'opt-approve' })
+    await settle(() => g.log.length > 1)
+    await ui.unmount()
+    expect(g.log).toEqual(['submit:composer:approve', 'submit:plugin:approve'])
   })
 })
 
@@ -654,7 +937,7 @@ describe('0.7.0', () => {
     atGate(on)
     for (const cols of [120, 80]) {
       const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(cols, 400) })
-      for (const k of ['tab-history', 'tab-settings', 'size', 'collapse', 'home', 'band-open', 'expand']) {
+      for (const k of ['ring', 'tab-history', 'tab-settings', 'size', 'collapse', 'home', 'band-open', 'expand']) {
         expect((await ui.find({ key: k }))?.props.hotkey).toBeUndefined()
       }
       const letters = (await ui.findAll({ type: 'Button' })).filter(b => typeof b.props.hotkey === 'string' && /^[a-z]$/.test(b.props.hotkey as string))
@@ -997,5 +1280,114 @@ describe('0.8.1', () => {
         await ui.unmount()
       }
     }
+  })
+})
+
+// ---------- 0.9.0: the context ring in the header ----------
+
+describe('context ring', () => {
+  const usage = (on: On, pct: () => number) =>
+    on('session.usage', async () => ({ value: { startedAt: 0, context: { window: 200_000, percent: pct() }, rateLimits: [] } }) as never)
+  /** Button keys in drawn order. */
+  const order = async (ui: { findAll: (q: { type: 'Button' }) => Promise<{ key?: string | null }[]> }) => (await ui.findAll({ type: 'Button' })).map(b => b.key ?? '')
+
+  for (const [name, height, cols, next] of [
+    ['band', 'band', 120, 'expand'], ['open', 'open', 120, 'tab-history'], ['max', 'max', 120, 'tab-history'], ['narrow', 'max', 80, 'tab-history'],
+  ] as const) test(`ring and whole percent sit just before ${next === 'expand' ? '⤢ (the band has no history)' : 'history'}: ${name}`, async ($, on) => {
+    atGate(on, { layout: { height, narrow: false } })
+    usage(on, () => 30.4)
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(cols, 400) })
+    expect((await ui.find({ key: 'ring' }))?.text).toBe('◔ 30%')
+    const keys = await order(ui)
+    const at = keys.indexOf('ring')
+    expect(at).toBeGreaterThanOrEqual(0)
+    expect(keys.slice(at + 1).find(k => k === next || k === 'tab-history' || k === 'expand')).toBe(next) // the next header control after the ring
+    expect((await ui.find({ key: 'ring' }))?.props.hotkey).toBeUndefined() // plain: no key, no digit
+    await ui.unmount()
+  })
+
+  test('no percent known: no ring', async ($, on) => {
+    atGate(on)
+    const ui = await mountPane($, 'terminal')
+    expect(await ui.find({ key: 'ring' })).toBeUndefined()
+    expect(await ui.find({ key: 'tab-history' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('amber at or above compact at, normal below; still shown with compact: never', async ($, on) => {
+    let mode: Record<string, unknown> = { ...settings, compactAt: 70 }
+    atGate(on, { settings: undefined })
+    on('state.get', { plugin: 'adlc-flightdeck', key: 'settings' } as never, async () => ({ value: { value: mode, version: 1 } }) as never)
+    usage(on, () => 70)
+    const look = async () => {
+      const ui = await mountPane($, 'terminal')
+      const t = await ui.find({ type: 'Text', text: /^◕ 70%$/ })
+      await ui.unmount()
+      return t
+    }
+    expect((await look())?.props.color).toBe('warning') // at the threshold
+    mode = { ...settings, compactAt: 80 }
+    expect((await look())?.props.color).toBeUndefined()
+    mode = { ...settings, compact: 'never' }
+    expect(await look()).toBeDefined() // pressing it is always your own call
+  })
+
+  test('pressed idle: compacts with the REQ brief, and the percent is asked again at once', async ($, on) => {
+    atGate(on)
+    let pct = 75
+    let briefs: string[] = []
+    usage(on, () => pct)
+    on('session.compact', async ($, e) => {
+      briefs = [...briefs, e.instructions ?? '']
+      pct = 10
+      return { messages: [{ role: 'user', text: 'summary', toolUses: [] }] }
+    })
+    const ui = await mountPane($, 'terminal')
+    expect((await ui.find({ key: 'ring' }))?.text).toBe('◕ 75%')
+    await ui.press({ key: 'ring' })
+    await settle(() => briefs.length > 0)
+    await ui.unmount()
+    expect(briefs.length).toBe(1)
+    expect(briefs[0]).toMatch(/ADLC gate compaction\. Resuming REQ-042/)
+    const again = await mountPane($, 'terminal') // same clock: only the reset cache lets the new percent through
+    expect((await again.find({ key: 'ring' }))?.text).toBe('○ 10%')
+    await again.unmount()
+  })
+
+  test('pressed mid-turn: a toast, no compaction; a vetoed compaction says so', async ($, on) => {
+    atGate(on)
+    usage(on, () => 50)
+    let compacted = 0
+    let veto = false
+    const toasts: string[] = []
+    on('turn.start', async () => ({ turnId: 't1' }))
+    on('turn.complete', async () => ({ text: '' }))
+    on('session.compact', async () => { compacted += 1; return veto ? { skip: 'vetoed' } : { messages: [{ role: 'user', text: 'summary', toolUses: [] }] } })
+    on('ui.toast', async ($, e) => { toasts.push(e.text); return { value: undefined } as never })
+    await $.turn.start({ text: 'x', turnId: 't1' } as never)
+    const ui = await mountPane($, 'terminal')
+    await ui.press({ key: 'ring' })
+    await settle(() => toasts.length > 0)
+    expect(toasts).toEqual(['Claude is working — compact when the turn ends'])
+    expect(compacted).toBe(0)
+    await $.turn.complete({ turnId: 't1', usage: {}, reason: 'end', isAborted: false, answer: '' } as never)
+    veto = true
+    await ui.press({ key: 'ring' })
+    await settle(() => toasts.length > 1)
+    await ui.unmount()
+    expect(compacted).toBe(1)
+    expect(toasts[1]).toBe('not compacted (vetoed)')
+  })
+
+  test('band: pressed, compacts with the brief of the REQ the band shows', async ($, on) => {
+    atGate(on, { layout: { height: 'band' } })
+    usage(on, () => 30)
+    let brief = ''
+    on('session.compact', async ($, e) => { brief = e.instructions ?? 'none'; return { messages: [{ role: 'user', text: 'summary', toolUses: [] }] } })
+    const ui = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(120, 400) })
+    await ui.press({ key: 'ring' })
+    await settle(() => brief !== '')
+    await ui.unmount()
+    expect(brief).toMatch(/Resuming REQ-042/)
   })
 })
