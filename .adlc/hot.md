@@ -17,6 +17,9 @@ Grep-friendly format: `## [YYYY-MM-DD] kind | description` with optional metadat
 
 <!-- Newest entries below this line, newest first. Each entry is a level-2 heading. -->
 
+## [2026-11-07] verify-gate-cleared | REQ-002-debrief | findings: C0/M0/m3 (n8, n9, m13 deferred to /wrapup)
+## [2026-11-07] implement-gate-cleared | REQ-002-debrief
+
 ## [2026-11-07] architect-gate-cleared | REQ-002-debrief
 ## [2026-11-07] adr-accepted | ADR-003 the debrief's reader question uses a question dialog
 

@@ -103,6 +103,12 @@ verify:
     - name: adapters-in-sync
       run: 'node scripts/adlc.mjs build --tool=all >/dev/null && git diff --exit-code --stat -- adapters'
       enforces: []
+    # The flightdeck mod's own tests (parser, narrow view, cockpit), which `test:` above does not
+    # reach. Needs the `claude` CLI on PATH; ran offline in the sandbox (150 pass, 2026-11-07).
+    - name: flightdeck-mod-tests
+      run: 'cd core/extras/claude/mods/adlc-flightdeck && claude plugin test .'
+      scope: project
+      enforces: []
   halt_on: [lint]
 
 # verify (template examples):

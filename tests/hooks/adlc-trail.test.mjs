@@ -46,24 +46,50 @@ test('readerOf: exactly 1/2 is not under 1/2', () => {
   assert.equal(reader(p).reader, 'warm');
 });
 
-test('readerOf: no viewed recorded at implement or review → cold', () => {
+test('readerOf: a pane round at implement/review with no viewed count → cold', () => {
+  const p = base(); delete p[3].gates[0].viewed; delete p[4].gates[0].viewed;
+  p[4].gates[0].via = 'typed'; // one pane round unseen of four: under half, so only the viewed reason fires
+  const r = reader(p);
+  assert.equal(r.reader, 'cold');
+  assert.equal(r.why, 'no viewed count at implement or review');
+});
+
+test('readerOf: every round typed, recent, no viewed count → warm (CORR-001)', () => {
   const p = base(); delete p[3].gates[0].viewed; delete p[4].gates[0].viewed;
   p[3].gates[0].via = 'typed'; p[4].gates[0].via = 'typed';
   const r = reader(p);
-  assert.equal(r.reader, 'cold');
-  assert.match(r.why, /no viewed count at implement or review/);
+  assert.equal(r.reader, 'warm');
+  assert.match(r.why, /you answered 4 gates · last 1h ago/);
 });
 
-test('readerOf: half the gates answered from the pane unseen → cold', () => {
-  const p = base(); p[1].gates[0].via = 'pane'; p[2].gates[0].via = 'pane';
+test('readerOf: half the implement/review rounds answered from the pane unseen → cold (CORR-006)', () => {
+  const p = base();
+  p[3].gates.unshift({ at: hoursAgo(3.5), decision: 'fix', via: 'pane', by: ME });
+  p[4].gates.unshift({ at: hoursAgo(1.5), decision: 'revise', via: 'pane', by: ME });
   const r = reader(p);
   assert.equal(r.reader, 'cold');
-  assert.match(r.why, /2 of 4 gates answered from the pane unseen/);
+  assert.equal(r.why, '2 of 4 gates at implement and review answered from the pane unseen');
 });
 
-test('readerOf: one pane round of four is under half → warm', () => {
-  const p = base(); p[1].gates[0].via = 'pane';
+test('readerOf: one unseen pane round of three at implement/review is under half → warm', () => {
+  const p = base(); p[4].gates.unshift({ at: hoursAgo(1.5), decision: 'revise', via: 'pane', by: ME });
   assert.equal(reader(p).reader, 'warm');
+});
+
+test('readerOf: pane answers at spec, architect and ship (no viewed there) never count → warm (CORR-006)', () => {
+  const p = base(); p[1].gates[0].via = 'pane'; p[2].gates[0].via = 'pane';
+  p[5] = { gates: [{ at: hoursAgo(0.5), decision: 'approve', via: 'pane', by: ME }] };
+  const r = reader(p);
+  assert.equal(r.reader, 'warm');
+  assert.match(r.why, /you answered 5 gates/);
+});
+
+test('readerOf: all four gates from the pane, every file viewed at implement and review → warm', () => {
+  const p = base(); for (const ph of Object.values(p)) ph.gates[0].via = 'pane';
+  p[3].gates[0].viewed = '6/6'; p[4].gates[0].viewed = '6/6';
+  const r = reader(p);
+  assert.equal(r.reader, 'warm');
+  assert.match(r.why, /you answered 4 gates · last 1h ago/);
 });
 
 test('readerOf: a phase cleared by the decision-maker → cold', () => {
@@ -100,6 +126,21 @@ test('readerOf: handover wins over cold (first match)', () => {
 test('readerOf: a mixed REQ (one round by the user) is not a handover', () => {
   const p = base(); for (const n of [1, 2, 3]) p[n].gates[0].by = 'Ada Lovelace';
   assert.equal(reader(p).reader, 'warm');
+});
+
+test('readerOf: an empty user (no git name) skips the handover rule (R2-003)', () => {
+  const p = base(); for (const ph of Object.values(p)) ph.gates[0].by = 'Ada Lovelace';
+  assert.equal(readerOf({ phases: p, user: '', now: NOW }).reader, 'warm');
+  assert.equal(readerOf({ phases: p, user: '   ', now: NOW }).reader, 'warm');
+  p[4].gates[0].viewed = '1/9';
+  assert.equal(readerOf({ phases: p, user: '', now: NOW }).reader, 'cold');
+});
+
+test('readerOf: rounds with no `by` never make a handover (R2-003)', () => {
+  const p = base(); for (const ph of Object.values(p)) delete ph.gates[0].by;
+  assert.equal(reader(p).reader, 'warm');
+  p[4].gates[0].viewed = '1/9';
+  assert.equal(reader(p).reader, 'cold');
 });
 
 test('readerOf: author match ignores case and spaces', () => {
@@ -273,4 +314,24 @@ test('trail reader: autoPhases from gate-decisions.md (APPROVE counts, HALT does
   const w = vault(recent, { 'gate-decisions.md': '## [t] REVIEW gate — HALT\n' });
   t.after(w.done);
   assert.match(run(w, 'reader', '--req', 'REQ-900-fixture', '--by', ME), /^warm — you answered 1 gate · last under an hour ago$/);
+});
+
+// ---------- the hook's Stop path (AC7), the way Claude Code runs it: event JSON on stdin ----------
+
+function stop(v, text) {
+  const r = spawnSync(process.execPath, [SCRIPT], { encoding: 'utf8', cwd: v.root, input: JSON.stringify({ hook_event_name: 'Stop', cwd: v.root, transcript_path: join(v.root, 't.jsonl'), last_assistant_message: text }) });
+  assert.equal(r.status, 0, r.stderr);
+}
+
+test('Stop: a DEBRIEF · turn at an open marker opens no gate round (AC7)', (t) => {
+  const v = vault({ 5: { gates: [{ at: hoursAgo(1), decision: 'approve', by: ME }] } }, { '.awaiting-approval': 'Ask: ship it?\n' });
+  t.after(v.done);
+  stop(v, 'DEBRIEF · REQ-900-fixture · for: lead\nIN ONE BREATH  the trail now says who reads it\nGATE 5/5 · REQ-900-fixture · ship\nready');
+  assert.deepEqual(v.state().phases[5].gates.map((r) => r.decision), ['approve']);
+  // Control: the same vault and marker with a plain gate card does open a round, so the check above is not vacuous.
+  stop(v, 'GATE 5/5 · REQ-900-fixture · ship\nready to ship');
+  const g = v.state().phases[5].gates;
+  assert.equal(g.length, 2);
+  assert.equal(g[1].decision, undefined);
+  assert.equal(g[1].card.verdict, 'ready to ship');
 });

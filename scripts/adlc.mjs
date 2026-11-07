@@ -799,7 +799,7 @@ function usage() {
   log(`  node scripts/adlc.mjs index   [--vault <dir>] [--check]   rebuild <vault>/index.md + decisions.md from records, ADRs, knowledge pages`);
   log(`  node scripts/adlc.mjs rules   [--vault <dir>] [--check]   generate <repo>/.claude/rules/adlc-*.md from <vault>/context/conventions-paths.md`);
   log(`  node scripts/adlc.mjs settings --repo <path> [--dry-run] [--no-statusline]   wire the Claude extras (hooks, statusline) into <repo>/.claude/settings.local.json — this repo, this developer only`);
-  log(`  node scripts/adlc.mjs trail gate|findings|show --req <id> …   record a gate answer / findings verdicts into the REQ's pipeline-state.json (1.10; the skills call this)`);
+  log(`  node scripts/adlc.mjs trail gate|findings|reader|stats|show --req <id> …   record a gate answer / findings verdicts into the REQ's pipeline-state.json, or read the debrief's reader and the trail stats (1.10; the skills call this)`);
   log(`  node scripts/adlc.mjs settings --global                                     the same into ~/.claude/settings.json — every session on this machine (opt-in)`);
 }
 

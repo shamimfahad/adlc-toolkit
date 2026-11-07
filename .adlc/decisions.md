@@ -8,4 +8,4 @@ One row per ADR. **accepted** is in effect; **superseded** points at its success
 |---|---|---|---|---|---|
 | ADR-001 | [[architecture/adr-001-tiered-vault-loading|Tiered vault loading for reflector and architect]] | accepted | (not recorded — created 2026-07-22; implemented in 1.9.0) | — | — |
 | ADR-002 | [[architecture/adr-002-opt-in-auto-compact|Opt-in auto compaction after an approved gate]] | accepted | 2026-11-07 | — | — |
-| ADR-003 | [[architecture/adr-003-debrief-ask-dialog|The debrief's reader question uses a question dialog]] | accepted | — | — | — |
+| ADR-003 | [[architecture/adr-003-debrief-ask-dialog|The debrief's reader question uses a question dialog]] | accepted | 2026-11-07 | — | — |

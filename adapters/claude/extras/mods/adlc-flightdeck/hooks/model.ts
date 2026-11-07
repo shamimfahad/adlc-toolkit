@@ -341,6 +341,19 @@ export function parseGateCard(text: string): GateCard | null {
   return card
 }
 
+// ---------- asks: rounds the trail records beside a gate's, never a gate round ----------
+
+/**
+ * The ask decisions (`--decision predict|summary|debrief`). The trail hook keeps its own copy
+ * (`ASK_DECISIONS` in core/extras/claude/hooks/adlc-trail.mjs; the mod cannot import it);
+ * tests/hooks/ask-list-parity.test.mjs fails when the two lists differ.
+ */
+export const ASK_DECISIONS = ['predict', 'summary', 'debrief'] as const
+export type AskDecision = (typeof ASK_DECISIONS)[number]
+export const isAskDecision = (d: string): d is AskDecision => (ASK_DECISIONS as readonly string[]).includes(d)
+/** A round that answered the gate — anything but an ask. */
+export const isGateRound = (r: { decision: string }) => !isAskDecision(r.decision)
+
 // ---------- the debrief: debrief.md, parsed (core/skills/debrief.md writes it) ----------
 
 /** The eight labels, verbatim, in the order the skill writes them. */

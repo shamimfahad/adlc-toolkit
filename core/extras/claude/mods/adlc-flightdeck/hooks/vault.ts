@@ -2,7 +2,7 @@
 // notes, and the map from a phase to the files and sections that belong to it. No `$`,
 // no state; everything here is unit-tested.
 import type { FlightGateAsk, FlightItem, FlightOption, FlightReq, FlightStripEntry } from '../types'
-import { BUG_PHASES, ID_SRC, REQ_PHASES, idOf, type PipelineState } from './model'
+import { BUG_PHASES, ID_SRC, REQ_PHASES, idOf, isGateRound, type PipelineState } from './model'
 
 /** Every name a phase goes by in hot.md events, gate names and notes — skills are not uniform. */
 const ALIASES: Record<'req' | 'bug', string[][]> = {
@@ -412,7 +412,7 @@ export function phaseLine(c: {
   waiting?: string | null
 }): string {
   const parts: string[] = []
-  const gates = c.rounds.filter(r => r.decision !== 'predict' && r.decision !== 'summary' && r.decision !== 'debrief') // asks, not gate rounds
+  const gates = c.rounds.filter(isGateRound) // asks are not gate rounds
   const last = gates[gates.length - 1]
   if (c.n === 4 && c.findings) parts.push(`${c.findings} finding${c.findings > 1 ? 's' : ''}`)
   if (c.n === 4 && c.needCall) parts.push(`${c.needCall} need${c.needCall > 1 ? '' : 's'} a call`)

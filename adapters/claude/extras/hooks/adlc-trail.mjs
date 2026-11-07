@@ -405,9 +405,13 @@ const ago = (ms) => { const h = Math.floor(ms / HOUR_MS); return h >= 48 ? `${Ma
  * Who the debrief is for, from the trail: `cold`, `warm` or `handover`, with one line of evidence.
  * Counts gate rounds only — decided rounds whose decision is not predict, summary or debrief — so the
  * ask rounds /wrapup records just before the debrief neither hide a handover nor reset the clock.
- * First match wins: handover (rounds carry `by`, none is the user) → cold (low or missing viewed at
- * implement/review · half or more answered from the pane with no viewed · a phase cleared by the
- * decision-maker · 24h since the last gate round) → warm. Pure: no file, clock or git access.
+ * First match wins: handover (rounds carry `by`, none is the user) → cold (low viewed at implement/review,
+ * or none there while a round there came from the pane · half or more of the implement/review rounds
+ * answered from the pane with no viewed · a phase cleared by the decision-maker · 24h since the last
+ * gate round) → warm. The cockpit attaches `viewed` only at implement (3) and review (4) — elsewhere its
+ * trailer is `[flightdeck] pane` — so a pane answer at spec, architect or ship never counts toward cold.
+ * An empty `user` (no git name) or rounds with no `by` skip the handover rule.
+ * Pure: no file, clock or git access.
  */
 export function readerOf({ phases = {}, user = '', now = Date.now(), autoPhases = [] } = {}) {
   const at = new Date(now).getTime();
@@ -425,14 +429,17 @@ export function readerOf({ phases = {}, user = '', now = Date.now(), autoPhases 
   const atCode = rounds.filter((r) => r.phase === 3 || r.phase === 4);
   if (atCode.length) {
     const counted = atCode.map((r) => ({ r, m: /^(\d+)\/(\d+)$/.exec(r.viewed ?? '') })).filter((x) => x.m && Number(x.m[2]) > 0);
-    if (!counted.length) cold.push('no viewed count at implement or review');
+    // Only the cockpit writes `viewed`: a typed round with no count is unknown, not unseen (CORR-001).
+    if (!counted.length) { if (atCode.some((r) => r.via === 'pane')) cold.push('no viewed count at implement or review'); }
     else {
       const low = counted.reduce((a, b) => (Number(b.m[1]) / Number(b.m[2]) < Number(a.m[1]) / Number(a.m[2]) ? b : a));
       if (Number(low.m[1]) / Number(low.m[2]) < 0.5) cold.push(`viewed ${low.m[1]}/${low.m[2]} at ${PHASE_NAMES[low.r.phase]}`);
+      // Blind: a pane round at implement/review with no count, against the rounds there (CORR-006).
+      // Only when some round there has a count — with none, the reason above already says it.
+      const blind = atCode.filter((r) => r.via === 'pane' && !r.viewed).length;
+      if (blind * 2 >= atCode.length) cold.push(`${blind} of ${atCode.length} gates at implement and review answered from the pane unseen`);
     }
   }
-  const blind = rounds.filter((r) => r.via === 'pane' && !r.viewed).length;
-  if (rounds.length && blind * 2 >= rounds.length) cold.push(`${blind} of ${rounds.length} gates answered from the pane unseen`);
   const auto = [...new Set((autoPhases ?? []).map(Number))].filter((n) => PHASE_NAMES[n]).sort((a, b) => a - b);
   if (auto.length) cold.push(`${auto.map((n) => PHASE_NAMES[n]).join(', ')} cleared by the decision-maker`);
   const last = Math.max(-Infinity, ...rounds.map((r) => new Date(r.at).getTime()).filter(Number.isFinite));

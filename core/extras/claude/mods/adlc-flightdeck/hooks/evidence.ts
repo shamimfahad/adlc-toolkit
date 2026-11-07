@@ -2,7 +2,7 @@
 // task files, findings, acceptance criteria), git's plain-text answers (porcelain, numstat),
 // and the derivations the pages draw — plan vs actual, task tiers as rails, path pointers as
 // links, the ship gate's consequences. No `$`, no state; everything here is unit-tested.
-import { ID_SRC } from './model'
+import { ID_SRC, type AskDecision } from './model'
 import { sectionOf } from './vault'
 
 // ---------- paths ----------
@@ -447,7 +447,7 @@ export function summaryGaps(summary: string, rows: PlanRow[]): { mentioned: stri
 // ---------- the trail's 1.11.1 rounds ----------
 
 /** The prediction (`--decision predict`) and the review summary (`--decision summary`) among a phase's rounds. */
-export function roundOf(rounds: readonly { decision: string; note: string }[], kind: 'predict' | 'summary'): string | null {
+export function roundOf(rounds: readonly { decision: string; note: string }[], kind: AskDecision): string | null {
   const r = rounds.find(x => x.decision === kind)
   return r?.note?.trim() || null
 }

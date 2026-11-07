@@ -193,22 +193,25 @@ before the last gate. The view reads that file; it never writes it.
   the reader from the file's first line; the toolkit's trail script works it out, not the mod.
 - **WHAT CHANGED** lists the files: `◆` planned (named in the architecture's blast radius, the
   files the REQ meant to touch), `◇` unplanned in amber, with `+a −d` from git; press it to open
-  the diff. A mermaid block in it is shown as code from 84 columns and dropped below.
-- **YOUR SUMMARY** sits beside SAY IT TO YOUR LEAD: the summary you gave `/wrapup`, which of the
+  the diff. A mermaid block in it is shown as code, except below the *narrow below* setting
+  (84 columns by default), where it is dropped.
+- **YOUR SUMMARY** sits beside SAY IT TO YOUR LEAD (under it below 110 columns): the summary you gave `/wrapup`, which of the
   changed files it names, and the ones it does not mention, in amber.
 - **Widths.** From 110 band columns, a board: heads in a left column, the files table with
-  `what` and `why`, SAY IT and YOUR SUMMARY side by side. From 84 to 109, the same story in one
-  column; the files table drops `why` and YOUR SUMMARY goes under SAY IT. Below 84, a list: one row
-  per section with a one-line gist, one section unfolded in place (WHAT CHANGED at first; press a
-  row to unfold it, `×` to fold it). An unfolded section shows 8 rows at most, then `… N more —
-  widen to 84+ cols or open debrief.md`.
+  `what` and `why`, SAY IT and YOUR SUMMARY side by side. Below 110, a list: one row per section
+  with a one-line gist, one section unfolded in place (WHAT CHANGED at first; press a row to unfold
+  it, `×` to fold it). An unfolded section shows 8 rows at most, then `… N more — widen to 110+
+  cols or open debrief.md`. Inside an unfolded section, from the *narrow below* setting (84 by
+  default) to 109 the story keeps one column: the files table drops `why`, YOUR SUMMARY goes under
+  SAY IT. Below the *narrow below* setting the files show `+a −d` instead of `what`, and the note
+  says `what · why dropped below <setting> cols`.
 - **The gate's options come last.** When the REQ waits at a gate, its options are drawn under the
   story, with their letters, so you can answer from the view.
 - No file yet: `no debrief here yet — /debrief writes one`. The working set is local to whoever
   ran the pipeline, so a teammate's REQ usually has none.
 
-Why the 8-row cap: the band cannot scroll a body it draws itself, so in the narrow list an unfolded
-section that ran long would push the options off screen.
+Why the list and the 8-row cap below 110: the band cannot scroll a body it draws itself, so a long
+story, or an unfolded section that ran long, would push the options off screen.
 
 STATUS: needs verification — that the band cannot keep the options pinned under a body that
 scrolls is checked by `claude plugin test` and by Claude Code 2.1.318's live runs, not yet live on

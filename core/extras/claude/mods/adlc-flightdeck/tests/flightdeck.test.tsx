@@ -128,6 +128,25 @@ describe('model', () => {
     expect(c?.sections.length).toBe(2)
   })
 
+  test('gate card: on a ship card YOUR SUMMARY after SAY IT is its own section, not folded into SAY IT', () => {
+    const c = parseGateCard([
+      'GATE 5/5 · Wrapup · REQ-042-retry-backoff',
+      '   clean wrap — recommend approve',
+      '',
+      'SAY IT      "I made payment calls retry with backoff, so a blip no',
+      '            longer fails checkout."',
+      'YOUR SUMMARY  names 5 of 7 changed files · not mentioned:',
+      '            Startup.cs, docs/retries.md',
+      '',
+      'MY READ     approve',
+    ].join('\n'))
+    expect(c?.sections.map(s => s.label)).toEqual(['SAY IT', 'YOUR SUMMARY', 'MY READ'])
+    const say = c?.sections.find(s => s.label === 'SAY IT')
+    expect(say?.lines.join(' ')).not.toMatch(/YOUR SUMMARY|names 5 of 7/)
+    const yours = c?.sections.find(s => s.label === 'YOUR SUMMARY')
+    expect(yours?.lines.join(' ')).toMatch(/^names 5 of 7 changed files · not mentioned:.*Startup\.cs, docs\/retries\.md$/)
+  })
+
   test('gate card: prose that only mentions a gate is left alone', () => {
     expect(parseGateCard('We are at GATE 2/5 now, see above.')).toBe(null)
   })
@@ -184,6 +203,14 @@ describe('model', () => {
     // ◆ outside WHAT CHANGED is plain text; an unknown reader is not a head.
     expect(parseDebrief('WHY\n◆ a — b — c').files).toEqual([])
     expect(parseDebrief('DEBRIEF · REQ-1 · for: me · reader: lukewarm').head).toBe(null)
+  })
+
+  test('debrief: a label inside a code fence is a line of the fence, not a new section', () => {
+    const d = parseDebrief('WHAT CHANGED\n```text\nWHY\n◆ not/a/file.ts — x — y\n```\n◆ a.ts — what — why\nWHY\nthe real one')
+    expect(d.sections.map(s => s.label)).toEqual(['WHAT CHANGED', 'WHY'])
+    expect(d.sections[0]?.lines).toEqual(['```text', 'WHY', '◆ not/a/file.ts — x — y', '```'])
+    expect(d.files.map(f => f.path)).toEqual(['a.ts'])
+    expect(d.sections[1]?.lines).toEqual(['the real one'])
   })
 
   test('context ring: one glyph per bucket, edges included', () => {
@@ -1692,10 +1719,10 @@ const files = (on: On, map: Record<string, string>) => {
     return t === undefined ? next(e) : ({ value: t } as never)
   })
 }
-const debriefView = { req: 'REQ-042', tab: 5, sub: { kind: 'debrief' }, home: false }
+const debriefViewState = { req: 'REQ-042', tab: 5, sub: { kind: 'debrief' }, home: false }
 /** The ship gate with a debrief on disk, drawn at one width: the one helper whose width spans all three regimes (L-REQ-001-4). */
 const debriefAt = async ($: Parameters<TestBody>[0], on: On, cols: 120 | 100 | 80, { md = DEBRIEF as string | null, ...extra }: Partial<Record<Key, unknown>> & { md?: string | null } = {}) => {
-  atGate(on, { deck: shipDeck, git: shipGit, trail: shipTrail(), gate: { 'REQ-042': parseMarker(SHIP_MARKER) }, view: debriefView, ...extra })
+  atGate(on, { deck: shipDeck, git: shipGit, trail: shipTrail(), gate: { 'REQ-042': parseMarker(SHIP_MARKER) }, view: debriefViewState, ...extra })
   files(on, md === null ? {} : { [`${FOLDER}/debrief.md`]: md })
   return $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(cols, 400) })
 }
@@ -1706,7 +1733,7 @@ const accentOutsideLevel1 = async (ui: Mounted) =>
 
 describe('0.10.0 debrief', () => {
   const regimes: { cols: 120 | 100 | 80; name: string }[] = [
-    { cols: 120, name: '≥110: the Debrief board' }, { cols: 100, name: '84–109: one column' }, { cols: 80, name: '<84: the DebriefNarrow board' },
+    { cols: 120, name: '≥110: the Debrief board' }, { cols: 100, name: '84–109: the section list, one column inside' }, { cols: 80, name: '<84: the section list, columns dropped' },
   ]
   for (const r of regimes) test(`the debrief view, ${r.name}: the head's reader condition, one ‹ back, the options last with letters`, async ($, on) => {
     const ui = await debriefAt($, on, r.cols)
@@ -1721,28 +1748,31 @@ describe('0.10.0 debrief', () => {
     const keyed = (await ui.findAll({ type: 'Button' })).filter(b => typeof b.props.hotkey === 'string')
     expect(keyed.every(b => /^opt-/.test(b.key ?? '') && /^[a-z]$/.test(b.props.hotkey as string))).toBe(true)
     expect(await accentOutsideLevel1(ui)).toEqual([])
+    expect((await ui.findAll({ type: 'Text' })).map(t => t.props.color).filter(c => typeof c === 'string' && c.startsWith('#'))).toEqual([]) // theme keys, never hex
     if (r.cols === 120) {
       expect(await ui.find({ type: 'Text', text: /^ │ $/ })).toBeDefined() // SAY IT │ YOUR SUMMARY
       expect((await ui.find({ type: 'Text', text: /^ │ $/ }))?.props.color).toBe('inactive')
       expect(await ui.find({ type: 'Text', text: /^why$/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /^QUESTIONS YOU MAY GET$/ })).toBeDefined()
-    }
-    if (r.cols === 100) {
-      expect(await ui.find({ type: 'Text', text: /^ │ $/ })).toBeUndefined()
-      expect(await ui.find({ type: 'Text', text: /^why$/ })).toBeUndefined() // the files table drops why
-      expect(await ui.find({ type: 'Text', text: /^what$/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /^YOUR SUMMARY$/ })).toBeDefined()
-    }
-    if (r.cols !== 80) {
       expect((await ui.find({ type: 'Text', text: /^SAY IT TO YOUR LEAD$/ }))?.props.color).toBe('subtle')
       expect((await ui.find({ type: 'Text', text: /^◇ 1 unplanned$/ }))?.props.color).toBe('warning')
       expect(await ui.find({ type: 'Code' })).toBeDefined() // the one mermaid fence
-      expect((await ui.findAll({ type: 'Button' })).filter(b => /^debrief-sec-/.test(b.key ?? ''))).toEqual([]) // the list is the narrow board only
+      expect((await ui.findAll({ type: 'Button' })).filter(b => /^debrief-sec-/.test(b.key ?? ''))).toEqual([]) // the list is below 110 only
     }
-    if (r.cols === 80) {
+    if (r.cols === 100) { // WHAT CHANGED unfolded keeps the one-column look
+      expect(await ui.find({ type: 'Text', text: /^ │ $/ })).toBeUndefined()
+      expect(await ui.find({ type: 'Text', text: /^why$/ })).toBeUndefined() // the files table drops why
+      expect(await ui.find({ type: 'Text', text: /^what$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^\+\/-$/ })).toBeUndefined()
+      expect((await ui.find({ type: 'Text', text: /^◇ 1 unplanned$/ }))?.props.color).toBe('warning')
+      expect(await ui.find({ type: 'Code' })).toBeDefined() // the one mermaid fence
+    }
+    if (r.cols !== 120) {
       for (const k of ['in-one-breath', 'why', 'what-changed', 'how', 'what-was-checked', 'what-to-watch', 'say-it-to-your-lead', 'questions-you-may-get']) expect(await ui.find({ key: `debrief-sec-${k}` })).toBeDefined()
       expect((await ui.find({ key: 'debrief-sec-what-changed' }))?.text).toMatch(/WHAT CHANGED +3 files · ◆ 2 planned ◇ 1 +×$/) // unfolded at first
       expect((await ui.find({ key: 'debrief-sec-say-it-to-your-lead' }))?.text).toMatch(/^SAY IT +1 line for your lead · yours names 1\/3 +›$/)
+    }
+    if (r.cols === 80) {
       expect(await ui.find({ type: 'Text', text: /^\+\/-$/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /^what · why dropped below 84 cols$/ })).toBeDefined()
       expect(await ui.find({ key: 'debrief-diff-readme.md' })).toBeDefined() // +/- from the numstat, pressed opens the diff
@@ -1751,7 +1781,7 @@ describe('0.10.0 debrief', () => {
     await ui.unmount()
   })
 
-  test('<84: one section unfolds in place — another press folds the first, a second press folds it', async ($, on) => {
+  test('<84: a press unfolds one section and folds the other; pressing it again folds it', async ($, on) => {
     const ui = await debriefAt($, on, 80, { view: undefined }) // the view left to the real state, so the presses land
     await $.command.run({ command: 'flight', args: 'debrief' } as never)
     await settle(() => false)
@@ -1770,22 +1800,51 @@ describe('0.10.0 debrief', () => {
   test('YOUR SUMMARY: the worked example names 1 of 3 files; model.ts and README.md are not mentioned (ADV-005)', async ($, on) => {
     const rows = planVsActual([], [], shipGit['REQ-042']?.touched ?? [])
     expect(summaryGaps(SUMMARY, rows)).toEqual({ mentioned: [`${MOD}/hooks/register.tsx`], missed: [`${MOD}/hooks/model.ts`, 'README.md'] })
-    const ui = await debriefAt($, on, 100)
+    const ui = await debriefAt($, on, 100, { view: { ...debriefViewState, sub: { kind: 'debrief', open: 'SAY IT TO YOUR LEAD' } } })
+    expect(await ui.find({ type: 'Text', text: /^YOUR SUMMARY$/ })).toBeDefined() // under SAY IT, not beside it
     expect(await ui.find({ type: 'Text', text: /^names 1 of 3 files$/ })).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /^ · not mentioned: model\.ts, README\.md$/ }))?.props.color).toBe('warning')
     await ui.unmount()
   })
 
+  const many = DEBRIEF.replace(/◆ core\/skills.*\n/, Array.from({ length: 20 }, (_, i) => `◆ src/f${i}.ts — what ${i} — why ${i}\n`).join(''))
+    .replace(/◆ hooks\/model.*\n/, '').replace(/◇ README.*\n/, '')
   test('at 80 columns with 20 files and WHAT CHANGED unfolded, it caps at 8 rows and the options still render (ADV-007)', async ($, on) => {
-    const many = DEBRIEF.replace(/◆ core\/skills.*\n/, Array.from({ length: 20 }, (_, i) => `◆ src/f${i}.ts — what ${i} — why ${i}\n`).join(''))
-      .replace(/◆ hooks\/model.*\n/, '').replace(/◇ README.*\n/, '')
     expect(parseDebrief(many).files.length).toBe(20)
     const ui = await debriefAt($, on, 80, { md: many })
     expect((await ui.find({ key: 'debrief-sec-what-changed' }))?.text).toMatch(/×$/)
-    expect(await ui.find({ type: 'Text', text: /^… 14 more — widen to 84\+ cols or open debrief\.md$/ })).toBeDefined() // header + 20 files + footer = 22 rows, 8 shown
+    expect(await ui.find({ type: 'Text', text: /^… 14 more — widen to 110\+ cols or open debrief\.md$/ })).toBeDefined() // header + 20 files + footer = 22 rows, 8 shown
     expect(await ui.find({ type: 'Link', text: 'src/f6.ts' })).toBeDefined() // the 7th file is the 8th row
     expect(await ui.find({ type: 'Link', text: 'src/f7.ts' })).toBeUndefined()
     for (const k of ['opt-approve', 'opt-revise', 'opt-merged', 'opt-abort']) expect(await ui.find({ key: k })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('at 100 columns with 20 files and WHAT CHANGED unfolded, the band is not pinned: 8 rows, then the options (M1)', async ($, on) => {
+    const ui = await debriefAt($, on, 100, { md: many })
+    expect((await ui.find({ key: 'debrief-sec-what-changed' }))?.text).toMatch(/×$/)
+    // count 1 + the two-line mermaid 2 + header 1 + 4 files = 8 rows; 16 of the 23 items left
+    expect(await ui.find({ type: 'Text', text: /^… 16 more — widen to 110\+ cols or open debrief\.md$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Link', text: 'src/f3.ts' })).toBeDefined()
+    expect(await ui.find({ type: 'Link', text: 'src/f4.ts' })).toBeUndefined()
+    for (const k of ['opt-approve', 'opt-revise', 'opt-merged', 'opt-abort']) expect(await ui.find({ key: k })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('the narrow note follows the narrow below setting, not a literal 84', async ($, on) => {
+    const ui = await debriefAt($, on, 100, { settings: { ...settings, narrowAt: 110 } })
+    expect(await ui.find({ type: 'Text', text: /^what · why dropped below 110 cols$/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  const readers: { reader: 'warm' | 'handover'; tone: string; depth: string }[] = [
+    { reader: 'warm', tone: 'success', depth: 'the delta' }, { reader: 'handover', tone: 'permission', depth: 'files first' },
+  ]
+  for (const x of readers) for (const cols of [120, 100, 80] as const) test(`a ${x.reader} reader at ${cols} columns: its tone and depth from the head`, async ($, on) => {
+    const ui = await debriefAt($, on, cols, { md: DEBRIEF.replace('reader: cold', `reader: ${x.reader}`) })
+    expect((await ui.find({ type: 'Text', text: new RegExp(`^${x.reader}$`) }))?.props.color).toBe(x.tone)
+    expect(await ui.find({ type: 'Text', text: new RegExp(`reader → ${x.depth}`) })).toBeDefined()
+    expect(await ui.find({ key: 'opt-approve' })).toBeDefined()
     await ui.unmount()
   })
 
@@ -1799,7 +1858,7 @@ describe('0.10.0 debrief', () => {
   test('a partial debrief: the sections present, and a run /debrief hint', async ($, on) => {
     const ui = await debriefAt($, on, 120, { md: 'IN ONE BREATH\nit tells the story\nWHY\nbecause\nHOW\nT1 → T2' })
     expect(await ui.find({ type: 'Text', text: /^3 of 8 sections · run \/debrief to write the rest$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /no head line — the reader condition is unknown/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^debrief\.md has no opening line saying who it is for — run \/debrief$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^WHAT CHANGED$/ })).toBeUndefined()
     await ui.unmount()
   })

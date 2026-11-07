@@ -25,6 +25,8 @@ This skill writes one file, `.adlc/<REQ_PATH>/debrief.md`, and records one trail
 
 ### 1. The reader condition
 
+The reader condition is how much of this change the reader has already seen, judged from the trail (the record of gate answers in `pipeline-state.json`).
+
 ```
 node $TOOLKIT_PATH/scripts/adlc.mjs trail reader --vault .adlc --req <REQ_PATH>
 ```
@@ -32,24 +34,26 @@ node $TOOLKIT_PATH/scripts/adlc.mjs trail reader --vault .adlc --req <REQ_PATH>
 It prints `<cold|warm|handover> — <why>`. Use it as printed; never recompute it. The rule, for the reader of this skill (it lives once, in `readerOf`, with its tests). It counts gate rounds only — decided rounds whose decision is not `predict`, `summary` or `debrief`. First match wins:
 
 1. **handover** — someone answered the gates, and none was answered by you (`git config user.name`).
-2. **cold** — any of: under half the changed files viewed at implement or review, or no `viewed` recorded there; half or more of the rounds sent from the cockpit with nothing viewed; a phase cleared by the decision-maker (`/autopilot`, `/sprint`); 24 hours or more since the last round.
+2. **cold** — any of: under half the changed files viewed at implement or review (where a count was recorded); no count at all there while a round there was answered from the cockpit (a typed answer with no count is unknown, not unseen); half or more of the implement and review rounds sent from the cockpit with no viewed count (checked only when some round there has a count); a phase cleared by the decision-maker (`/autopilot`, `/sprint`); 24 hours or more since the last round.
 3. **warm** — otherwise.
 
-The condition sets the depth (step 4). It goes into the head line with its `why`.
+The condition sets the depth (step 4). It goes into the head line (the first line of `debrief.md`) with its `why`.
 
 ### 2. The ask
 
 Asked once per REQ. Look in `phases[*].gates[]` for a round with `decision: "debrief"`, in any phase. If there is one and `--ask` was not given, reuse its note (`<reader> · <angle>`, or `skip` → the defaults below) and go to step 3.
 
-It is **skipped under /autopilot and /sprint** (nobody is there to answer), and on an assistant without a question dialog. Then use the defaults and record `--note skip`:
+**Never at an open gate.** If the REQ has a gate marker (`.awaiting-approval`), a gate is open and its cockpit must stay drawn (GATE-PROTOCOL invariant 5). Do not open the dialog, even with `--ask`: reuse a recorded `debrief` round, else use the defaults below for this run and **record nothing** — nobody answered, so `/wrapup` step 7c must still ask. Step 5 then ends the turn with that gate's `Decision →` line.
+
+It is also **skipped under /autopilot and /sprint** (nobody is there to answer), and on an assistant without a question dialog. A dialog that is dismissed or fails counts the same. In each case use the defaults and record `--note skip`:
 
 - reader: `handover` when step 1 printed handover, else `lead`;
 - angle: the first seeded option below.
 
-Otherwise ask, on Claude with `AskUserQuestion` — the one question dialog the pipeline puts, because this is not a gate and `/wrapup` must not end its turn here (GATE-PROTOCOL → *The trail*; the toolkit's ADR-003). One call, two questions:
+Otherwise ask, on Claude with `AskUserQuestion`. It is the one question dialog the pipeline puts: no gate is open, and `/wrapup` must not end its turn here (GATE-PROTOCOL → *The trail*; the toolkit's decision record ADR-003). One call, two questions:
 
-- **Reader** — the question text carries the condition: *"Who is this for? The trail says you are cold: viewed 2/7 at review."* Options: `my lead (Recommended)` · `me now` · `a handover`. When step 1 printed handover, put `a handover (Recommended)` first and drop the mark from `my lead`. The dialog's own *Other* covers anyone else.
-- **Angle** — *"What do you want to be able to answer?"* Two or three options seeded from the REQ: its accepted ADRs, `architecture.md` → *Risks*, and the requirement's open questions. Each option is a question a lead would ask, short: `why a dialog, not a text ask (ADR-003)`, `what if register.tsx breaks`. The first is the default.
+- **Reader** — the question text says, in plain words, what step 1 found and what it was based on. Never the bare word `cold`, `warm` or `handover`, and never "the trail says". For example: *"You opened 2 of 7 changed files at review, so I'll tell the whole story. Who is it for?"*; for warm, *"You approved review an hour ago, so I'll cover what changed since. Who is it for?"*. Options: `my lead (Recommended)` · `me now` · `a handover`. When step 1 printed handover, put `a handover (Recommended)` first and drop the mark from `my lead`. The dialog's own *Other* covers anyone else.
+- **Angle** — *"What do you want to be able to answer?"* Two or three options seeded from the REQ: its accepted ADRs, `architecture.md` → *Risks*, and the requirement's open questions. Each option is a question a lead would ask, short and in plain words. Name a decision by what it decided, not by its id alone: `why a dialog, not a text ask`, `what if register.tsx breaks`. The first is the default.
 
 Record the answer at once, before writing anything:
 
@@ -57,7 +61,7 @@ Record the answer at once, before writing anything:
 node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision debrief --note "<reader> · <angle>" --phase <currentPhase>
 ```
 
-`<reader>` is `lead`, `me`, `handover`, or the *Other* text. `trail gate` records an ask before an open gate round and never closes it, so asking from an open gate leaves that gate as it was.
+`<reader>` is `lead`, `me`, `handover`, or the *Other* text. `trail gate` records an ask before an open gate round and never closes it, so a gate opened later in the same phase is left as it was.
 
 ### 3. Read the inputs — this much and no more
 
@@ -129,13 +133,13 @@ DEBRIEF · <REQ-ID-slug>
 full story: .adlc/<REQ_PATH>/debrief.md
 ```
 
-The first line starts `DEBRIEF · `, so the trail hook knows this turn is not a gate, even with a gate open. No marker, no gate, no `Decision →` line; the open gate, if any, stays as it was.
+The first line starts `DEBRIEF · `, so the trail hook knows this turn is not a gate, even with a gate open. No marker and no gate of its own; the open gate, if any, stays as it was. With no gate open, add no `Decision →` line. With a gate open, the turn is a reply that names no option, so end it with that gate's `Decision →` line again, word for word from its marker's options (GATE-PROTOCOL invariant 5).
 
 Run by `/wrapup` (or `/autopilot`'s final review), print nothing: hand back the file path, the reader and the condition. The caller's card shows the debrief under its own `GATE` header. Inside that card no line may start with `DEBRIEF · `, or the trail hook would take the ship gate for a story turn.
 
 ## What this skill never does
 
-- Ask more than once per REQ (unless `--ask`), or ask under `/autopilot` or `/sprint`.
+- Ask more than once per REQ (unless `--ask`), ask under `/autopilot` or `/sprint`, or open the dialog while a gate marker exists.
 - Ask as text that ends the turn, or put any other question in a dialog.
 - Write a marker, a gate card, or anything outside `debrief.md` and the one trail round.
 - Grade the user's own summary. It is shown beside the story by `/wrapup`, never corrected.
