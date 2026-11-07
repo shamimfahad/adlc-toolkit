@@ -3,13 +3,14 @@ import { describe, expect, mock, test, type TestBody } from 'claude-code/testing
 
 import type { FlightDeck, FlightGateAsk, FlightGit, FlightItem, FlightLane, FlightTrail } from '../types'
 import {
-  COMPACT_TIMEOUT_MS, autoCompactApplies, buildReq, describeTool, eta, idOf, isApproveLike, markSpans, parseDispatch, parseGateCard, ringGlyph, runs, splitFolder, taskGlyphs,
+  COMPACT_TIMEOUT_MS, autoCompactApplies, buildReq, describeTool, eta, idOf, isApproveLike, markSpans, parseDebrief, parseDispatch, parseGateCard, ringGlyph, runs, splitFolder, taskGlyphs,
   timeline,
 } from '../hooks/model'
 import {
-  filterItems, firstLine, hotFor, hotTail, notesFor, optionsFromDecision, parseHot, parseMarker, parseRecord, partsOf, phaseOf,
+  filterItems, firstLine, hotFor, hotTail, notesFor, optionsFromDecision, parseHot, parseMarker, parseRecord, partsOf, phaseLine, phaseOf,
   recordDecisionsFor, replyFor, replyOf, inFlight, sectionOf, sprintMembers, stripOf, idOrder, flyingTarget,
 } from '../hooks/vault'
+import { planVsActual, summaryGaps } from '../hooks/evidence'
 
 const CARD = [
   'Implementation is done. Here is the gate.',
@@ -26,6 +27,34 @@ const CARD = [
   'MY READ    approve — the Startup.cs edit is the DI line TASK-005 needed',
   'Decision → approve — moves on to review · revise — say what to change · abort — stops REQ-042',
   '```',
+].join('\n')
+
+const DEBRIEF = [
+  'DEBRIEF · REQ-002-debrief · for: lead · reader: cold — viewed 2/7 at review · 3 days since the last gate · written 2026-11-08T10:02Z at 9fa7fc2',
+  'IN ONE BREATH',
+  'The pane tells the story of a REQ.',
+  'One file, eight sections.',
+  '',
+  'WHY',
+  'today → nothing · after → debrief.md — requirement.md',
+  'WHAT CHANGED',
+  '```mermaid',
+  'flowchart LR',
+  '  A --> B',
+  '```',
+  '◆ core/skills/debrief.md:12 — the new skill — AC1',
+  '◆ hooks/model.ts — parseDebrief — the mod reads the file — never recomputes',
+  '◇ README.md — skill count — the list grew (unplanned)',
+  'HOW',
+  'T1,T2 → T3 · 3 agents — ADR-003',
+  'WHAT WAS CHECKED',
+  '✓ tests 41/41 — verify-output.md:14',
+  'WHAT TO WATCH',
+  '⚠ the pin is not verified live — README · Debrief',
+  'SAY IT TO YOUR LEAD',
+  '"I added a debrief."',
+  'QUESTIONS YOU MAY GET',
+  'Q why not a dialog? → ADR-003',
 ].join('\n')
 
 describe('model', () => {
@@ -101,6 +130,60 @@ describe('model', () => {
 
   test('gate card: prose that only mentions a gate is left alone', () => {
     expect(parseGateCard('We are at GATE 2/5 now, see above.')).toBe(null)
+  })
+
+  test('debrief: a full file parses into head, eight sections and the file rows', () => {
+    const d = parseDebrief(DEBRIEF)
+    expect(d.head).toEqual({
+      req: 'REQ-002', slug: 'debrief', forWho: 'lead', reader: 'cold',
+      why: 'viewed 2/7 at review · 3 days since the last gate', written: '2026-11-08T10:02Z', sha: '9fa7fc2',
+    })
+    expect(d.sections.map(s => s.label)).toEqual([
+      'IN ONE BREATH', 'WHY', 'WHAT CHANGED', 'HOW', 'WHAT WAS CHECKED', 'WHAT TO WATCH', 'SAY IT TO YOUR LEAD', 'QUESTIONS YOU MAY GET',
+    ])
+    expect(d.sections[0]?.lines).toEqual(['The pane tells the story of a REQ.', 'One file, eight sections.'])
+    const changed = d.sections[2]?.lines ?? []
+    expect(changed).toEqual(['```mermaid', 'flowchart LR', '  A --> B', '```'])
+    expect(d.files).toEqual([
+      { planned: true, path: 'core/skills/debrief.md', line: 12, what: 'the new skill', why: 'AC1' },
+      { planned: true, path: 'hooks/model.ts', what: 'parseDebrief', why: 'the mod reads the file — never recomputes' },
+      { planned: false, path: 'README.md', what: 'skill count', why: 'the list grew' },
+    ])
+    expect(d.before).toEqual([])
+  })
+
+  test('debrief: partial, empty, no head, CRLF', () => {
+    const partial = parseDebrief('DEBRIEF · REQ-7-x · for: me · reader: warm\nIN ONE BREATH\nshort\nWHAT TO WATCH\n⚠ one\nSAY IT TO YOUR LEAD\n"done"')
+    expect(partial.head?.reader).toBe('warm')
+    expect(partial.head?.why).toBe('')
+    expect(partial.head?.written).toBe(null)
+    expect(partial.sections.map(s => s.label)).toEqual(['IN ONE BREATH', 'WHAT TO WATCH', 'SAY IT TO YOUR LEAD'])
+    expect(partial.files).toEqual([])
+
+    expect(parseDebrief('')).toEqual({ head: null, sections: [], files: [], before: [] })
+    expect(parseDebrief(undefined as unknown as string).sections).toEqual([])
+
+    const headless = parseDebrief('some prose first\n## WHY\ntoday → after')
+    expect(headless.head).toBe(null)
+    expect(headless.before).toEqual(['some prose first'])
+    expect(headless.sections).toEqual([{ label: 'WHY', lines: ['today → after'] }])
+
+    const crlf = parseDebrief(DEBRIEF.replace(/\n/g, '\r\n'))
+    expect(crlf).toEqual(parseDebrief(DEBRIEF))
+    expect(crlf.head?.sha).toBe('9fa7fc2')
+  })
+
+  test('debrief: an unknown label stays a line of the section before; a head with no why keeps the written tail', () => {
+    const d = parseDebrief('**DEBRIEF · REQ-sf-033 · for: a handover · reader: handover · written 2026-11-08T10:02Z at abc1234**\n**HOW**\nT1 → T2\nEXTRA NOTES\nkept\nhow\nWHAT CHANGED\n◇ docs/x.md:3 — moved\nnot a file row')
+    expect(d.head).toEqual({ req: 'REQ-sf-033', slug: '', forWho: 'a handover', reader: 'handover', why: '', written: '2026-11-08T10:02Z', sha: 'abc1234' })
+    expect(d.sections).toEqual([
+      { label: 'HOW', lines: ['T1 → T2', 'EXTRA NOTES', 'kept', 'how'] },
+      { label: 'WHAT CHANGED', lines: ['not a file row'] },
+    ])
+    expect(d.files).toEqual([{ planned: false, path: 'docs/x.md', line: 3, what: 'moved', why: '' }])
+    // ◆ outside WHAT CHANGED is plain text; an unknown reader is not a head.
+    expect(parseDebrief('WHY\n◆ a — b — c').files).toEqual([])
+    expect(parseDebrief('DEBRIEF · REQ-1 · for: me · reader: lukewarm').head).toBe(null)
   })
 
   test('context ring: one glyph per bucket, edges included', () => {
@@ -1212,7 +1295,7 @@ describe('0.7.0', () => {
     expect((await wide.find({ key: 'tab-3' }))?.text).toMatch(/3 implement ●/)
     expect(await wide.find({ type: 'Text', text: /waiting 0:05/ })).toBeDefined() // implement's status line
     expect(await wide.find({ key: 'home' })).toBeUndefined() // ‹ back exists only in narrow
-    expect(await wide.find({ type: 'Text', text: /‹|›/ })).toBeUndefined()
+    expect((await wide.findAll({ type: 'Text', text: /‹|›/ })).map(t => t.text)).toEqual(['debrief ›']) // 0.10.0: the GATE line's link; no ‹ back
     await wide.unmount()
     const mid = await $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(100, 400) })
     expect(await mid.find({ key: 'tab-3' })).toBeDefined()
@@ -1338,6 +1421,7 @@ describe('0.8.1', () => {
     { name: 'narrow while layout says wide', cols: 80, extra: { view: { req: 'REQ-042', tab: 3, sub: { kind: 'page' }, home: false } } },
     { name: 'no git facts yet for the REQ shown', cols: 120, extra: { git: {} } },
     { name: 'a diff open', cols: 120, extra: { view: { req: 'REQ-042', tab: 3, sub: { kind: 'diff', path: 'src/pay/Startup.cs' }, home: false } } },
+    { name: 'the debrief open, narrow', cols: 80, extra: { view: { req: 'REQ-042', tab: 3, sub: { kind: 'debrief' }, home: false } } },
   ]
   for (const v of pure) test(`a render only reads, no write and no git: ${v.name}`, async ($, on) => {
     {
@@ -1561,5 +1645,200 @@ describe('context ring', () => {
     await settle(() => brief !== '')
     await ui.unmount()
     expect(brief).toMatch(/Resuming REQ-042/)
+  })
+})
+
+// ---------- 0.10.0: the debrief — the ship tab's DEBRIEF and the debrief view ----------
+
+const SHIP_MARKER = [
+  'Phase: ship', 'REQ: REQ-042-payment-retries', 'Gate: 5/5', 'Awaiting: ship it.', 'Ask: Ship REQ-042?', 'Options:',
+  '  - approve — run the merge checklist', '  - revise <what> — adjust the PR draft or vault', '  - merged — after you merge; finalize state',
+  '  - abort — halts without merging', 'Recommended: approve',
+].join('\n')
+const FOLDER = 'D:/repo/.adlc/specs/REQ-042-payment-retries'
+const MOD = 'core/extras/claude/mods/adlc-flightdeck'
+const shipDeck: FlightDeck = { vault: 'D:/repo/.adlc', scannedAt: 0, reqs: [buildReq('REQ-042-payment-retries', { currentPhase: 5, gateState: 'awaiting' }, true, 0, 0)] }
+const shipGit: Record<string, FlightGit> = {
+  'REQ-042': {
+    ...(gitFacts['REQ-042'] as FlightGit),
+    touched: [
+      { path: `${MOD}/hooks/register.tsx`, status: 'M', add: 88, del: 12 },
+      { path: `${MOD}/hooks/model.ts`, status: 'M', add: 24, del: 3 },
+      { path: 'README.md', status: 'M', add: 9, del: 1 },
+    ],
+    hashes: {},
+  },
+}
+// The worked example of architecture.md (ADV-005): it names register, so 1 of 3; model.ts and README.md are not mentioned.
+const SUMMARY = 'compaction in register, ring in the band'
+const shipTrail = (rounds: { decision: string; note: string }[] = [{ decision: 'summary', note: SUMMARY }, { decision: 'debrief', note: 'lead · why not a dialog' }]): FlightTrail => ({
+  'REQ-042': { ship: { rounds: rounds.map((r, i) => ({ at: i, ...r })), runs: [], card: null } },
+})
+/**
+ * Files the mod reads, by path; anything else falls through (and reads as missing). Matched by suffix: the host
+ * resolves `D:/…` against the test's folder on a POSIX machine. A fresh mtime per call, so the mtime cache never
+ * serves an older test's text.
+ */
+let fsEpoch = 0
+const files = (on: On, map: Record<string, string>) => {
+  const mtimeMs = ++fsEpoch
+  const at = (path: string) => Object.entries(map).find(([k]) => path === k || path.endsWith(`/${k}`))?.[1]
+  on('fs.stat', async ($, e, next) => {
+    const t = at((e as { path: string }).path)
+    return t === undefined ? next(e) : ({ value: { kind: 'file', size: t.length, mtimeMs, isLink: false } } as never)
+  })
+  on('fs.read', async ($, e, next) => {
+    const t = at((e as { path: string }).path)
+    return t === undefined ? next(e) : ({ value: t } as never)
+  })
+}
+const debriefView = { req: 'REQ-042', tab: 5, sub: { kind: 'debrief' }, home: false }
+/** The ship gate with a debrief on disk, drawn at one width: the one helper whose width spans all three regimes (L-REQ-001-4). */
+const debriefAt = async ($: Parameters<TestBody>[0], on: On, cols: 120 | 100 | 80, { md = DEBRIEF as string | null, ...extra }: Partial<Record<Key, unknown>> & { md?: string | null } = {}) => {
+  atGate(on, { deck: shipDeck, git: shipGit, trail: shipTrail(), gate: { 'REQ-042': parseMarker(SHIP_MARKER) }, view: debriefView, ...extra })
+  files(on, md === null ? {} : { [`${FOLDER}/debrief.md`]: md })
+  return $.ui.mount({ plugin: 'adlc-flightdeck', surface: 'terminal', ...bandAt(cols, 400) })
+}
+type Mounted = Awaited<ReturnType<typeof debriefAt>>
+/** The view never uses the mod's accent: the only autoAccept Texts are level 1's (✈ and the selected chip). */
+const accentOutsideLevel1 = async (ui: Mounted) =>
+  (await ui.findAll({ type: 'Text' })).filter(t => t.props.color === 'autoAccept').map(t => t.text).filter(t => !/^(✈|REQ-042|042| ship)$/.test(t))
+
+describe('0.10.0 debrief', () => {
+  const regimes: { cols: 120 | 100 | 80; name: string }[] = [
+    { cols: 120, name: '≥110: the Debrief board' }, { cols: 100, name: '84–109: one column' }, { cols: 80, name: '<84: the DebriefNarrow board' },
+  ]
+  for (const r of regimes) test(`the debrief view, ${r.name}: the head's reader condition, one ‹ back, the options last with letters`, async ($, on) => {
+    const ui = await debriefAt($, on, r.cols)
+    expect((await ui.find({ type: 'Text', text: /^DEBRIEF · for: lead$/ }))?.props.color).toBe('permission')
+    expect((await ui.find({ type: 'Text', text: /^cold$/ }))?.props.color).toBe('warning') // read from the head, never recomputed
+    expect(await ui.find({ type: 'Text', text: /reader → full story/ })).toBeDefined()
+    expect((await ui.findAll({ type: 'Button' })).filter(b => b.text === '‹ back').length).toBe(1)
+    expect(await ui.find({ key: 'gate-debrief' })).toBeUndefined() // the view draws the GATE line without its own link
+    expect((await ui.find({ key: 'opt-approve' }))?.props.hotkey).toBe('a')
+    expect(await ui.find({ type: 'Text', text: /awaiting — ship · round 1/ })).toBeDefined() // summary and debrief are asks, not rounds
+    // Headers click-only; no digit anywhere; only the gate's options take letters.
+    const keyed = (await ui.findAll({ type: 'Button' })).filter(b => typeof b.props.hotkey === 'string')
+    expect(keyed.every(b => /^opt-/.test(b.key ?? '') && /^[a-z]$/.test(b.props.hotkey as string))).toBe(true)
+    expect(await accentOutsideLevel1(ui)).toEqual([])
+    if (r.cols === 120) {
+      expect(await ui.find({ type: 'Text', text: /^ │ $/ })).toBeDefined() // SAY IT │ YOUR SUMMARY
+      expect((await ui.find({ type: 'Text', text: /^ │ $/ }))?.props.color).toBe('inactive')
+      expect(await ui.find({ type: 'Text', text: /^why$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^QUESTIONS YOU MAY GET$/ })).toBeDefined()
+    }
+    if (r.cols === 100) {
+      expect(await ui.find({ type: 'Text', text: /^ │ $/ })).toBeUndefined()
+      expect(await ui.find({ type: 'Text', text: /^why$/ })).toBeUndefined() // the files table drops why
+      expect(await ui.find({ type: 'Text', text: /^what$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^YOUR SUMMARY$/ })).toBeDefined()
+    }
+    if (r.cols !== 80) {
+      expect((await ui.find({ type: 'Text', text: /^SAY IT TO YOUR LEAD$/ }))?.props.color).toBe('subtle')
+      expect((await ui.find({ type: 'Text', text: /^◇ 1 unplanned$/ }))?.props.color).toBe('warning')
+      expect(await ui.find({ type: 'Code' })).toBeDefined() // the one mermaid fence
+      expect((await ui.findAll({ type: 'Button' })).filter(b => /^debrief-sec-/.test(b.key ?? ''))).toEqual([]) // the list is the narrow board only
+    }
+    if (r.cols === 80) {
+      for (const k of ['in-one-breath', 'why', 'what-changed', 'how', 'what-was-checked', 'what-to-watch', 'say-it-to-your-lead', 'questions-you-may-get']) expect(await ui.find({ key: `debrief-sec-${k}` })).toBeDefined()
+      expect((await ui.find({ key: 'debrief-sec-what-changed' }))?.text).toMatch(/WHAT CHANGED +3 files · ◆ 2 planned ◇ 1 +×$/) // unfolded at first
+      expect((await ui.find({ key: 'debrief-sec-say-it-to-your-lead' }))?.text).toMatch(/^SAY IT +1 line for your lead · yours names 1\/3 +›$/)
+      expect(await ui.find({ type: 'Text', text: /^\+\/-$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^what · why dropped below 84 cols$/ })).toBeDefined()
+      expect(await ui.find({ key: 'debrief-diff-readme.md' })).toBeDefined() // +/- from the numstat, pressed opens the diff
+      expect(await ui.find({ type: 'Code' })).toBeUndefined()
+    }
+    await ui.unmount()
+  })
+
+  test('<84: one section unfolds in place — another press folds the first, a second press folds it', async ($, on) => {
+    const ui = await debriefAt($, on, 80, { view: undefined }) // the view left to the real state, so the presses land
+    await $.command.run({ command: 'flight', args: 'debrief' } as never)
+    await settle(() => false)
+    expect((await ui.find({ key: 'debrief-sec-what-changed' }))?.text).toMatch(/×$/)
+    await ui.press({ key: 'debrief-sec-how' })
+    expect((await ui.find({ key: 'debrief-sec-how' }))?.text).toMatch(/×$/)
+    expect((await ui.find({ key: 'debrief-sec-what-changed' }))?.text).toMatch(/›$/)
+    expect(await ui.find({ type: 'Text', text: /^what · why dropped below 84 cols$/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^T1,T2 → T3 · 3 agents — ADR-003$/ })).toBeDefined()
+    await ui.press({ key: 'debrief-sec-how' })
+    expect((await ui.find({ key: 'debrief-sec-how' }))?.text).toMatch(/›$/)
+    expect(await ui.find({ type: 'Text', text: /^T1,T2 → T3 · 3 agents — ADR-003$/ })).toBeUndefined() // the gist row is padded; the unfolded line is not
+    await ui.unmount()
+  })
+
+  test('YOUR SUMMARY: the worked example names 1 of 3 files; model.ts and README.md are not mentioned (ADV-005)', async ($, on) => {
+    const rows = planVsActual([], [], shipGit['REQ-042']?.touched ?? [])
+    expect(summaryGaps(SUMMARY, rows)).toEqual({ mentioned: [`${MOD}/hooks/register.tsx`], missed: [`${MOD}/hooks/model.ts`, 'README.md'] })
+    const ui = await debriefAt($, on, 100)
+    expect(await ui.find({ type: 'Text', text: /^names 1 of 3 files$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /^ · not mentioned: model\.ts, README\.md$/ }))?.props.color).toBe('warning')
+    await ui.unmount()
+  })
+
+  test('at 80 columns with 20 files and WHAT CHANGED unfolded, it caps at 8 rows and the options still render (ADV-007)', async ($, on) => {
+    const many = DEBRIEF.replace(/◆ core\/skills.*\n/, Array.from({ length: 20 }, (_, i) => `◆ src/f${i}.ts — what ${i} — why ${i}\n`).join(''))
+      .replace(/◆ hooks\/model.*\n/, '').replace(/◇ README.*\n/, '')
+    expect(parseDebrief(many).files.length).toBe(20)
+    const ui = await debriefAt($, on, 80, { md: many })
+    expect((await ui.find({ key: 'debrief-sec-what-changed' }))?.text).toMatch(/×$/)
+    expect(await ui.find({ type: 'Text', text: /^… 14 more — widen to 84\+ cols or open debrief\.md$/ })).toBeDefined() // header + 20 files + footer = 22 rows, 8 shown
+    expect(await ui.find({ type: 'Link', text: 'src/f6.ts' })).toBeDefined() // the 7th file is the 8th row
+    expect(await ui.find({ type: 'Link', text: 'src/f7.ts' })).toBeUndefined()
+    for (const k of ['opt-approve', 'opt-revise', 'opt-merged', 'opt-abort']) expect(await ui.find({ key: k })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('no debrief.md: the view says so and how to make one; the options still follow', async ($, on) => {
+    const ui = await debriefAt($, on, 120, { md: null })
+    expect(await ui.find({ type: 'Text', text: /^no debrief here yet — \/debrief writes one \(the working set is local to whoever ran the pipeline\)$/ })).toBeDefined()
+    expect(await ui.find({ key: 'opt-approve' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a partial debrief: the sections present, and a run /debrief hint', async ($, on) => {
+    const ui = await debriefAt($, on, 120, { md: 'IN ONE BREATH\nit tells the story\nWHY\nbecause\nHOW\nT1 → T2' })
+    expect(await ui.find({ type: 'Text', text: /^3 of 8 sections · run \/debrief to write the rest$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /no head line — the reader condition is unknown/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^WHAT CHANGED$/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('the ship tab: DEBRIEF with IN ONE BREATH, the reader and open ›; without the file, how to make one', async ($, on) => {
+    const ui = await debriefAt($, on, 120, { view: undefined })
+    await ui.press({ key: 'tab-5' })
+    expect(await ui.find({ type: 'Text', text: /^DEBRIEF$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^The pane tells the story of a REQ\. One file, eight sections\.$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^for: lead · reader: cold — viewed 2\/7 at review/ })).toBeDefined()
+    await ui.press({ key: 'ship-debrief' })
+    expect(await ui.find({ type: 'Text', text: /^DEBRIEF · for: lead$/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('the ship tab without debrief.md', async ($, on) => {
+    const ui = await debriefAt($, on, 120, { md: null, view: { req: 'REQ-042', tab: 5, sub: { kind: 'page' }, home: false } })
+    expect(await ui.find({ type: 'Text', text: /^DEBRIEF$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^no debrief here yet/ })).toBeDefined()
+    expect(await ui.find({ key: 'ship-debrief' })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('/flight debrief opens it; ‹ back returns to the phase page; the GATE line\'s debrief › opens it again', async ($, on) => {
+    const ui = await debriefAt($, on, 120, { view: undefined })
+    const run = async (args: string) => ((await $.command.run({ command: 'flight', args } as never)) as { text?: string }).text ?? ''
+    expect(await run('debrief')).toMatch(/Debrief open/)
+    await settle(() => false)
+    expect(await ui.find({ type: 'Text', text: /^DEBRIEF · for: lead$/ })).toBeDefined()
+    await ui.press({ key: 'back' })
+    expect(await ui.find({ type: 'Text', text: /^DEBRIEF · for: lead$/ })).toBeUndefined()
+    expect(await ui.find({ key: 'gate-debrief' })).toBeDefined() // the ship page, its GATE line
+    await ui.press({ key: 'gate-debrief' })
+    expect(await ui.find({ type: 'Text', text: /^DEBRIEF · for: lead$/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a debrief round is not a gate round: not counted on the GATE line, not in the phase line', () => {
+    expect(phaseLine({ n: 5, state: 'done', rounds: [{ decision: 'approve', note: '' }, { decision: 'debrief', note: 'lead · skip' }] })).toBe('approve · 1 round')
+    expect(phaseLine({ n: 5, state: 'gate', rounds: [{ decision: 'debrief', note: 'skip' }] })).toBe('at the gate')
   })
 })

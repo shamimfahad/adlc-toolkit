@@ -1,6 +1,6 @@
 {
   "$comment": "Tool-agnostic catalog of the ADLC toolkit. The build script (scripts/build.mjs) reads this plus the frontmatter of each core/skills/*.md and core/agents/*.md file, then emits per-tool adapter stubs. Only metadata NOT present in the source frontmatter lives here.",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "repository": "https://github.com/shamimfahad/adlc-toolkit",
   "vaultDir": ".adlc",
   "$layoutComment": "On-disk shape of the work-record trees. The prose contract — resolve/mint/enumerate, the four depths, the gitignore set — lives in core/VAULT-LAYOUT.md. Change both together.",
@@ -166,6 +166,13 @@
       "gate": false,
       "agents": [],
       "summary": "Reconcile pipeline-state with git reality; back-fill the vault."
+    },
+    {
+      "name": "debrief",
+      "category": "utility",
+      "gate": false,
+      "agents": [],
+      "summary": "Write the REQ's story (debrief.md): eight sections, a pointer on every claim, pitched to its reader."
     },
     {
       "name": "config",

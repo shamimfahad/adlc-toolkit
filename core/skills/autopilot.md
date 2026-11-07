@@ -126,8 +126,9 @@ When phase 5 completes and the decision-maker (or fast path) APPROVEs the ship g
 1. Ensure the feature branch holds the checkpoint commits; under `commit+push`, fast-forward push it.
 2. Write `pr-draft.md` (as `/wrapup` does) — title, body, change summary, lesson references. Do not run `gh pr create`.
 3. Write `run-report.md` (see below).
-4. Notify (if `notify.on_complete`).
-5. Emit the final review — a `RUN SUMMARY` card per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. Unlike a phase gate it's a **handoff, not an approve/revise choice**: the autonomous run is done and the merge decision is now the human's. Keep the spine — what's done → what's left for you → your read.
+4. Run the debrief with the ask skipped — `/debrief` steps 1–4 (`$TOOLKIT_PATH/core/skills/debrief.md`). Nobody is there to answer, so its step 2 records `--note skip` and takes the reader from the trail (`handover` when the trail says so, else `lead`). It writes `debrief.md`; it shows nothing, and no line of the card below starts with `DEBRIEF · `.
+5. Notify (if `notify.on_complete`).
+6. Emit the final review — a `RUN SUMMARY` card per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. Unlike a phase gate it's a **handoff, not an approve/revise choice**: the autonomous run is done and the merge decision is now the human's. Keep the spine — what's done → what's left for you → your read.
 
 ```
 RUN COMPLETE · REQ-NNN-<slug>  (autonomous)
@@ -136,6 +137,7 @@ RUN COMPLETE · REQ-NNN-<slug>  (autonomous)
 RUN SUMMARY   decisions: <a> approve / <r> rework / <h> halt
               risk: <low|medium|high> · reworks: <x> (of <budget> allowed)
               full decision log: run-report.md
+              the story to retell: debrief.md
 
 NEEDS YOU     1. review run-report.md and the diff
               2. open the PR from pr-draft.md

@@ -12,7 +12,6 @@ A table of contents for the vault, built from the files themselves. Each row lin
 | ID | Title | Status | Kind | Merged | Path |
 |---|---|---|---|---|---|
 | REQ-001 | [[specs/2026-11/sf/REQ-001-flightdeck-compact-ring|Flightdeck: auto-compact at phase boundaries, a context ring, numbered agents]] | ready-to-merge | /proceed | — | `specs/2026-11/sf/REQ-001-flightdeck-compact-ring.md` |
-| REQ-002 | [[specs/2026-11/sf/REQ-002-debrief|The debrief: the story of a REQ you can retell, in the gate]] | in flight — phase 1 (cleared) | — | — | `specs/2026-11/sf/REQ-002-debrief/` |
 
 ## ADRs
 
@@ -22,6 +21,7 @@ Full ledger with supersession chains: [[decisions]].
 |---|---|---|---|
 | ADR-001 | [[architecture/adr-001-tiered-vault-loading|Tiered vault loading for reflector and architect]] | accepted | (not recorded — created 2026-07-22; implemented in 1.9.0) |
 | ADR-002 | [[architecture/adr-002-opt-in-auto-compact|Opt-in auto compaction after an approved gate]] | accepted | 2026-11-07 |
+| ADR-003 | [[architecture/adr-003-debrief-ask-dialog|The debrief's reader question uses a question dialog]] | accepted | — |
 
 ## Concepts
 

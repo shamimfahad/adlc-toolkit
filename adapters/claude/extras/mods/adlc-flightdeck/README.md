@@ -65,7 +65,8 @@ unshipped* puts every unshipped REQ back on the strip.
 
 `/flight` (or `/flight REQ-079`) opens the flightdeck on that REQ's live phase; `/flight max` at
 full height; `/flight close` collapses it to its row; `/flight toggle` switches; `/flight
-history` / `settings` open those views.
+history` / `settings` open those views; `/flight debrief` (or `/flight debrief REQ-079`) opens the
+REQ's story (see *Debrief*).
 
 ### A phase tab
 
@@ -82,7 +83,7 @@ Then the evidence, built from the files the templates already mandate plus git:
 | **architect** | `YOU SAID` (your predict answer) beside `CLAUDE FOUND` (the Approach) · `TASKS` as rails, tiers and parallel lanes |
 | **implement** | `FILES` — one row per changed file: viewed mark, link, a dot per task that names it, `+a −d` (opens the diff) |
 | **review** | `FINDINGS` grid (id · sev · where · finding · split · pick) · `ACCEPTANCE CRITERIA` met / not · `PLAN VS ACTUAL` |
-| **ship** | `WHAT APPROVING SETS IN MOTION`, numbered · `DIFFSTAT` with a `+`/`-` bar per file (opens the diff) |
+| **ship** | `WHAT APPROVING SETS IN MOTION`, numbered · `DIFFSTAT` with a `+`/`-` bar per file (opens the diff) · `DEBRIEF`, two lines: IN ONE BREATH, then who it is for and the reader, with `open ›` |
 
 `/flight REQ-042 review` (or a phase number) opens a tab directly. Press a diff to read it in the flightdeck
 (`‹ back`) — that marks the file viewed; Ctrl+click a path to open it in your editor at the line.
@@ -177,6 +178,41 @@ together. If the list cannot be read, no numbers show.
 
 STATUS: needs verification — the engine's types state no order for its agent list; whether it matches
 the list under the prompt is checked live, not by the tests.
+
+### Debrief
+
+`/debrief` (toolkit 1.14.0) writes `debrief.md` into the REQ's working set: the story of the
+work in eight sections — IN ONE BREATH, WHY, WHAT CHANGED, HOW, WHAT WAS CHECKED, WHAT TO WATCH,
+SAY IT TO YOUR LEAD, QUESTIONS YOU MAY GET — with a pointer on every claim. `/wrapup` runs it
+before the last gate. The view reads that file; it never writes it.
+
+- **Opening it.** `debrief ›` at the end of every phase's GATE line (click only), `open ›` on the
+  ship tab's DEBRIEF section, or `/flight debrief`. `‹ back` returns to the page you came from.
+- **The head** says who it is for and the reader: `cold` (full story), `warm` (the delta) or
+  `handover` (files first), with the evidence — for example `viewed 2/7 at review`. The view reads
+  the reader from the file's first line; the toolkit's trail script works it out, not the mod.
+- **WHAT CHANGED** lists the files: `◆` planned (named in the architecture's blast radius, the
+  files the REQ meant to touch), `◇` unplanned in amber, with `+a −d` from git; press it to open
+  the diff. A mermaid block in it is shown as code from 84 columns and dropped below.
+- **YOUR SUMMARY** sits beside SAY IT TO YOUR LEAD: the summary you gave `/wrapup`, which of the
+  changed files it names, and the ones it does not mention, in amber.
+- **Widths.** From 110 band columns, a board: heads in a left column, the files table with
+  `what` and `why`, SAY IT and YOUR SUMMARY side by side. From 84 to 109, the same story in one
+  column; the files table drops `why` and YOUR SUMMARY goes under SAY IT. Below 84, a list: one row
+  per section with a one-line gist, one section unfolded in place (WHAT CHANGED at first; press a
+  row to unfold it, `×` to fold it). An unfolded section shows 8 rows at most, then `… N more —
+  widen to 84+ cols or open debrief.md`.
+- **The gate's options come last.** When the REQ waits at a gate, its options are drawn under the
+  story, with their letters, so you can answer from the view.
+- No file yet: `no debrief here yet — /debrief writes one`. The working set is local to whoever
+  ran the pipeline, so a teammate's REQ usually has none.
+
+Why the 8-row cap: the band cannot scroll a body it draws itself, so in the narrow list an unfolded
+section that ran long would push the options off screen.
+
+STATUS: needs verification — that the band cannot keep the options pinned under a body that
+scrolls is checked by `claude plugin test` and by Claude Code 2.1.318's live runs, not yet live on
+2.1.319 (`docs/plans/probes/results-pin.md` → *To finish it*).
 
 ### Narrow
 
@@ -283,7 +319,7 @@ adlc-flightdeck/
   .claude-plugin/plugin.json
   hooks/hooks.json
   hooks/register.tsx   the hooks: events, band, cards, /flight, the cockpit and its pages
-  hooks/model.ts       pure helpers: phase rail, gate-card parser, timeline, numbers
+  hooks/model.ts       pure helpers: phase rail, gate-card parser, debrief parser, timeline, numbers
   hooks/vault.ts       pure readers: hot.md, records, notes[], artifacts per phase, history filters
   hooks/evidence.ts    pure readers: blast radius, task files, findings, acceptance, git's text, plan vs actual, pointers, consequences
   types/index.d.ts     the $.state contract

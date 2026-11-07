@@ -91,7 +91,7 @@ It creates `.adlc/`, scans existing docs (README, ARCHITECTURE, CONTRIBUTING, li
 /spec      → approve → /architect → approve → /implement → approve → /review → approve → /wrapup → approve
 ```
 
-Or run the whole thing with `/proceed`. Each gate pauses for your approval. For bugs, use `/bugfix`; for a small change, `/task` runs a slim two-gate pipeline that still records a REQ (and escalates to `/proceed` if it turns out large).
+Or run the whole thing with `/proceed`. Each gate pauses for your approval. For bugs, use `/bugfix`; for a small change, `/task` runs a slim two-gate pipeline that still records a REQ (and escalates to `/proceed` if it turns out large). To retell the work — to your lead, or to whoever takes it over — run `/debrief` at any phase: it writes `debrief.md`, the story in eight short sections with a pointer on every claim. `/wrapup` runs it for you before the last gate.
 
 ## Changing settings
 

@@ -66,6 +66,8 @@ export type FlightSub =
   | { kind: 'lane'; id: string }
   | { kind: 'diff'; path: string }
   | { kind: 'mermaid'; n: number }
+  /** The REQ's debrief.md, parsed (model.ts parseDebrief). `open`: below 84 columns, the section unfolded ('' none; absent WHAT CHANGED). */
+  | { kind: 'debrief'; open?: string }
 
 export type FlightView = {
   req: string | null

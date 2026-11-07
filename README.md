@@ -120,7 +120,7 @@ Run phases one at a time, or chain them with `proceed` (gates between each), `au
 Five phase skills, three orchestrators, two slim pipelines, and a set of standalone audits and utilities — each installed as a slash command in your assistant.
 
 <details>
-<summary><b>All 18 skills</b></summary>
+<summary><b>All 19 skills</b></summary>
 
 | Skill            | What it does                                                                                                               | Ends in gate? |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------- |
@@ -130,6 +130,7 @@ Five phase skills, three orchestrators, two slim pipelines, and a set of standal
 | `implement`      | Execute task DAG                                                                                                           | Yes           |
 | `review`         | Dispatch reviewers, consolidate findings                                                                                   | Yes           |
 | `wrapup`         | Draft PR + lessons + vault updates + git checklist                                                                         | Yes           |
+| `debrief`        | Write the REQ's story (`debrief.md`) — eight sections, a pointer on every claim, pitched to its reader                     | No            |
 | `proceed`        | Run all five phase skills with gates between                                                                               | —             |
 | `autopilot`      | Autonomous pipeline — routes each gate through the decision-maker; ends in one final human review                          | —             |
 | `sprint`         | Parallel multi-REQ orchestrator (gate-pause)                                                                               | —             |

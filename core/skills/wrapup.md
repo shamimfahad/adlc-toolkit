@@ -134,14 +134,14 @@ If the verify phase produced reflector findings tagged `vault-stale`, draft upda
 
 ### 3b. Write the record
 
-The record is the one file about this REQ that outlives its folder. It lives **beside** the folder, not in it — `.adlc/<REQ_PATH>.md` (`specs/REQ-042-slug.md` next to `specs/REQ-042-slug/`; `VAULT-LAYOUT.md` → `record(ID)`). It is committed; the folder is the local working set. Write it once, here; after this step nothing edits it except the append-only `## Later` section (`/bugfix` adds a line when a bug traces back).
+The record is the one file about this REQ that outlives its folder. It lives **beside** the folder, not in it — `.adlc/<REQ_PATH>.md` (`specs/REQ-042-slug.md` next to `specs/REQ-042-slug/`; `VAULT-LAYOUT.md` → `record(ID)`). It is committed; the folder is the local working set. Write it once, here; after this step nothing edits it except step 7c, which replaces the `## Goal` body later in this same run, and the append-only `## Later` section (`/bugfix` adds a line when a bug traces back).
 
 Copy `.adlc/templates/record-template.md` (toolkit fallback `$TOOLKIT_PATH/templates/record-template.md`, same rule as step 2) to `.adlc/<REQ_PATH>.md` and fill it from what you already have open — do not open anything new for it:
 
 | Section | Source |
 |---|---|
 | Header table | `pipeline-state.json` (path kind, branch, rounds, PR), `git log --oneline <base>..HEAD` and `--shortstat` (commits, lines), `usage.json` if present |
-| Goal | `requirement.md` Goal, past tense (you wrote this for the PR body at step 2 — reuse it) |
+| Goal | `requirement.md` Goal, past tense (you wrote this for the PR body at step 2 — reuse it). A stand-in: step 7c replaces it with the debrief's `IN ONE BREATH`, past tense |
 | Acceptance criteria | `requirement.md`, ticked from `verification.md`'s cross-check |
 | What changed | `architecture.md` blast-radius table, paths only; two to four sentences of approach |
 | Decisions | ADRs touched this REQ; gate decisions from `pipeline-state.notes` |
@@ -220,7 +220,7 @@ Only if `config.yml.sources.write` includes the issue tracker **and** this REQ w
 
 ### 7. Write the gate marker
 
-Per GATE-PROTOCOL → *The marker*, after step 7b's ask has had its reply (or was skipped):
+Per GATE-PROTOCOL → *The marker*, after step 7c has written the debrief (7c follows 7b's reply, or 7b's skip):
 
 ```
 Phase: ship
@@ -238,6 +238,7 @@ Files:
   - .adlc/<REQ_PATH>/pr-draft.md
   - .adlc/<REQ_PATH>/merge-checklist.md
   - .adlc/<REQ_PATH>.md   (the record)
+  - .adlc/<REQ_PATH>/debrief.md   (the story, step 7c)
   - New / updated vault files (see below)
 ```
 
@@ -252,7 +253,16 @@ Two to four lines.
 skip — no summary; I go straight to the ship gate
 ```
 
-On the reply, record it at once — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision summary --note "<the reply, verbatim>" --phase 5` (a `skip` is recorded as `--note skip`) — then compare it with the diff: the changed files whose name (or stem) the summary never mentions, and any claim in it that the tree contradicts. A summary that names no file is handed back once — *"name the files you looked at"*, which ends the turn the same way — and then taken as given. Append to `pr-draft.md`, after `### Summary`, a block `### Reviewed by <git user.name>` holding the lines verbatim; the user keeps or cuts it when opening the PR. The commits stay as drafted in step 1, in the repo's convention — this is the reviewer's account, not the author's message. Then, in the same turn, write the state (step 6), the marker (step 7) and the card (step 8).
+On the reply, record it at once — `node $TOOLKIT_PATH/scripts/adlc.mjs trail gate --vault .adlc --req <REQ_PATH> --decision summary --note "<the reply, verbatim>" --phase 5` (a `skip` is recorded as `--note skip`) — then compare it with the diff: the changed files the summary never names (the rule is under step 8's `YOUR SUMMARY`), and any claim in it that the tree contradicts. A summary that names no file is handed back once — *"name the files you looked at"*, which ends the turn the same way — and then taken as given. Append to `pr-draft.md`, after `### Summary`, a block `### Reviewed by <git user.name>` holding the lines verbatim; the user keeps or cuts it when opening the PR. The commits stay as drafted in step 1, in the repo's convention — this is the reviewer's account, not the author's message. Then, in the same turn, go to step 7c.
+
+### 7c. Write the debrief
+
+**This runs after 7b and before steps 6, 7 and 8, in the same turn as 7b's reply.** Start it only once 7b's reply is recorded and the `### Reviewed by` block is appended — or once 7b was skipped. A summary handed back for naming no file is not a reply yet: wait for the next one. So the summary is never asked after the debrief is shown.
+
+1. Run `/debrief` steps 1–4 for this REQ (`$TOOLKIT_PATH/core/skills/debrief.md`): the reader condition from the trail, the ask (once per REQ; skipped under `/autopilot` and `/sprint`), the inputs, and `debrief.md`. The ask's reader default here is `lead`. Do not run its step 5: this card shows the debrief, and no line of it may start with `DEBRIEF · `.
+2. Lift `IN ONE BREATH` from `.adlc/<REQ_PATH>/debrief.md`, put it into the past tense, and replace the body of the record's `## Goal` with it (the record from step 3b). Touch nothing else in the record.
+
+Then, in the same turn, write the state (step 6), the marker (step 7) and the card (step 8).
 
 ### 8. Emit the gate card
 
@@ -263,7 +273,9 @@ Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A wrap-up gate's body i
 - **READY** — PR title + `pr-draft.md` (files changed, +/-); `merge-checklist.md`; the record (`<REQ_PATH>.md`, size); vault capture in one compact line (candidates considered `<N>`; promoted `<L-REQ-NNN-n>`; gotchas `<^gNN>`; ADRs/concepts/components/glossary/hot as applicable), then the dedup basis: `dedup vs origin/<base> as of <age>` or `cross-branch dedup skipped: origin/<base> not found`. The age is the honest signal — a week-old fetch makes the check weaker, and the card shows it rather than hiding it.
 - **NEEDS YOU** — only genuine calls: the repo-doc list from step 1 (`docs: <file> — <claim> → <fact>`, applied on approve); **Promotion candidates** from step 3 (`L-REQ-NNN-n — detectable by <grep|lint|test>: <the check>` — pick a home for the check, or `later`); a drafted issue-tracker write-back awaiting your OK (never auto-sent); a "no knowledge captured — is that right?" confirmation; any unresolved final-sanity item. Omit if none.
 - **CHECKS** — final diff sanity as one compact `✓ / ⚠` line: blast radius matches architecture · user-facing docs swept (`N` stale claims listed / none / skipped) · no debug artifacts · no `--no-verify` · commit drafts all in git log.
-- **YOUR SUMMARY** — when a `summary` round was recorded (step 7b): `names 5 of 7 changed files · not mentioned: Startup.cs, docs/retries.md` and any contradiction in one line. Omit when the ask was skipped. The cockpit draws the summary beside the diffstat.
+- **DEBRIEF** — two lines from `debrief.md` (step 7c): `IN ONE BREATH`'s first line, then the first `⚠` line of `WHAT TO WATCH`. The marker's `Files:` names the full story. The label is `DEBRIEF` alone — never `DEBRIEF · `, which the trail hook reads as a story turn, not a gate.
+- **SAY IT** — the debrief's `SAY IT TO YOUR LEAD`, its three lines as written.
+- **YOUR SUMMARY** — right under `SAY IT`, so the two read side by side: when a `summary` round was recorded (step 7b), `names 5 of 7 changed files · not mentioned: Startup.cs, docs/retries.md`, and any contradiction in one line. Omit when the ask was skipped. The gaps use the mod's `summaryGaps` rule, so the card and the cockpit agree: go over the changed files; a file is *named* when its stem (the basename less its last extension) is 3 characters or more and the lower-cased summary contains its lower-cased basename or stem; every other changed file is *not mentioned*. Worked example: the summary "compaction in register, ring in the band" over `register.tsx`, `model.ts`, `README.md` → `names 1 of 3 · not mentioned: model.ts, README.md`. Never grade or correct the summary; show it.
 - **MY READ** — recommendation + one-line why.
 - **Decision** — the last line, `Decision →`, with the same options as the marker: **approve** (gate cleared — run the merge checklist), **revise** (adjust PR draft or vault updates), **merged** (after you merge — finalize state, log to `hot.md`), **abort** (halt without merging). Mark the one `MY READ` names `(recommended)`. Then end your turn: the user's reply is the answer (GATE-PROTOCOL invariant 5).
 
@@ -282,6 +294,14 @@ NEEDS YOU   ⚠ drafted, not sent: comment on issue #842 and a move to
 
 CHECKS      ✓ changed files match the plan · ✓ docs updated · ✓ no debug
             ✓ no --no-verify · ✓ commits in log
+
+DEBRIEF     Payment calls now retry three times with backoff.
+            ⚠ the retry cap is in config, not code — appsettings.json
+SAY IT      "I made payment calls retry with backoff, so a blip no
+            longer fails checkout. I checked the retry tests and the
+            timeout path. The one thing to watch is the cap in config."
+YOUR SUMMARY names 5 of 7 changed files · not mentioned: Startup.cs,
+            docs/retries.md
 
 MY READ     approve — clean wrap; the write-back is the only thing awaiting you
 

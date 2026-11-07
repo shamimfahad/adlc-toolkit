@@ -11,21 +11,25 @@
 //     SubagentStart         phases[n].agents += { id, type, startedAt }
 //     SubagentStop          fills endedAt, task, verdict (first line of the last message), transcript
 //     Stop                  when .awaiting-approval exists: opens a gate round { at, card, ask } for the skill to close;
-//                           the card's GATE header names the REQ, and an `ASK ·` turn (predict, summary) is not a gate
+//                           the card's GATE header names the REQ; an `ASK ·` turn (predict, summary) or a
+//                           `DEBRIEF ·` turn (the debrief's ask or its story) is not a gate
 //
 //   cli   (node adlc-trail.mjs <cmd> …, also `node scripts/adlc.mjs trail <cmd> …`):
-//     gate     --req <id|path> --decision <approve|revise|fix|abort|merged|reframe|predict|summary|…> [--note "<the reply, verbatim>"] [--viewed <n/m>] [--by <name>] [--phase <n>]
+//     gate     --req <id|path> --decision <approve|revise|fix|abort|merged|reframe|predict|summary|debrief|…> [--note "<the reply, verbatim>"] [--viewed <n/m>] [--by <name>] [--phase <n>]
+//                                    predict, summary and debrief are asks: they never close an open gate round
+//     reader   --req <id|path> [--by <name>]   the debrief's reader condition: `cold|warm|handover — <why>` (readerOf)
 //     findings --req <id|path> --json '[{"id","severity","decision","reason"}]' | --file <path>
 //     show     --req <id|path>
-//     stats    [--all | --json]     did the evidence change behaviour: viewed ratios, predict/summary asks, findings without a location,
+//     stats    [--all | --json]     did the evidence change behaviour: viewed ratios, predict/summary/debrief asks, findings without a location,
 //                                    answers sent from the cockpit vs typed, compactions at gates (1.12)
 //
 // The hook stamps the mechanical fields; the skill writes the semantic ones. Disjoint keys,
 // one lock. Everything is bounded: verdicts and notes are cut, agents per phase are capped,
 // and nothing here is read by a phase preflight — the block exists for the cockpit and the
 // record. Silent on every error in hook mode; the pipeline never waits on its own trail.
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, openSync, closeSync, unlinkSync, readSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, openSync, closeSync, unlinkSync, readSync, realpathSync } from 'node:fs';
 import { join, dirname, resolve, basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 
 const MAX_DEPTH = 4;
@@ -53,8 +57,10 @@ const idOf = (s) => ID_IN_TEXT.exec(s ?? '')?.[1] ?? null;
 const isWorkName = (name) => ID_AT_START.test(name);
 /** A gate card's header line (GATE-PROTOCOL skeleton); the id in it names the REQ. */
 const GATE_LINE = /^[ \t]*(?:#+\s*|\*\*)?GATE \d+\/\d+ · [^\n]*\n/m;
-/** A predict or summary ask (GATE-PROTOCOL → The trail): ends the turn, but is not a gate. */
-const ASK_LINE = /^[ \t]*(?:#+\s*|\*\*)?ASK · (?:Predict|Summary) · /m;
+/** A predict or summary ask, or a debrief turn (GATE-PROTOCOL → The trail): ends the turn, but is not a gate. */
+export const ASK_LINE = /^[ \t]*(?:#+\s*|\*\*)?(?:ASK · (?:Predict|Summary)|DEBRIEF) · /m;
+/** Decisions that record an ask, not a gate answer: they never close an open round and never count as gate rounds. */
+const ASK_DECISIONS = new Set(['predict', 'summary', 'debrief']);
 /** The trailer a reply sent from the cockpit ends with (adlc-flightdeck): the viewed count at implement and review, `pane` elsewhere. */
 const TRAILER = /\s*\[flightdeck\](?: viewed (\d{1,3})\/(\d{1,3}) files?| pane)\s*$/;
 
@@ -270,7 +276,7 @@ function hook(ev) {
     }
     case 'Stop': {
       const text = String(ev.last_assistant_message ?? '');
-      if (ASK_LINE.test(text)) return; // a predict or summary ask ends the turn; it is not a gate
+      if (ASK_LINE.test(text)) return; // a predict, summary or debrief turn ends the turn; it is not a gate
       const m = GATE_LINE.exec(text);
       const named = m ? idOf(m[0]) : null; // the card names its REQ: two open in one checkout land right
       const folder = (named && resolveReq(vault, named)) || resolveReq(vault, null, { atGate: true });
@@ -320,12 +326,18 @@ function cli(argv) {
         : t && t[1] ? `${t[1]}/${t[2]}` : null; // files opened of files changed, from the cockpit
       const via = t ? 'pane' : 'typed';
       const who = flag('--by') || by();
+      let index = 0;
       const st = mutate(folder, (st) => {
         const n = Number(flag('--phase')) || Number(st.currentPhase) || 1;
         const ph = phaseOf(st, n);
         ph.gates ??= [];
         const last = ph.gates[ph.gates.length - 1];
-        const round = last && !last.decision ? last : (ph.gates.push({ at: now() }), ph.gates[ph.gates.length - 1]);
+        const open = !!last && !last.decision;
+        let round;
+        if (open && !ASK_DECISIONS.has(decision)) round = last; // the gate's answer closes its open round
+        else if (open) { round = { at: now() }; ph.gates.splice(ph.gates.length - 1, 0, round); } // an ask goes before the open round, which stays last
+        else { round = { at: now() }; ph.gates.push(round); }
+        index = ph.gates.indexOf(round) + 1;
         round.at = now();
         round.decision = decision;
         if (note) round.note = note;
@@ -334,7 +346,7 @@ function cli(argv) {
         if (who) round.by = who;
       });
       const n = Number(flag('--phase')) || Number(st.currentPhase) || 1;
-      console.log(`trail: ${basename(folder)} phase ${n} round ${st.phases[String(n)].gates.length} → ${decision}${viewed ? ` · viewed ${viewed}` : ''}${via === 'pane' ? ' · via pane' : ''}${note ? ` — “${note}”` : ''}`);
+      console.log(`trail: ${basename(folder)} phase ${n} round ${index} → ${decision}${viewed ? ` · viewed ${viewed}` : ''}${via === 'pane' ? ' · via pane' : ''}${note ? ` — “${note}”` : ''}`);
       return 0;
     }
     case 'findings': {
@@ -346,15 +358,88 @@ function cli(argv) {
       console.log(`trail: ${basename(folder)} findings recorded: ${clean.length}`);
       return 0;
     }
+    case 'reader': {
+      const st = readState(folder);
+      if (!st) { console.error(`trail reader: no readable pipeline-state.json in ${basename(folder)}`); return 2; }
+      let decisions = '';
+      try { decisions = readFileSync(join(folder, 'gate-decisions.md'), 'utf8'); } catch {}
+      const r = readerOf({ phases: st.phases ?? {}, user: flag('--by') || by(), now: Date.now(), autoPhases: autoPhasesOf(decisions) });
+      console.log(`${r.reader} — ${r.why}`);
+      return 0;
+    }
     case 'show': {
       const st = readState(folder);
       console.log(JSON.stringify({ req: basename(folder), currentPhase: st?.currentPhase, gateState: st?.gateState, phases: st?.phases ?? {} }, null, 2));
       return 0;
     }
     default:
-      console.error('usage: adlc-trail.mjs gate --req <id|path> --decision <d> [--note "<the reply, verbatim>"] [--viewed <n/m>] [--by <name>] [--phase <n>]\n       adlc-trail.mjs findings --req <id> --json \'[…]\' | --file <path>\n       adlc-trail.mjs show --req <id>\n       adlc-trail.mjs stats [--all | --json]');
+      console.error('usage: adlc-trail.mjs gate --req <id|path> --decision <d> [--note "<the reply, verbatim>"] [--viewed <n/m>] [--by <name>] [--phase <n>]\n       adlc-trail.mjs findings --req <id> --json \'[…]\' | --file <path>\n       adlc-trail.mjs show --req <id>\n       adlc-trail.mjs reader --req <id> [--by <name>]\n       adlc-trail.mjs stats [--all | --json]');
       return cmd ? 1 : 0;
   }
+}
+
+// ---------- the reader condition (REQ-002, the debrief) ----------
+
+const HOUR_MS = 3_600_000;
+const STALE_HOURS = 24;
+const PHASE_NAMES = { 1: 'spec', 2: 'architect', 3: 'implement', 4: 'review', 5: 'ship' };
+/** gate-decisions.md names a phase by word (decision-maker.md → Output); this is the one map to its number. */
+const PHASE_BY_NAME = { spec: 1, architect: 2, implement: 3, verify: 4, review: 4, ship: 5 };
+
+/**
+ * The phases the decision-maker cleared: `## [<ts>] <PHASE> gate — APPROVE` entries in gate-decisions.md.
+ * REWORK and HALT went back to a human, so they do not count. Unknown phase names are ignored.
+ */
+export function autoPhasesOf(text) {
+  const out = new Set();
+  for (const m of String(text ?? '').matchAll(/^##\s*\[[^\]]*\]\s*(\w+)\s+gate\s*[—–-]+\s*(\w+)/gim)) {
+    const n = PHASE_BY_NAME[m[1].toLowerCase()];
+    if (n && m[2].toUpperCase() === 'APPROVE') out.add(n);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+const ago = (ms) => { const h = Math.floor(ms / HOUR_MS); return h >= 48 ? `${Math.floor(h / 24)} days` : h >= 1 ? `${h}h` : 'under an hour'; };
+
+/**
+ * Who the debrief is for, from the trail: `cold`, `warm` or `handover`, with one line of evidence.
+ * Counts gate rounds only — decided rounds whose decision is not predict, summary or debrief — so the
+ * ask rounds /wrapup records just before the debrief neither hide a handover nor reset the clock.
+ * First match wins: handover (rounds carry `by`, none is the user) → cold (low or missing viewed at
+ * implement/review · half or more answered from the pane with no viewed · a phase cleared by the
+ * decision-maker · 24h since the last gate round) → warm. Pure: no file, clock or git access.
+ */
+export function readerOf({ phases = {}, user = '', now = Date.now(), autoPhases = [] } = {}) {
+  const at = new Date(now).getTime();
+  const rounds = [];
+  for (const [n, ph] of Object.entries(phases ?? {})) {
+    for (const g of ph?.gates ?? []) if (g?.decision && !ASK_DECISIONS.has(String(g.decision).toLowerCase())) rounds.push({ ...g, phase: Number(n) });
+  }
+  const me = String(user ?? '').trim().toLowerCase();
+  const authors = rounds.map((r) => String(r.by ?? '').trim()).filter(Boolean);
+  if (me && authors.length && !authors.some((a) => a.toLowerCase() === me)) {
+    const names = [...new Set(authors)];
+    return { reader: 'handover', why: `every gate answered by ${names.slice(0, 2).join(', ')}${names.length > 2 ? ' and others' : ''}, none by you` };
+  }
+  const cold = [];
+  const atCode = rounds.filter((r) => r.phase === 3 || r.phase === 4);
+  if (atCode.length) {
+    const counted = atCode.map((r) => ({ r, m: /^(\d+)\/(\d+)$/.exec(r.viewed ?? '') })).filter((x) => x.m && Number(x.m[2]) > 0);
+    if (!counted.length) cold.push('no viewed count at implement or review');
+    else {
+      const low = counted.reduce((a, b) => (Number(b.m[1]) / Number(b.m[2]) < Number(a.m[1]) / Number(a.m[2]) ? b : a));
+      if (Number(low.m[1]) / Number(low.m[2]) < 0.5) cold.push(`viewed ${low.m[1]}/${low.m[2]} at ${PHASE_NAMES[low.r.phase]}`);
+    }
+  }
+  const blind = rounds.filter((r) => r.via === 'pane' && !r.viewed).length;
+  if (rounds.length && blind * 2 >= rounds.length) cold.push(`${blind} of ${rounds.length} gates answered from the pane unseen`);
+  const auto = [...new Set((autoPhases ?? []).map(Number))].filter((n) => PHASE_NAMES[n]).sort((a, b) => a - b);
+  if (auto.length) cold.push(`${auto.map((n) => PHASE_NAMES[n]).join(', ')} cleared by the decision-maker`);
+  const last = Math.max(-Infinity, ...rounds.map((r) => new Date(r.at).getTime()).filter(Number.isFinite));
+  if (Number.isFinite(last) && at - last >= STALE_HOURS * HOUR_MS) cold.push(`${ago(at - last)} since the last gate`);
+  if (cold.length) return { reader: 'cold', why: cold.join(' · ') };
+  if (!rounds.length) return { reader: 'warm', why: 'no gate answered yet' };
+  return { reader: 'warm', why: `you answered ${rounds.length} gate${rounds.length === 1 ? '' : 's'} · last ${ago(at - last)} ago` };
 }
 
 // ---------- stats: did the evidence change behaviour? (1.11.2) ----------
@@ -389,8 +474,8 @@ const pct = (x) => (x === null ? '—' : `${Math.round(x * 100)}%`);
 /** One item's evidence facts, from its working set (pipeline-state.phases + files) or its record (## Trail). */
 function evidenceOf(folder, recordPath) {
   const id = ID_AT_START.exec(basename(folder ?? recordPath))?.[1] ?? basename(folder ?? recordPath);
-  // rounds (1.12): every gate round but predict/summary — { phase, decided, via: pane|typed|unknown, compactions }
-  const f = { id, source: folder ? 'folder' : 'record', phase: 0, answers: [], rounds: [], midCompactions: 0, predict: null, summary: null, architect: false, ship: false, noWhere: [], behaviour: null };
+  // rounds (1.12): every gate round but predict/summary/debrief — { phase, decided, via: pane|typed|unknown, compactions }
+  const f = { id, source: folder ? 'folder' : 'record', phase: 0, answers: [], rounds: [], midCompactions: 0, predict: null, summary: null, debrief: null, architect: false, ship: false, noWhere: [], behaviour: null };
   if (folder) {
     const st = readState(folder);
     if (st) {
@@ -402,10 +487,11 @@ function evidenceOf(folder, recordPath) {
         f.midCompactions += Number(ph.compactions) || 0; // a compaction that fell between gates
         for (const g of ph.gates ?? []) {
           // `via` is written by every 1.12 `trail gate`; a decided round without it predates 1.12.
-          if (g.decision !== 'predict' && g.decision !== 'summary') f.rounds.push({ phase: k, decided: !!g.decision, via: g.decision ? (g.via === 'pane' || g.via === 'typed' ? g.via : 'unknown') : null, compactions: Number(g.compactions) || 0 });
+          if (!ASK_DECISIONS.has(g.decision)) f.rounds.push({ phase: k, decided: !!g.decision, via: g.decision ? (g.via === 'pane' || g.via === 'typed' ? g.via : 'unknown') : null, compactions: Number(g.compactions) || 0 });
           if (!g.decision) continue;
           if (g.decision === 'predict') { f.predict = g.note === 'skip' ? 'skipped' : 'answered'; continue; }
           if (g.decision === 'summary') { f.summary = g.note === 'skip' ? 'skipped' : 'answered'; continue; }
+          if (g.decision === 'debrief') { f.debrief = g.note === 'skip' ? 'skipped' : 'answered'; continue; }
           if (k === 3 || k === 4) { const m = /^(\d+)\/(\d+)$/.exec(g.viewed ?? ''); f.answers.push({ phase: k, decision: g.decision, viewed: m ? ratio(Number(m[1]), Number(m[2])) : null, raw: g.viewed ?? null }); }
         }
       }
@@ -444,6 +530,7 @@ function evidenceOf(folder, recordPath) {
           const decision = d.replace(/\s*·\s*(?:viewed|via|typed|\d+ compactions?)\b.*$/, '').trim();
           if (decision === 'predict') { f.predict = 'answered'; continue; }
           if (decision === 'summary') { f.summary = 'answered'; continue; }
+          if (decision === 'debrief') { f.debrief = 'answered'; continue; }
           const c = /·\s*(\d+) compactions?\b/.exec(d);
           f.rounds.push({ phase: k, decided: true, via: /·\s*via pane\b/.test(d) ? 'pane' : /·\s*typed\b/.test(d) ? 'typed' : 'unknown', compactions: c ? Number(c[1]) : 0 });
           if (k === 3 || k === 4) f.answers.push({ phase: k, decision, viewed: v ? ratio(Number(v[1]), Number(v[2])) : null, raw: v ? `${v[1]}/${v[2]}` : null });
@@ -451,6 +538,7 @@ function evidenceOf(folder, recordPath) {
       }
       if (/\bpredict\b.*"/.test(line) && !f.predict) f.predict = 'answered';
       if (/\bsummary\b.*"/.test(line) && !f.summary) f.summary = 'answered';
+      if (/\bdebrief\b.*"/.test(line) && !f.debrief) f.debrief = 'answered';
     }
     f.behaviour = section(md, 'Behaviou?r') !== null ? true : null;
   }
@@ -480,11 +568,12 @@ function stats(vault, argv) {
     viewed: { answers: answers.length, counted: counted.length, mean, lowApprovals: low.map((a) => ({ id: a.id, phase: a.phase, viewed: a.raw })) },
     predict: { gates: arch.length, asked: asked(arch, 'predict').length, answered: arch.filter((it) => it.predict === 'answered').length },
     summary: { gates: ship.length, asked: asked(ship, 'summary').length, answered: ship.filter((it) => it.summary === 'answered').length },
+    debrief: { items: all.length, asked: asked(all, 'debrief').length, skipped: all.filter((it) => it.debrief === 'skipped').length },
     pointers: { findingsWithoutWhere: noWhere.flatMap((it) => it.noWhere.map((fid) => `${it.id} ${fid}`)) },
     behaviour: { specs: specs.length, present: specs.filter((it) => it.behaviour).length },
     via: { answers: decided.length, pane: viaN('pane'), typed: viaN('typed'), unknown: viaN('unknown') },
     compactions: { gates: rounds.length, total: cmpTotal, perGate: rounds.length ? cmpTotal / rounds.length : null, atGateRounds: rounds.filter((r) => r.compactions > 0).length, midPhase: all.reduce((s, it) => s + it.midCompactions, 0) },
-    perItem: all.map((it) => ({ id: it.id, source: it.source, phase: it.phase, answers: it.answers.length, viewed: it.answers.filter((a) => a.viewed !== null).map((a) => a.raw), predict: it.predict, summary: it.summary, noWhere: it.noWhere, behaviour: it.behaviour, via: { pane: it.rounds.filter((r) => r.via === 'pane').length, typed: it.rounds.filter((r) => r.via === 'typed').length }, compactions: it.rounds.reduce((s, r) => s + r.compactions, 0) })),
+    perItem: all.map((it) => ({ id: it.id, source: it.source, phase: it.phase, answers: it.answers.length, viewed: it.answers.filter((a) => a.viewed !== null).map((a) => a.raw), predict: it.predict, summary: it.summary, debrief: it.debrief, noWhere: it.noWhere, behaviour: it.behaviour, via: { pane: it.rounds.filter((r) => r.via === 'pane').length, typed: it.rounds.filter((r) => r.via === 'typed').length }, compactions: it.rounds.reduce((s, r) => s + r.compactions, 0) })),
   };
   if (want === 'json') { console.log(JSON.stringify(out, null, 2)); return 0; }
   const lines = [
@@ -493,6 +582,7 @@ function stats(vault, argv) {
       (low.length ? ` · ${low.length} approved under 50%: ${low.slice(0, 4).map((a) => `${a.id} (${a.raw})`).join(', ')}${low.length > 4 ? '…' : ''}` : counted.length ? ' · none approved under 50%' : ''),
     `predict     ${out.predict.asked} of ${out.predict.gates} architect gates asked · ${out.predict.answered} answered`,
     `summary     ${out.summary.asked} of ${out.summary.gates} ship gates asked · ${out.summary.answered} answered`,
+    `debrief     ${out.debrief.asked} of ${out.debrief.items} items asked · ${out.debrief.skipped} skipped`,
     `pointers    findings with no location: ${out.pointers.findingsWithoutWhere.length}` + (out.pointers.findingsWithoutWhere.length ? ` (${out.pointers.findingsWithoutWhere.slice(0, 6).join(', ')}${out.pointers.findingsWithoutWhere.length > 6 ? '…' : ''})` : ''),
     `behaviour   ${out.behaviour.present} of ${out.behaviour.specs} in-flight specs carry ## Behaviour`,
     `via pane    ${out.via.pane} of ${out.via.pane + out.via.typed} gate answers (${out.via.typed} typed · ${out.via.unknown} before 1.12)`,
@@ -500,8 +590,8 @@ function stats(vault, argv) {
       (out.compactions.midPhase ? ` · ${out.compactions.midPhase} between gates` : ''),
   ];
   if (want === 'all') {
-    lines.push('', 'item        phase  answers  viewed            predict   summary   no-where  behaviour  via p/t  cmp');
-    for (const it of out.perItem) lines.push(`${it.id.padEnd(11)} ${String(it.phase).padEnd(6)} ${String(it.answers).padEnd(8)} ${(it.viewed.join(' ') || '—').padEnd(17)} ${(it.predict ?? '—').padEnd(9)} ${(it.summary ?? '—').padEnd(9)} ${(it.noWhere.join(',') || '—').padEnd(9)} ${(it.behaviour === null ? '—' : it.behaviour ? 'yes' : 'no').padEnd(10)} ${`${it.via.pane}/${it.via.typed}`.padEnd(8)} ${it.compactions}`);
+    lines.push('', 'item        phase  answers  viewed            predict   summary   debrief   no-where  behaviour  via p/t  cmp');
+    for (const it of out.perItem) lines.push(`${it.id.padEnd(11)} ${String(it.phase).padEnd(6)} ${String(it.answers).padEnd(8)} ${(it.viewed.join(' ') || '—').padEnd(17)} ${(it.predict ?? '—').padEnd(9)} ${(it.summary ?? '—').padEnd(9)} ${(it.debrief ?? '—').padEnd(9)} ${(it.noWhere.join(',') || '—').padEnd(9)} ${(it.behaviour === null ? '—' : it.behaviour ? 'yes' : 'no').padEnd(10)} ${`${it.via.pane}/${it.via.typed}`.padEnd(8)} ${it.compactions}`);
   }
   console.log(lines.join('\n'));
   return 0;
@@ -509,16 +599,22 @@ function stats(vault, argv) {
 
 // ---------- entry ----------
 
-const argv = process.argv.slice(2);
-if (argv.length && /^(gate|findings|show|stats)$/.test(argv[0])) {
-  process.exit(cli(argv));
-} else {
-  try {
-    let input = '';
-    try { input = readFileSync(0, 'utf8'); } catch {}
-    let ev = {};
-    try { ev = JSON.parse(input); } catch {}
-    if (ev && ev.hook_event_name) hook(ev);
-  } catch {}
-  process.exit(0);
+// Run only when executed, never on `import` (the tests import readerOf). argv[1] may be a symlink
+// to this file (an installed hook), and import.meta.url is always the real path: compare real paths.
+const isMain = (() => { try { return realpathSync(process.argv[1] ?? '') === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } })();
+
+if (isMain) {
+  const argv = process.argv.slice(2);
+  if (argv.length && /^(gate|findings|show|stats|reader)$/.test(argv[0])) {
+    process.exit(cli(argv));
+  } else {
+    try {
+      let input = '';
+      try { input = readFileSync(0, 'utf8'); } catch {}
+      let ev = {};
+      try { ev = JSON.parse(input); } catch {}
+      if (ev && ev.hook_event_name) hook(ev);
+    } catch {}
+    process.exit(0);
+  }
 }

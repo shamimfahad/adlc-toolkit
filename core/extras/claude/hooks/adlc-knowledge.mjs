@@ -273,8 +273,10 @@ function sessionStartCompact(ev, vault) {
     const n = Number(active.phase) || 1;
     const live = awaiting || active.gate !== 'cleared' ? n : Math.min(5, n + 1);
     const skill = active.kind === 'bugfix' ? 'bugfix' : active.kind === 'task' ? 'task' : { 1: 'spec', 2: 'architect', 3: 'implement', 4: 'review', 5: 'wrapup' }[live];
+    // /wrapup runs /debrief before the ship card (step 7c), so a compaction there needs both skills back.
+    const skills = skill ? [skill, ...(skill === 'wrapup' ? ['debrief'] : [])] : [];
     const kit = posix.join(norm(dirname(fileURLToPath(import.meta.url))), '../../../..');
-    lines.push(`- **Re-read before acting** (a skill comes back from compaction cut at ~5,000 tokens): ${skill ? `\`${kit}/core/skills/${skill}.md\`, ` : ''}\`${kit}/core/GATE-PROTOCOL.md\`${awaiting ? `, and the marker \`.adlc/${active.dir}/.awaiting-approval\` — it lists the gate's options` : ''}.`);
+    lines.push(`- **Re-read before acting** (a skill comes back from compaction cut at ~5,000 tokens): ${skills.map(s => `\`${kit}/core/skills/${s}.md\`, `).join('')}\`${kit}/core/GATE-PROTOCOL.md\`${awaiting ? `, and the marker \`.adlc/${active.dir}/.awaiting-approval\` — it lists the gate's options` : ''}.`);
   } else lines.push('- No non-terminal work item found in `.adlc/specs` or `.adlc/bugs`.');
   const st = sh('git status --porcelain').split('\n').filter(Boolean);
   lines.push(st.length ? `- **Uncommitted changes (${st.length}):**\n${st.slice(0, 30).map(s => '  ' + s).join('\n')}${st.length > 30 ? '\n  … run `git status` for the rest' : ''}` : '- **Uncommitted changes:** none.');

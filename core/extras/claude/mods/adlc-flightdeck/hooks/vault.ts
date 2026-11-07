@@ -412,7 +412,7 @@ export function phaseLine(c: {
   waiting?: string | null
 }): string {
   const parts: string[] = []
-  const gates = c.rounds.filter(r => r.decision !== 'predict' && r.decision !== 'summary')
+  const gates = c.rounds.filter(r => r.decision !== 'predict' && r.decision !== 'summary' && r.decision !== 'debrief') // asks, not gate rounds
   const last = gates[gates.length - 1]
   if (c.n === 4 && c.findings) parts.push(`${c.findings} finding${c.findings > 1 ? 's' : ''}`)
   if (c.n === 4 && c.needCall) parts.push(`${c.needCall} need${c.needCall > 1 ? '' : 's'} a call`)

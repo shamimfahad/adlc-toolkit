@@ -341,6 +341,99 @@ export function parseGateCard(text: string): GateCard | null {
   return card
 }
 
+// ---------- the debrief: debrief.md, parsed (core/skills/debrief.md writes it) ----------
+
+/** The eight labels, verbatim, in the order the skill writes them. */
+export const DEBRIEF_LABELS = [
+  'IN ONE BREATH', 'WHY', 'WHAT CHANGED', 'HOW', 'WHAT WAS CHECKED', 'WHAT TO WATCH', 'SAY IT TO YOUR LEAD', 'QUESTIONS YOU MAY GET',
+] as const
+export type DebriefLabel = (typeof DEBRIEF_LABELS)[number]
+export type DebriefReader = 'cold' | 'warm' | 'handover'
+export type DebriefHead = {
+  /** The id only (REQ-002), as `idOf` gives it; the folder's slug is in `slug`. */
+  req: string
+  slug: string
+  forWho: string
+  reader: DebriefReader
+  /** The evidence after `—`, without the `written … at …` tail. */
+  why: string
+  written: string | null
+  sha: string | null
+}
+export type DebriefSection = { label: DebriefLabel; lines: string[] }
+/** One `◆` (planned) or `◇` (unplanned) row of WHAT CHANGED: `path[:line] — what — why`. */
+export type DebriefFile = { planned: boolean; path: string; line?: number; what: string; why: string }
+export type Debrief = {
+  head: DebriefHead | null
+  sections: DebriefSection[]
+  /** The file rows of WHAT CHANGED. They are not repeated in that section's `lines`. */
+  files: DebriefFile[]
+  /** Lines before the first label that are not the head — kept, never dropped. */
+  before: string[]
+}
+
+const DEBRIEF_HEAD = new RegExp(`^[ \\t]*(?:#+\\s*|\\*\\*)?DEBRIEF · (${ID_SRC})([\\w-]*) · for: (.+?) · reader: (cold|warm|handover)\\b(.*)$`)
+const DEBRIEF_LABEL = new RegExp(`^[ \\t]*(?:#+\\s+|\\*\\*)?(${DEBRIEF_LABELS.join('|')})(?:\\*\\*)?:?[ \\t]*$`)
+const DEBRIEF_WRITTEN = /(?:^|\s*·\s*|\s+)written (\S+) at ([0-9a-f]{4,40})\s*$/i
+const DEBRIEF_FILE = /^\s*([◆◇])\s*(.*)$/
+
+function debriefHead(m: RegExpExecArray): DebriefHead {
+  let rest = (m[5] ?? '').replace(/\*\*\s*$/, '').trim()
+  let written: string | null = null
+  let sha: string | null = null
+  const w = DEBRIEF_WRITTEN.exec(rest)
+  if (w) { written = w[1] ?? null; sha = w[2] ?? null; rest = rest.slice(0, w.index).trim() }
+  return {
+    req: m[1] ?? '', slug: (m[2] ?? '').replace(/^-/, ''), forWho: (m[3] ?? '').trim(), reader: m[4] as DebriefReader,
+    why: rest.replace(/^[—–-]\s*/, '').trim(), written, sha,
+  }
+}
+
+function debriefFile(mark: string, body: string): DebriefFile {
+  const parts = body.split(' — ')
+  let path = (parts[0] ?? '').trim()
+  const what = (parts[1] ?? '').trim()
+  const why = parts.slice(2).join(' — ').replace(/\s*\(unplanned\)\s*$/, '').trim()
+  const file: DebriefFile = { planned: mark === '◆', path, what, why }
+  const l = /^(.*):(\d+)$/.exec(path)
+  if (l) { path = l[1] ?? path; file.path = path; file.line = Number(l[2]) }
+  return file
+}
+
+/**
+ * Splits debrief.md into its head, its labelled sections and the WHAT CHANGED file rows.
+ * Tolerant by design: CRLF, a missing head, missing or repeated sections all parse; a label
+ * it does not know stays a plain line of the section before it. Never throws.
+ */
+export function parseDebrief(text: string): Debrief {
+  const out: Debrief = { head: null, sections: [], files: [], before: [] }
+  if (typeof text !== 'string' || !text) return out
+  let current: DebriefSection | null = null
+  let fenced = false
+  for (const raw of text.split(/\r?\n|\r/)) {
+    const line = raw.replace(/\s+$/, '')
+    if (!line.trim()) continue
+    if (/^\s*```/.test(line)) fenced = !fenced
+    if (!fenced && !/^\s*```/.test(line)) {
+      if (!out.head && !current) {
+        const m = DEBRIEF_HEAD.exec(line)
+        if (m) { out.head = debriefHead(m); continue }
+      }
+      const s = DEBRIEF_LABEL.exec(line)
+      if (s) {
+        current = { label: s[1] as DebriefLabel, lines: [] }
+        out.sections.push(current)
+        continue
+      }
+      const f = current?.label === 'WHAT CHANGED' ? DEBRIEF_FILE.exec(line) : null
+      if (f) { out.files.push(debriefFile(f[1] ?? '◆', f[2] ?? '')); continue }
+    }
+    if (current) current.lines.push(line)
+    else out.before.push(line.trim())
+  }
+  return out
+}
+
 /** Splits a card line into spans so the markers carry colour: ✓ ⚠ ? and the severities. */
 export function markSpans(line: string): { text: string; tone: 'ok' | 'warn' | 'ask' | 'crit' | 'plain' }[] {
   const out: { text: string; tone: 'ok' | 'warn' | 'ask' | 'crit' | 'plain' }[] = []

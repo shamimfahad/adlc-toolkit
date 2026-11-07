@@ -6,6 +6,20 @@ Labels used below: **[breaking]** needs action on update, **[protocol]** changes
 
 ## [Unreleased]
 
+### The debrief — the story of a REQ, to retell it (`adlc-flightdeck` v0.10.0) **[protocol]** **[tooling]**
+
+At `/wrapup` you approve work you may have skimmed, then have to explain it to your lead or hand it to someone else. Nothing wrote that story down, and nothing said how much of it you had actually seen.
+
+- **`/debrief`** (new skill, `core/skills/debrief.md`) writes `debrief.md` into the REQ's working set (its local folder of pipeline files): IN ONE BREATH, WHY, WHAT CHANGED, HOW, WHAT WAS CHECKED, WHAT TO WATCH, SAY IT TO YOUR LEAD, QUESTIONS YOU MAY GET — a pointer on every claim. Run it at any phase. It writes no code and runs no git.
+- **The reader** sets how deep it goes: `cold` (full story), `warm` (what changed since your last answer) or `handover` (files first). `trail reader --req <path>` works it out from the trail — few files viewed, pane-sent answers, a phase the decision-maker cleared, or a day since the last gate make it cold; rounds all by someone else make it a handover. The rule is one function, `readerOf`, in `adlc-trail.mjs`; its tests run under `node --test tests/hooks/*.test.mjs` (now `verify.test`).
+- **One question, in a dialog** (ADR-003): who it is for and the angle, asked once per REQ with `AskUserQuestion` and recorded as `trail gate --decision debrief`. It is the one dialog the pipeline puts; it is not a gate, and `trail gate` files it before an open gate round, never into it. Skipped under `/autopilot` and `/sprint`. `core/GATE-PROTOCOL.md` → *The trail* says so; invariant 5 points to it.
+- **The trail** treats a turn with a line starting `DEBRIEF · ` as a story, not a gate. `trail stats` gains a `debrief` line and column.
+- **`/wrapup`** runs the debrief (new step 7c) after your summary and before the ship card. The record's Goal becomes IN ONE BREATH, in the past tense. The card gains `DEBRIEF` (two lines), and `YOUR SUMMARY` under SAY IT: which changed files your summary names, and which it does not mention. `/autopilot` runs the debrief at the end, with the question skipped.
+- **The mod's *Debrief* view** — from `debrief ›` on every GATE line, `open ›` on the ship tab's new DEBRIEF section, or `/flight debrief`. A board from 110 columns, one column from 84, a list below 84 with one section unfolded and capped at 8 rows (`… N more — widen to 84+ cols or open debrief.md`). An open gate's options come after the story.
+- STATUS: needs verification — probe P10 (can the band keep options pinned under a body that scrolls?) passed `claude plugin test` on 2.1.319, but its live check in tmux was not run. The view is built for the "not pinned" answer. Steps: `docs/plans/probes/results-pin.md` → *To finish it*.
+- `core/manifest.json` → 1.14.0; mod 0.9.0 → 0.10.0; README skill table, `docs/quickstart.md`, mod README *Debrief*. Mod tests: 127 → 140. Adapters regenerated.
+- **On update:** update the mod (`/plugin` → adlc-mods → update). Your next `/wrapup` asks one more question and writes `debrief.md`; nothing else changes.
+
 ### Compact on approve, a context ring, agent numbers (`adlc-flightdeck` v0.9.0) **[protocol]** **[tooling]**
 
 Long `/proceed` runs filled the context and the compact button was easy to forget, so the engine's own auto-compact hit mid-phase. ADR-002 lets the cockpit compact on its own — only when you opt in, only after an approve, and never at the cost of your answer.

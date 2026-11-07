@@ -51,8 +51,8 @@ import {
   sumFuel, summaryGaps, tiersOf, type PlanRow, type TaskDoc,
 } from './evidence'
 import {
-  COMPACT_TIMEOUT_MS, ID_SRC, autoCompactApplies, bar, buildReq, clip, clock, describeTool, idOf, isActive, isLanded, kindOf, markSpans, parseDispatch, parseGateCard, pulse, ringGlyph,
-  spinFrame, splitFolder, tokens, typicalCost, type PipelineState,
+  COMPACT_TIMEOUT_MS, DEBRIEF_LABELS, ID_SRC, autoCompactApplies, bar, buildReq, clip, clock, describeTool, idOf, isActive, isLanded, kindOf, markSpans, parseDebrief, parseDispatch, parseGateCard,
+  pulse, ringGlyph, spinFrame, splitFolder, tokens, typicalCost, type Debrief, type DebriefReader, type PipelineState,
 } from './model'
 import {
   age, artifactsFor, compactBrief, dateOf, filterItems, firstLine, hotFor, hotTail, notesFor, optionHead, optionsFromDecision, standardOptions, idOrder, flyingTarget,
@@ -1115,6 +1115,7 @@ export const register: Register = on => {
       await openOn($, 'max')
       return { text: 'Flightdeck at full height.' }
     }
+    const toDebrief = /^debrief\b/.test(args) // `/flight debrief [id]`: the REQ's debrief view, over its phase page
     const m = new RegExp(`(?<![\\w-])(${ID_SRC})`).exec(args)
     // A phase named after the id (`/flight REQ-042 review`, or its number) opens that tab instead of the live one.
     const named = /\b(spec|architect|implement|review|ship|report|plan|fix|verify|[1-5])\s*$/.exec(m ? args.slice((m.index ?? 0) + (m[1]?.length ?? 0)) : '')?.[1]
@@ -1130,14 +1131,14 @@ export const register: Register = on => {
     await setView($, v => ({
       req: focus ?? v.req,
       tab: tab ?? (typeof v.tab === 'number' && focus === v.req ? v.tab : ((live?.phase ?? 5) as FlightTab)),
-      sub: { kind: 'page' },
-      home: !phaseTab, // narrow: the list home first, unless a phase was named
+      sub: toDebrief ? { kind: 'debrief' } : { kind: 'page' },
+      home: !phaseTab && !toDebrief, // narrow: the list home first, unless a phase (or the debrief) was named
     }))
     if (focus) void refreshGit($, focus, true).catch(() => {})
     // History opens on the REQ in view: scroll its row into the band's window once it is drawn.
     if (tab === 'history' && focus) $.clock.after(120, () => { void $.ui.scroll({ to: { key: `hist-${focus}` }, block: 'center' }).catch(() => {}) })
     if ((await read($, layoutA)).height === 'band') await setHeight($, 'open')
-    return { text: 'Flightdeck open above the prompt.' }
+    return { text: toDebrief ? 'Debrief open in the flightdeck above the prompt.' : 'Flightdeck open above the prompt.' }
   })
 }
 
@@ -1182,6 +1183,80 @@ function laneNo(places: Map<string, number> | null, id: string): { n: number; dr
 
 /** The mockup's palette, as theme keys so light and dark themes both hold. */
 const C = { v: 'autoAccept', amber: 'warning', ok: 'success', link: 'suggestion', red: 'error', faint: 'inactive', dim: 'subtle' } as const
+
+// ----- the debrief view (0.10.0): debrief.md, as core/skills/debrief.md writes it -----
+// Theme keys only, and never the mod's accent (`autoAccept`): permission for the title, suggestion for links,
+// warning for ◇ and the gaps, subtle bold for heads, inactive for rules.
+
+/** What the reader condition sets: cold the full story, warm the delta, a handover files first. Read from the head, never recomputed. */
+const DEBRIEF_DEPTH: Record<DebriefReader, string> = { cold: 'full story', warm: 'the delta', handover: 'files first' }
+const DEBRIEF_READER_TONE: Record<DebriefReader, string> = { cold: 'warning', warm: 'success', handover: 'permission' }
+/** Below 84 columns a head keeps its first words. */
+const DEBRIEF_SHORT: Record<string, string> = { 'WHAT WAS CHECKED': 'CHECKED', 'WHAT TO WATCH': 'WATCH', 'SAY IT TO YOUR LEAD': 'SAY IT', 'QUESTIONS YOU MAY GET': 'QUESTIONS' }
+const NO_DEBRIEF = 'no debrief here yet — /debrief writes one (the working set is local to whoever ran the pipeline)'
+const DEBRIEF_GUTTER = 18 // the heads' column from 84 columns
+const FOLD_MAX = 8 // rows an unfolded section shows below 84 columns: nothing scrolls inside the band, so the options after it stay on screen
+const STORY_TONE = { ok: 'success', warn: 'warning', ask: 'warning', crit: 'error', plain: undefined } as const
+const STORY_ID = /\b(?:ADR-\d+|TASK-\d+|[CMm]\d+)\b/g
+
+/** Word-wraps `text` to `w` columns, so two columns can be drawn row by row with one rule between them. */
+function wrapTo(text: string, w: number): string[] {
+  const out: string[] = []
+  let cur = ''
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    let rest = word
+    while (rest.length > w) { if (cur) { out.push(cur); cur = '' } out.push(rest.slice(0, w)); rest = rest.slice(w) }
+    if (!rest) continue
+    if (!cur) cur = rest
+    else if (cur.length + 1 + rest.length <= w) cur += ` ${rest}`
+    else { out.push(cur); cur = rest }
+  }
+  if (cur) out.push(cur)
+  return out
+}
+
+/** A story line as spans with their theme keys: ✓ success, ⚠ and ? warning, critical error, pointers and ids suggestion. */
+function storySpans(line: string): { text: string; color?: string }[] {
+  const out: { text: string; color?: string }[] = []
+  for (const m of markSpans(plainMd(line))) {
+    if (m.tone !== 'plain') { out.push({ text: m.text, color: STORY_TONE[m.tone] }); continue }
+    for (const p of pointerSpans(m.text)) {
+      if (p.path !== undefined) { out.push({ text: p.text, color: C.link }); continue }
+      let last = 0
+      for (const x of p.text.matchAll(STORY_ID)) {
+        if ((x.index ?? 0) > last) out.push({ text: p.text.slice(last, x.index) })
+        out.push({ text: x[0], color: C.link })
+        last = (x.index ?? 0) + x[0].length
+      }
+      if (last < p.text.length) out.push({ text: p.text.slice(last) })
+    }
+  }
+  return out
+}
+
+/** `names 1 of 3 files` and the changed files the summary never names, by summaryGaps' rule (evidence.ts). */
+function gapsOf(summary: string, rows: PlanRow[]): { named: string; missed: string } | null {
+  const total = rows.filter(r => r.touched).length
+  if (!total) return null
+  const { mentioned, missed } = summaryGaps(summary, rows)
+  return { named: `names ${mentioned.length} of ${total} file${total === 1 ? '' : 's'}`, missed: missed.length ? `not mentioned: ${missed.map(baseName).join(', ')}` : '' }
+}
+
+/** The one-line gist a folded section shows below 84 columns. */
+function debriefGist(d: Debrief, label: string, summary: string | null, gaps: { named: string } | null): string {
+  const lines = (d.sections.find(s => s.label === label)?.lines ?? []).filter(l => !/^\s*```/.test(l)).map(l => plainMd(l.trim()))
+  if (label === 'WHAT CHANGED') {
+    const planned = d.files.filter(f => f.planned).length
+    return `${d.files.length} file${d.files.length === 1 ? '' : 's'} · ◆ ${planned} planned ◇ ${d.files.length - planned}`
+  }
+  if (label === 'SAY IT TO YOUR LEAD') {
+    const yours = summary ? (gaps ? ` · yours ${gaps.named.replace(/^names (\d+) of (\d+).*$/, 'names $1/$2')}` : ' · yours is in') : ' · no summary of yours yet'
+    return `${lines.length} line${lines.length === 1 ? '' : 's'} for your ${d.head?.forWho || 'lead'}${yours}`
+  }
+  if (label === 'QUESTIONS YOU MAY GET') return [String(lines.length), ...lines.map(l => l.replace(/^Q\s+/, '').replace(/\s*→.*$/, ''))].join(' · ')
+  if (label === 'WHAT TO WATCH' && lines.length > 1) return `${lines.length} · ${lines[0]}`
+  return lines[0] ?? ''
+}
 
 async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' | 'max', below: unknown = null) {
   const deck = await read($, deckA)
@@ -1236,7 +1311,8 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     if (r && !gitAll[id]) void refreshGit($, id).catch(() => {}) // first look at it: git is asked from the press, not the draw
   }
   // The gate's options take their letters (OPTION_KEYS) only while the open gate's page is on screen.
-  const gateOnScreen = !!live?.waiting && view.sub.kind === 'page' && (view.tab === live.phase) && !(narrow && view.home !== false)
+  // The debrief view draws the live gate's options after the story, so they take their letters there too.
+  const gateOnScreen = !!live?.waiting && (view.sub.kind === 'debrief' || (view.sub.kind === 'page' && (view.tab === live.phase) && !(narrow && view.home !== false)))
   // Asked on every draw (cached 5 s): the header's ring shows it at any height. The gate page still hides its own line on `never`.
   const usagePct = await contextPercent($)
   const places = await agentPlaces($) // read, never written: lane numbers are worked out here
@@ -1444,7 +1520,8 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
       verdict: card?.verdict ?? '',
     }
   }
-  const gateRounds = (c: PhaseCtx) => c.rounds.filter(r => r.decision !== 'predict' && r.decision !== 'summary')
+  /** The rounds that answered the gate: predict, summary and debrief are asks, never gate rounds. */
+  const gateRounds = (c: PhaseCtx) => c.rounds.filter(r => r.decision !== 'predict' && r.decision !== 'summary' && r.decision !== 'debrief')
   /** `2026-10-22T14:05…` or `2026-10-22 14:05` → `10-22 14:05`. */
   const when = (at: string) => { const m = /\d{4}-(\d\d-\d\d)[T ](\d\d:\d\d)/.exec(at); return m ? `${m[1]} ${m[2]}` : clip(at, 16) }
 
@@ -1520,8 +1597,9 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
    * The gate's options inline, `a: fix all (recommended)`, the recommended one in the accent; under them the
    * consequence of the recommended one, then `[ ⟳ compact first ]` with the context fill. An option that takes
    * an argument (`fix <ids>`, `revise <what>`) fills the prompt with its head for you to finish.
+   * `accent`: the recommended option's colour — the debrief view passes `permission` (it never uses the mod's accent).
    */
-  const gateCard = (c: PhaseCtx) => {
+  const gateCard = (c: PhaseCtx, accent: string = C.v) => {
     if (!live) return null
     const { options, source } = optionsOf(gateAll[live.id], c.card?.decision ?? null, c.myRead, c.phase)
     const v = viewedOf(g, marks)
@@ -1569,7 +1647,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
               return (
                 <Box marginRight={2} flexShrink={0}>
                   <Button key={optKey} plain {...(hotkey ? { hotkey } : {})} dimColor={dimAll || !!pending} onPress={() => choose(o)}>
-                    <Text color={o.recommended ? C.v : undefined}>{o.label}{o.recommended ? ' (recommended)' : ''}</Text>
+                    <Text color={o.recommended ? accent : undefined}>{o.label}{o.recommended ? ' (recommended)' : ''}</Text>
                   </Button>
                 </Box>
               )
@@ -1582,7 +1660,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
           <Box flexDirection="row" flexWrap="wrap">
             <Button key="compact-first" plain dimColor={dimAll || (mode === 'suggest' && !hotCtx && !compactFirst)}
               onPress={() => void update($, layoutA, l => ({ ...l, compactFirst: !l.compactFirst })).catch(() => {})}>
-              <Text color={C.faint}>[</Text><Text color={compactFirst ? C.v : undefined}>⟳ compact first</Text><Text color={C.faint}>]</Text>
+              <Text color={C.faint}>[</Text><Text color={compactFirst ? accent : undefined}>⟳ compact first</Text><Text color={C.faint}>]</Text>
             </Button>
             <Text color={C.faint}>
               {'  '}{pct !== null ? <Text>context <Text color={hotCtx ? C.amber : undefined}>{Math.round(pct)}%</Text> · </Text> : null}
@@ -1594,14 +1672,23 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     )
   }
 
-  /** The GATE line — awaiting, sent, cleared, in progress or not reached — and, at an open gate, its card. */
-  const gateBlock = (c: PhaseCtx) => {
+  /**
+   * The GATE line — awaiting, sent, cleared, in progress or not reached — and, at an open gate, its card.
+   * A REQ's line ends in `debrief ›` (click-only), which opens the debrief view; that view draws the block without it.
+   */
+  const gateBlock = (c: PhaseCtx, { link = true, accent = C.v }: { link?: boolean; accent?: string } = {}) => {
     const st_ = c.p?.state ?? 'todo'
     const rounds = gateRounds(c)
     const last = rounds[rounds.length - 1]
-    const line = (glyph: string, color: string, text: string) => (
-      <Text wrap="truncate"><Text bold>GATE</Text> <Text color={color}>{glyph}</Text> <Text color={st_ === 'gate' ? undefined : C.dim}>{text}</Text></Text>
-    )
+    const toDebrief = link && kind === 'req' ? (
+      <Box flexShrink={0} marginLeft={2}>
+        <Button key="gate-debrief" plain onPress={() => sub({ kind: 'debrief' })}><Text color={C.link}>debrief ›</Text></Button>
+      </Box>
+    ) : null
+    const line = (glyph: string, color: string, text: string) => {
+      const said = <Text wrap="truncate"><Text bold>GATE</Text> <Text color={color}>{glyph}</Text> <Text color={st_ === 'gate' ? undefined : C.dim}>{text}</Text></Text>
+      return toDebrief ? <Box flexDirection="row"><Box flexShrink={1} overflow="hidden">{said}</Box>{toDebrief}</Box> : said
+    }
     if (st_ === 'gate' && live) {
       if (pending?.req === live.id) {
         const v = viewedOf(g, marks)
@@ -1615,7 +1702,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
       return (
         <Box flexDirection="column">
           {line('●', C.amber, `awaiting — ${c.phase} · round ${rounds.length + 1}${live.waitingSince != null ? ` · ${clock(now - live.waitingSince)}` : ''}`)}
-          {gateCard(c)}
+          {gateCard(c, accent)}
         </Box>
       )
     }
@@ -1830,10 +1917,41 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
       </Box>
     )))
 
-  const shipPage = async () => {
+  /** Plan vs actual for the REQ: what the ship tab and the debrief count changed files and +/- from. */
+  const changedRows = async (): Promise<PlanRow[]> => {
     const arch = folder ? await cached($, `${folder}/${kind === 'bug' ? 'investigation.md' : 'architecture.md'}`) : null
-    const tasks = await tasksOf($, folder)
-    const rows = planVsActual(blastRadius(arch), tasks, g?.touched ?? [])
+    return planVsActual(blastRadius(arch), await tasksOf($, folder), g?.touched ?? [])
+  }
+  /** debrief.md, parsed; null when the REQ has none (a BUG never has one). */
+  const debriefOf = async (): Promise<{ md: string; d: Debrief } | null> => {
+    const md = folder && kind === 'req' ? await cached($, `${folder}/debrief.md`) : null
+    return md === null ? null : { md, d: parseDebrief(md) }
+  }
+  /** The ship round where /wrapup records your own summary (`--decision summary`); a skip is none. */
+  const yourSummary = () => { const s = roundOf(ctxOf(5).rounds, 'summary'); return s && !/^skip\b/i.test(s) ? s : null }
+
+  /** The ship tab's DEBRIEF: IN ONE BREATH, then the reader and `open ›`. */
+  const debriefSec = async () => {
+    if (kind !== 'req') return null
+    const got = await debriefOf()
+    const hd = got?.d.head ?? null
+    const breath = (got?.d.sections.find(s => s.label === 'IN ONE BREATH')?.lines ?? []).map(l => plainMd(l.trim())).join(' ')
+    return Sec('DEBRIEF', hd ? `${hd.reader} reader → ${DEBRIEF_DEPTH[hd.reader]}` : null,
+      !got ? dim(NO_DEBRIEF) : breath ? <Text wrap="truncate">{breath}</Text> : faint('no IN ONE BREATH yet — run /debrief'),
+      got ? (
+        <Box flexDirection="row">
+          <Box flexGrow={1} flexShrink={1} overflow="hidden">
+            <Text color={C.dim} wrap="truncate">{hd ? `for: ${hd.forWho} · reader: ${hd.reader}${hd.why ? ` — ${hd.why}` : ''}` : 'no head line — the reader condition is unknown'}</Text>
+          </Box>
+          <Box flexShrink={0} marginLeft={2}>
+            <Button key="ship-debrief" plain onPress={() => sub({ kind: 'debrief' })}><Text color={C.link}>open ›</Text></Button>
+          </Box>
+        </Box>
+      ) : null)
+  }
+
+  const shipPage = async () => {
+    const rows = await changedRows()
     const commits = folder ? await cached($, `${folder}/commits-draft.md`) : null
     const pr = folder ? await cached($, `${folder}/${kind === 'bug' ? 'bug-fix-pr-draft.md' : 'pr-draft.md'}`) : null
     const checklistMd = folder ? await cached($, `${folder}/merge-checklist.md`) : null
@@ -1848,6 +1966,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
       return <Text><Text color={C.ok}>{'+'.repeat(p)}</Text><Text color={C.red}>{'-'.repeat(t - p)}</Text></Text>
     }
     return [
+      await debriefSec(),
       Sec('WHAT APPROVING SETS IN MOTION', null,
         cons.length === 0 ? dim('no drafts on disk yet — wrapup writes commits-draft.md, pr-draft.md and merge-checklist.md') : null,
         ...cons.map((x, i) => (
@@ -1880,7 +1999,8 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     }
     if (height === 'open') {
       // The summary: GATE (and what is flying). ⤢ — or this line — adds the phase's evidence, and the band scrolls.
-      const blocks = ['BEHAVIOUR · ACCEPTANCE CRITERIA', 'YOU SAID · CLAUDE FOUND · TASKS', 'FILES', 'FINDINGS · ACCEPTANCE CRITERIA · PLAN VS ACTUAL', 'WHAT APPROVING SETS IN MOTION · DIFFSTAT'][n - 1] ?? ''
+      const blocks = ['BEHAVIOUR · ACCEPTANCE CRITERIA', 'YOU SAID · CLAUDE FOUND · TASKS', 'FILES', 'FINDINGS · ACCEPTANCE CRITERIA · PLAN VS ACTUAL',
+        `${kind === 'req' ? 'DEBRIEF · ' : ''}WHAT APPROVING SETS IN MOTION · DIFFSTAT`][n - 1] ?? ''
       return (
         <Box flexDirection="column">
           {gateBlock(c)}
@@ -1905,9 +2025,10 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
 
   // ----- one thing opened from a phase page: a back control, then the thing -----
   /** `right`: drawn at the far end of the row; `lead`: drawn just before the title (a lane's `#n`). */
-  const header = (title: string, { right = null, lead = null }: { right?: unknown; lead?: unknown } = {}) => (
+  /** `tone`: the title's colour — the debrief view passes `permission`, never the accent. */
+  const header = (title: string, { right = null, lead = null, tone = C.v }: { right?: unknown; lead?: unknown; tone?: string } = {}) => (
     <Box flexDirection="row" justifyContent="space-between">
-      <Box flexDirection="row" flexShrink={1}><Button key="back" plain label="‹ back" onPress={back} /><Text>  </Text>{lead as never}<Text bold color={C.v} wrap="truncate">{title}</Text></Box>
+      <Box flexDirection="row" flexShrink={1}><Button key="back" plain label="‹ back" onPress={back} /><Text>  </Text>{lead as never}<Text bold color={tone} wrap="truncate">{title}</Text></Box>
       <Box flexDirection="row" flexShrink={0}>{right as never}</Box>
     </Box>
   )
@@ -1959,6 +2080,202 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
       <Box flexDirection="column">
         {header(`diagram ${n + 1} of ${fences.length} · source`)}
         <Box marginTop={1}>{src ? <Code source={src} language="mermaid" /> : dim('no diagram')}</Box>
+      </Box>
+    )
+  }
+
+  /**
+   * The debrief: the REQ's story in review order, then — at an open gate — the GATE line and its options, last.
+   * ≥110 the Debrief board: heads in an 18-column gutter, files `mark · path · what · why`, SAY IT │ YOUR SUMMARY.
+   * 84–109 the same story in one column; the files drop `why`, YOUR SUMMARY sits under SAY IT.
+   * <84 the DebriefNarrow board: one row per section (head · gist · ›), one unfolded in place and capped at
+   * FOLD_MAX rows, files `mark · path · +/-`. Probe P10 found the band does not pin (architecture.md → Probe
+   * result): nothing scrolls inside the band, so the narrow list keeps the view short and the options follow it.
+   */
+  const debriefView = async () => {
+    const got = await debriefOf()
+    const d = got?.d ?? null
+    const hd = d?.head ?? null
+    const wide = !narrow && e.props.bodyColumns >= STATUS_AT
+    const rows = await changedRows()
+    const summary = yourSummary()
+    const gaps = summary ? gapsOf(summary, rows) : null
+    const gateC = live?.waiting ? ctxOf(live.phase) : null
+    const options = gateC ? <Box flexDirection="column" marginTop={1}>{rule()}{gateBlock(gateC, { link: false, accent: 'permission' })}</Box> : null
+    const top = header(`DEBRIEF${hd ? ` · for: ${hd.forWho}` : ''}`, {
+      tone: 'permission',
+      right: hd ? <Text><Text color={DEBRIEF_READER_TONE[hd.reader]}>{hd.reader}</Text><Text color={C.dim}> reader → {DEBRIEF_DEPTH[hd.reader]}</Text></Text> : null,
+    })
+    if (!d) return <Box flexDirection="column">{top}<Box marginTop={1} paddingLeft={2}>{dim(NO_DEBRIEF)}</Box>{options}</Box>
+
+    const evidence = hd ? [hd.why, hd.written ? `written ${when(hd.written)}${hd.sha ? ` at ${hd.sha}` : ''}` : ''].filter(Boolean).join(' · ') : 'no head line — the reader condition is unknown; run /debrief'
+    const labels = DEBRIEF_LABELS.filter(l => d.sections.some(s => s.label === l))
+    const linesOf = (label: string) => d.sections.filter(s => s.label === label).flatMap(s => s.lines)
+    const missing = DEBRIEF_LABELS.length - labels.length
+    const hint = labels.length === 0 ? dim('debrief.md has none of the eight sections yet — run /debrief')
+      : missing ? faint(`${labels.length} of ${DEBRIEF_LABELS.length} sections · run /debrief to write the rest`) : null
+    const story = (line: string, wrap: 'wrap' | 'truncate' = 'wrap') => <Text wrap={wrap}>{storySpans(line).map(sp => <Text color={sp.color}>{sp.text}</Text>)}</Text>
+    /** A path cut from the left, so the file name survives. */
+    const clipLeft = (s: string, n: number) => (s.length > n ? `…${s.slice(s.length - n + 1)}` : s)
+    const touchedOf = (path: string) => { const k = pathKey(path); return (g?.touched ?? []).find(t => pathKey(t.path) === k || pathKey(t.path).endsWith(`/${k}`)) ?? null }
+    const markOf = (f: Debrief['files'][number]) => (f.planned ? <Text>◆</Text> : <Text color={C.amber}>◇</Text>)
+    const planned = d.files.filter(f => f.planned).length
+    const counted = d.files.length ? (
+      <Text><Text color={C.faint}>{d.files.length} file{d.files.length === 1 ? '' : 's'} · </Text><Text>◆ {planned} planned</Text><Text color={C.faint}> · </Text><Text color={C.amber}>◇ {d.files.length - planned} unplanned</Text></Text>
+    ) : null
+    const say = linesOf('SAY IT TO YOUR LEAD').map(l => plainMd(l.trim()))
+    /** YOUR SUMMARY's rows: the summary, then what it names and the gaps (warning). */
+    const yours = (w: number): { text: string; color?: string }[] => [
+      ...(summary ? wrapTo(`“${summary}”`, w).map(text => ({ text })) : [{ text: 'no summary recorded — /wrapup asks for yours at ship', color: C.dim }]),
+      ...(gaps ? [{ text: gaps.named, color: C.dim }, ...(gaps.missed ? wrapTo(gaps.missed, w).map(text => ({ text, color: C.amber })) : [])] : []),
+    ]
+    const showSay = say.length > 0 || !!summary
+
+    // ----- below 84 columns: the sections as a list, one unfolded -----
+    if (narrow) {
+      const fold = view.sub.kind === 'debrief' ? view.sub.open ?? 'WHAT CHANGED' : ''
+      const inner = W - 4
+      const gistW = W - 14 - 2
+      const capped = (items: unknown[]) => items.length > FOLD_MAX ? [...items.slice(0, FOLD_MAX), faint(`… ${items.length - FOLD_MAX} more — widen to 84+ cols or open debrief.md`)] : items
+      const plainRows = (lines: string[]) => lines.filter(l => !/^\s*```/.test(l)).flatMap(l => wrapTo(plainMd(l), inner)).map(l => story(l, 'truncate'))
+      const unfolded = (label: string): unknown[] => {
+        if (label === 'WHAT CHANGED') {
+          // Fences are drawn from 84 columns; here the rail lines and the files.
+          const lines: string[] = []
+          let fenced = false
+          for (const l of linesOf(label)) { if (/^\s*```/.test(l)) { fenced = !fenced; continue } if (!fenced) lines.push(l) }
+          return [
+            ...plainRows(lines),
+            ...(d.files.length ? [
+              <Box flexDirection="row"><Cell w={2}><Text> </Text></Cell><Box flexGrow={1}>{faint('file')}</Box><Cell w={12}>{faint('+/-')}</Cell></Box>,
+              ...d.files.map(f => {
+                const t = touchedOf(f.path)
+                return (
+                  <Box flexDirection="row">
+                    <Cell w={2}>{markOf(f)}</Cell>
+                    <Box flexGrow={1} flexShrink={1} overflow="hidden">{ref(`debrief-n-${pathKey(f.path)}`, f.path, f.line, clipLeft(f.path, inner - 16))}</Box>
+                    <Cell w={12}>{diffCell('debrief-', t, t?.path ?? f.path)}</Cell>
+                  </Box>
+                )
+              }),
+              <Text color={C.dim}>what · why dropped below 84 cols</Text>,
+            ] : []),
+          ]
+        }
+        if (label === 'SAY IT TO YOUR LEAD') {
+          return [...plainRows(say), <Text bold color={C.dim}>YOUR SUMMARY</Text>,
+            ...yours(inner).map(x => <Text color={x.color} wrap="truncate">{x.text}</Text>)]
+        }
+        return plainRows(linesOf(label))
+      }
+      const list = labels.map(label => {
+        const open = fold === label
+        return (
+          <Box flexDirection="column">
+            <Button key={`debrief-sec-${label.toLowerCase().replace(/\s+/g, '-')}`} plain
+              onPress={() => sub({ kind: 'debrief', open: open ? '' : label })}>
+              <Text bold color={C.dim}>{(DEBRIEF_SHORT[label] ?? label).padEnd(14)}</Text>
+              <Text>{clip(debriefGist(d, label, summary, gaps), gistW - 1).padEnd(gistW - 1)}</Text>
+              <Text color={C.dim}> {open ? '×' : '›'}</Text>
+            </Button>
+            {open ? <Box flexDirection="column" paddingLeft={2}>{capped(unfolded(label)) as never}</Box> : null}
+          </Box>
+        )
+      })
+      return (
+        <Box flexDirection="column">
+          {top}
+          <Box paddingLeft={2}><Text color={C.dim} wrap="truncate">{evidence}</Text></Box>
+          {rule()}
+          {hint}
+          {list as never}
+          {options}
+        </Box>
+      )
+    }
+
+    // ----- from 84 columns: the story, heads in a gutter -----
+    const CW = W - DEBRIEF_GUTTER
+    const row = (label: string, ...children: unknown[]) => label.length >= DEBRIEF_GUTTER - 1 ? (
+      <Box flexDirection="column">
+        <Text bold color={C.dim}>{label}</Text>
+        <Box flexDirection="column" paddingLeft={DEBRIEF_GUTTER}>{children as never}</Box>
+      </Box>
+    ) : (
+      <Box flexDirection="row">
+        <Cell w={DEBRIEF_GUTTER}><Text bold color={C.dim}>{label}</Text></Cell>
+        <Box flexDirection="column" flexGrow={1} flexShrink={1}>{children as never}</Box>
+      </Box>
+    )
+    /** A section's lines; a fence (at most one mermaid of five nodes, the skill's rule) as code. */
+    const bodyOf = (lines: string[]) => {
+      const out: unknown[] = []
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i] ?? ''
+        const fence = /^\s*```\s*(\S*)/.exec(l)
+        if (!fence) { out.push(story(l)); continue }
+        const src: string[] = []
+        for (i++; i < lines.length && !/^\s*```/.test(lines[i] ?? ''); i++) src.push(lines[i] ?? '')
+        out.push(<Code source={src.join('\n')} {...(fence[1] ? { language: fence[1] } : {})} />)
+      }
+      return out
+    }
+    const pW = Math.min(36, Math.floor(CW * (wide ? 0.34 : 0.45)))
+    const wW = Math.floor((CW - 2 - pW) * 0.45)
+    const fileTable = d.files.length === 0 ? [] : [
+      wide ? (
+        <Box flexDirection="row"><Cell w={2}><Text> </Text></Cell><Cell w={pW}>{faint('file')}</Cell><Cell w={wW}>{faint('what')}</Cell><Box flexGrow={1}>{faint('why')}</Box></Box>
+      ) : (
+        <Box flexDirection="row"><Cell w={2}><Text> </Text></Cell><Cell w={pW}>{faint('file')}</Cell><Box flexGrow={1}>{faint('what')}</Box></Box>
+      ),
+      ...d.files.map(f => {
+        const label = f.line ? `${f.path}:${f.line}` : f.path
+        return (
+          <Box flexDirection="row">
+            <Cell w={2}>{markOf(f)}</Cell>
+            <Cell w={pW}><Box overflow="hidden">{ref(`debrief-${pathKey(label)}`, f.path, f.line, clipLeft(label, pW - 1))}</Box></Cell>
+            {wide ? <Cell w={wW}><Text wrap="truncate">{plainMd(f.what) || ' '}</Text></Cell> : <Box flexGrow={1} flexShrink={1}><Text wrap="truncate">{plainMd(f.what) || ' '}</Text></Box>}
+            {wide ? <Box flexGrow={1} flexShrink={1}><Text color={C.dim} wrap="truncate">{plainMd(f.why) || ' '}</Text></Box> : null}
+          </Box>
+        )
+      }),
+    ]
+    /** ≥110: SAY IT TO YOUR LEAD │ YOUR SUMMARY, drawn row by row so the one rule runs between them. */
+    const sayBeside = () => {
+      const colW = Math.floor((W - 3) / 2)
+      type Cel = { text: string; color?: string; head?: boolean }
+      const left: Cel[] = [{ text: 'SAY IT TO YOUR LEAD', head: true }, ...say.flatMap(l => wrapTo(l, colW)).map(text => ({ text }))]
+      const right: Cel[] = [{ text: 'YOUR SUMMARY', head: true }, ...yours(colW)]
+      const cel = (x: Cel | undefined) => (x ? <Text bold={!!x.head} color={x.head ? C.dim : x.color} wrap="truncate">{x.text}</Text> : <Text> </Text>)
+      return (
+        <Box flexDirection="column">
+          {Array.from({ length: Math.max(left.length, right.length) }, (_, i) => (
+            <Box flexDirection="row"><Cell w={colW}>{cel(left[i])}</Cell><Text color={C.faint}> │ </Text><Box flexGrow={1} flexShrink={1}>{cel(right[i])}</Box></Box>
+          ))}
+        </Box>
+      )
+    }
+    const sayBelow = () => [
+      say.length ? row('SAY IT TO YOUR LEAD', ...say.map(l => story(l))) : null,
+      row('YOUR SUMMARY',
+        summary ? <Text wrap="wrap">“{summary}”</Text> : dim('no summary recorded — /wrapup asks for yours at ship'),
+        gaps ? <Text wrap="wrap"><Text color={C.dim}>{gaps.named}</Text>{gaps.missed ? <Text color={C.amber}> · {gaps.missed}</Text> : null}</Text> : null),
+    ]
+    const blocks = DEBRIEF_LABELS.map(label => {
+      if (label === 'SAY IT TO YOUR LEAD') return showSay ? (wide ? sayBeside() : sayBelow()) : null
+      if (!labels.includes(label)) return null
+      if (label === 'WHAT CHANGED') return row(label, counted, ...bodyOf(linesOf(label)), ...fileTable)
+      return row(label, ...bodyOf(linesOf(label)))
+    })
+    return (
+      <Box flexDirection="column">
+        {top}
+        <Box paddingLeft={2}><Text color={C.dim} wrap="truncate">{evidence}</Text></Box>
+        {rule()}
+        {d.before.map(l => faint(l)) as never}
+        {hint}
+        {blocks as never}
+        {options}
       </Box>
     )
   }
@@ -2124,6 +2441,7 @@ async function cockpit($: Dollar, e: RenderInput<'AbovePrompt'>, height: 'open' 
     : view.sub.kind === 'lane' ? laneView(view.sub.id)
     : view.sub.kind === 'diff' ? diffView(view.sub.path)
     : view.sub.kind === 'mermaid' ? await mermaidView(view.sub.n)
+    : view.sub.kind === 'debrief' ? await debriefView()
     : await phasePage(tabN || 1)
 
   // Nothing is cut: a tree taller than the band scrolls in the engine's window (wheel, keys). Open and max differ in

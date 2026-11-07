@@ -17,6 +17,11 @@ Grep-friendly format: `## [YYYY-MM-DD] kind | description` with optional metadat
 
 <!-- Newest entries below this line, newest first. Each entry is a level-2 heading. -->
 
+## [2026-11-07] architect-gate-cleared | REQ-002-debrief
+## [2026-11-07] adr-accepted | ADR-003 the debrief's reader question uses a question dialog
+
+## [2026-11-07] work-path-set | REQ-002-debrief | fast-forwarded onto REQ-001 (9fa7fc2), not yet on main
+
 ## [2026-11-07] req-ready-to-merge | REQ-001-flightdeck-compact-ring | flightdeck auto compact, context ring, agent numbers (mod 0.9.0)
 ## [2026-11-07] lesson | L-REQ-001-1 — a flag that holds user input needs one owner
 ## [2026-11-07] lesson | L-REQ-001-2 — recover a failed send in the one send function

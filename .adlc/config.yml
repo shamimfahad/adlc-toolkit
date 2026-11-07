@@ -93,6 +93,10 @@ verify:
     # Syntax-checks every toolkit script. Catches parse errors only, not types or logic.
     run: 'for f in scripts/*.mjs core/extras/claude/hooks/*.mjs; do node --check "$f" || exit 1; done'
     scope: project
+  test:
+    # node:test for the trail hook (REQ-002). Files, not a directory: `node --test <dir>` exits 1 on Node 24.
+    run: 'node --test tests/hooks/*.test.mjs'
+    scope: project
   sensors:
     # STATUS: needs verification — rebuilds adapters/ from core/ and fails if the committed
     # snapshot drifted (the same rebuild scripts/hooks/pre-commit runs). Writes adapters/.
