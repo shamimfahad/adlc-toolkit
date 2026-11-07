@@ -1,0 +1,54 @@
+P1 FACT: band validates hotkeys [digit=1,letter=a]; ui.press({key:'digit'}) -> presses=["digit"]; ui.key('1') rejected (key: the drawing holds no Client)
+P1 VERDICT: not testable in plugin test — the kit has no composer/prompt key routing (press is by element key, key() reaches only a Client) — check live with /probe p1; docs (Button.hotkey) say a bare digit in an EMPTY composer answers a band Button, a letter never reaches it from the composer
+P2 FACT: mount of a 31-row tree at maxRows=10 ok; before[0..1]=["window 0..8 of 30 (engine offset 0, maxRows 10)","row 0"]; $.ui.scroll(person, by 5) -> {}; mod offset=5; after[0..1]=["window 5..13 of 30 (engine offset 0, maxRows 10)","row 5"]; after has 10 Text, buttons=[]
+P2 VERDICT: a mod CAN own ui.scroll for the band — answering without next returns {}, its atom moves (offset 5, then 21 at end) and its redraw draws its own slice ("row 5" first after scroll; buttons at end=[decide-y,decide-9]); the kit does not paint, so whether the engine ALSO windows that tree with scroll.bodyRows (double-scroll) is check-live
+P3 FACT: tree of 30 rows at maxRows=10 offset 0; ui.press({key:'decide-y'}) on an out-of-window Button -> {"element":"decide-y"} presses=["decide-y"] (kit press is by key: it ignores the window)
+P3 VERDICT: not testable in plugin test — the kit presses by element key and models no band window or hotkey arming — check live with /probe p3 (focus band with ctrl+x tab, press y while row 29 is out of view); docs only state the window rule for a BARE DIGIT (AbovePrompt.maxRows remark), letters unspecified
+P4 FACT: viewedMarks before=0 after render+settle+advance(1000)=0; next render drew "p4 render drew; previous unawaited write: rejected: HooksError: flightdeck-engine-probes: state.set: denied: it was made while ui.render is being dispatched, and drawing is pure (a render hook reads state and returns a tree; write from a handler such as onPress, or from another event) (host check)"
+P4 VERDICT: unawaited update() started in ui.render -> REFUSED (promise rejects with the render-purity denial; atom unchanged; silently lost unless the mod catches it)
+P4 FACT (timer): viewedMarks=1; drawn=["p4-timer render drew; previous: pending"]
+P4 VERDICT (timer): a write deferred with $.clock.after from the render -> LANDS (atom=1); a render that also READS that atom would redraw and reschedule on every write, so it needs a guard
+P4 FACT (awaited): viewedMarks=0; drawn=["p4 render drew; awaited refusal: HooksError: flightdeck-engine-probes: state.set: denied: it was made while ui.render is being dispatched, and drawing is pure (a render hook reads state and returns a tree; write from a handler such as onPress, or from another event) (host check)"]
+P4 VERDICT (awaited): update() awaited in ui.render -> refused; refusal text drawn: "p4 render drew; awaited refusal: HooksError: flightdeck-engine-probes: state.set: denied: it was made while ui.render is being dispatched, and drawing is pure (a render hook reads state and returns a tree; write from a handler such as onPress, or from another event) (host check)"
+P5 FACT: $.ui.open result recorded={"isPlaced":true} (the test stub's answer; isPlaced only, no placement field); dock render="p5 placement=dock fullscreen=true cols=120" closes=1 {"id":"p5","origin":{"kind":"plugin"}}; inline render="p5 placement=inline fullscreen=false cols=120" closes=1
+P5 VERDICT: placement is only on Pane render props (UiOpenResult has isPlaced/reason, no placement); which value fullscreen@120 vs main screen gives is the surface's — not testable (kit takes props from the test), check live with /probe p5; guard calling $.ui.close from the render when placement==='dock' WORKS (ui.close raised once, origin plugin, not on inline)
+P6 FACT (same module): drawn=["probes-outer","probes-inner"]
+P6 VERDICT (same module): COMPOSES — outer hook embedding await next(e) as a child draws both
+P6 FACT (two plugins, both wrap next): drawn=["probes-outer","other-band","engine-band"]
+P6 VERDICT (two plugins): inline second plugin is POSSIBLE in the kit; COMPOSES — order top-down ["probes-outer","other-band","engine-band"]
+P6 FACT (greedy second plugin): drawn=["probes-outer","greedy-band"]
+P6 VERDICT (greedy): a contributor that does not call next is wrapped by ours (ours sits above it in the chain); drawn=["probes-outer","greedy-band"]
+P7 FACT: events=["ask: open","prompt.submit bottom: {\"text\":\"probe-approve\",\"origin\":{\"kind\":\"plugin\",\"name\":\"flightdeck-engine-probes\",\"asUser\":true}}","press settled before ask answered: true","ask: answered"] presses=["submit:start","submit:resolved {\"text\":\"probe-approve\"}"] ask=resolved {"result":{"answers":{}}}
+P7 VERDICT: not testable in plugin test — nothing sits beneath the test's prompt.submit hook, so the engine's idle queue, the dialog and the composer draft are not modelled (the kit delivers the submit to the bottom at once, as recorded) — check live with /probe p7; docs: $.prompt.submit queues "a turn of its own, once the session is idle" and resolves as that turn starts
+P8 FACT (terminal): Input drawn rows=3; onInput saw ["line one\n"]; onSubmit saw ["terminal:\"line one\\nline two  \""]
+P8 VERDICT (terminal): onSubmit receives the text whole (newlines kept, not trimmed: confirmed); which physical key (Enter vs Shift+Enter) submits vs types a newline is not testable in plugin test — kit input() is a semantic submit/change — check live; docs: "Enter submits; a newline is typed as in the prompt box"
+P8 FACT (desktop): Input drawn rows=3; onInput saw ["line one\n"]; onSubmit saw ["desktop:\"line one\\nline two  \""]
+P8 VERDICT (desktop): onSubmit receives the text whole (newlines kept, not trimmed: confirmed); which physical key (Enter vs Shift+Enter) submits vs types a newline is not testable in plugin test — kit input() is a semantic submit/change — check live; docs: "Enter submits; a newline is typed as in the prompt box"
+P9 FACT: initial=["ctx no-measure"] live=["ctx 25%"] snapshot={"percent":25,"tokens":50000,"window":200000,"keys":["percent","tokens","window"],"changed":["context"]}; after-compact=["ctx percent-null"] snapshot={"percent":null,"tokens":null,"window":200000,"keys":["window"],"changed":["context"]}
+P9 VERDICT: session.measure carries context.percent (0-100 integer) beside tokens/window; with percent absent (post-/compact shape per type docs) the hook sees keys ["window"] and the band draws "ctx percent-null"; the kit replays the shape the test gives — that the engine raises measure with percent absent right after /compact is from the type docs (inferred), check live
+P10 FACT (maxRows 12): body props height=6 overflow=hidden; before=["line 01","line 02","line 03","line 04","line 05","line 06","[opt-approve]","[opt-revise]","[opt-halt]"]; $.ui.scroll(person, by 5) -> {}; p10Offset=5; after=["line 06","line 07","line 08","line 09","line 10","line 11","[opt-approve]","[opt-revise]","[opt-halt]"]
+P10 VERDICT (maxRows 12): structure holds — 6 body lines, then the three options, before and after a scroll the mod answers itself (body moves to "line 06", options still after it); the kit does not paint and raises ui.scroll on request, so whether the engine ever sends ui.scroll to a band whose tree fits maxRows (results-live.md P2: it did not) is check-live with /probe p10
+P10 FACT (maxRows 24): body props height=6 overflow=hidden; before=["line 01","line 02","line 03","line 04","line 05","line 06","[opt-approve]","[opt-revise]","[opt-halt]"]; $.ui.scroll(person, by 5) -> {}; p10Offset=5; after=["line 06","line 07","line 08","line 09","line 10","line 11","[opt-approve]","[opt-revise]","[opt-halt]"]
+P10 VERDICT (maxRows 24): structure holds — 6 body lines, then the three options, before and after a scroll the mod answers itself (body moves to "line 06", options still after it); the kit does not paint and raises ui.scroll on request, so whether the engine ever sends ui.scroll to a band whose tree fits maxRows (results-live.md P2: it did not) is check-live with /probe p10
+
+tests/probes.test.tsx:
+(pass) P1 digit vs letter hotkey in an empty composer > band buttons with hotkey "1" and "a" [47.42ms]
+(pass) P2 a mod owning ui.scroll for the AbovePrompt band > tall band, person wheel answered by the mod [24.75ms]
+(pass) P3 letter hotkeys on buttons scrolled out of the band window > decision row last, engine window at top [19.18ms]
+(pass) P4 update() started inside ui.render > unawaited update that settles after the render [20.29ms]
+(pass) P4 update() started inside ui.render > write deferred to a $.clock.after timer scheduled by the render [17.31ms]
+(pass) P4 update() started inside ui.render > awaited update inside the render [16.42ms]
+(pass) P5 Pane placement and a dock guard > placement reported, close-when-dock guard [18.94ms]
+(pass) P6 two band contributors composing via await next(e) > two hooks in the same module [13.26ms]
+(pass) P6 two band contributors composing via await next(e) > a second plugin (inline fixture) drawing the band [18.64ms]
+(pass) P6 two band contributors composing via await next(e) > a second plugin that draws without next [28.80ms]
+(pass) P7 $.prompt.submit from a band press during an open question dialog > submit while AskUserQuestion is pending [34.41ms]
+(pass) P8 Input rows=3: Enter vs Shift+Enter and what reaches onSubmit > multi-line submit on terminal [22.24ms]
+(pass) P8 Input rows=3: Enter vs Shift+Enter and what reaches onSubmit > multi-line submit on desktop [20.44ms]
+(pass) P9 context percent on session.measure, and after /compact > measure before and after a compaction [25.31ms]
+(pass) P10 options pinned under a body that scrolls on its own > body of 6 rows, three options after it, at maxRows 12 [19.43ms]
+(pass) P10 options pinned under a body that scrolls on its own > body of 6 rows, three options after it, at maxRows 24 [18.44ms]
+
+ 16 pass
+ 0 fail
+Ran 16 tests across 1 file. [0.52s]

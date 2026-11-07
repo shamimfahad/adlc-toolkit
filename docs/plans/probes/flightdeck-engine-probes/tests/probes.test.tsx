@@ -1,4 +1,4 @@
-// Engine behaviour probes P1..P9. Each test records what happened and prints
+// Engine behaviour probes P1..P10. Each test records what happened and prints
 // one `P<n> VERDICT:` line; assertions are kept to what the probe needs to
 // run at all, so an unexpected answer is printed rather than hidden.
 import type { On } from 'claude-code'
@@ -505,4 +505,51 @@ describe('P9 context percent on session.measure, and after /compact', () => {
     )
     await ui.unmount()
   })
+})
+
+describe('P10 options pinned under a body that scrolls on its own', () => {
+  for (const maxRows of [12, 24]) {
+    test(`body of 6 rows, three options after it, at maxRows ${maxRows}`, async ($, on) => {
+      world(on)
+      await selectProbe($, 'p10')
+      const ui = await $.ui.mount({ ...band(maxRows), surface: 'terminal' })
+
+      const order = async () => {
+        const drawn = (await ui.findAll({})) as { type: string; key?: string; text?: string }[]
+        return drawn
+          .filter(n => n.type === 'Button' || (n.type === 'Text' && /^line \d+$/.test(n.text ?? '')))
+          .map(n => (n.type === 'Button' ? `[${String(n.key)}]` : String(n.text)))
+      }
+
+      const before = await order()
+      const result = await $.ui.scroll({
+        component: 'AbovePrompt',
+        requestId: BAND_ID,
+        offset: 5,
+        by: 5,
+        bodyRows: maxRows - 1,
+        contentRows: 10,
+        origin: { kind: 'person' },
+      })
+      const offset = await stateOf($, 'p10Offset')
+      const after = await order()
+      const body = (await ui.find({ key: 'p10-body' } as never)) as { props?: Record<string, unknown> } | undefined
+
+      const lastLine = (list: string[]) => list.map((t, i) => (t.startsWith('line') ? i : -1)).reduce((a, b) => Math.max(a, b), -1)
+      const firstOption = (list: string[]) => list.findIndex(t => t.startsWith('['))
+      const optionsAfter = (list: string[]) => firstOption(list) > lastLine(list) && list.filter(t => t.startsWith('[')).length === 3
+
+      verdict(
+        `P10 FACT (maxRows ${maxRows}): body props height=${String(body?.props?.height)} overflow=${String(body?.props?.overflow)}; before=${JSON.stringify(before)}; $.ui.scroll(person, by 5) -> ${JSON.stringify(result)}; p10Offset=${String(offset)}; after=${JSON.stringify(after)}`,
+      )
+      expect(optionsAfter(before)).toBe(true)
+      expect(optionsAfter(after)).toBe(true)
+      expect(before.filter(t => t.startsWith('line'))).toHaveLength(6)
+      expect(after[0]).toBe('line 06')
+      verdict(
+        `P10 VERDICT (maxRows ${maxRows}): structure holds — 6 body lines, then the three options, before and after a scroll the mod answers itself (body moves to "${after[0]}", options still after it); the kit does not paint and raises ui.scroll on request, so whether the engine ever sends ui.scroll to a band whose tree fits maxRows (results-live.md P2: it did not) is check-live with /probe p10`,
+      )
+      await ui.unmount()
+    })
+  }
 })

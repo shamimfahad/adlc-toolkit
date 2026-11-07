@@ -18,7 +18,7 @@ claude plugin test /path/to/flightdeck-engine-probes 2>&1 | grep -E 'P[0-9] (FAC
 
 ## Fixtures and live checks
 
-The `/probe <id>` slash command sets the `mode` atom. The fixtures are selected by that mode, so you can run any of them by hand in a live session: `claude --plugin-dir <this folder>`, then `/probe p1` (or `p2`, `p3`, `p4`, `p4-await`, `p4-timer`, `p5`, `p6`, `p6-pass`, `p7`, `p8`, `p9`). `/probe off` returns the band to the engine. In tests, a `Pane` with the id `readout` draws every atom as `name=<json>`, because the test's `$` has no state noun.
+The `/probe <id>` slash command sets the `mode` atom. The fixtures are selected by that mode, so you can run any of them by hand in a live session: `claude --plugin-dir <this folder>`, then `/probe p1` (or `p2`, `p3`, `p4`, `p4-await`, `p4-timer`, `p5`, `p6`, `p6-pass`, `p7`, `p8`, `p9`, `p10`). `/probe off` returns the band to the engine. In tests, a `Pane` with the id `readout` draws every atom as `name=<json>`, because the test's `$` has no state noun.
 
 | id | fixture |
 |---|---|
@@ -31,6 +31,7 @@ The `/probe <id>` slash command sets the `mode` atom. The fixtures are selected 
 | p7 | a band Button that calls `$.prompt.submit({ asUser: true })` |
 | p8 | `Input rows={3}` that records `onInput` and `onSubmit` |
 | p9 | a `session.measure` hook snapshots `context`; the band draws `ctx N%`, `percent-null`, or `no-measure` |
+| p10 | a body `Box` 6 rows tall (`overflow="hidden"`) drawing its own slice of 30 lines from a `p10Offset` atom that the mod's `ui.scroll` answer moves, then three option rows (`y`, `r`, `h`); every scroll that reaches the band is logged in `p10Scrolls` |
 
 ## What each probe answers, and the decision it feeds
 
@@ -45,6 +46,7 @@ The `/probe <id>` slash command sets the `mode` atom. The fixtures are selected 
 | P7 | What does `$.prompt.submit` from a press do while AskUserQuestion is open, or after the user typed? | two-gate-model race until toolkit 1.12.1 |
 | P8 | `Input rows=3`: Enter vs Shift+Enter, and what text reaches `onSubmit`? | ship explain-back box |
 | P9 | Is `context.percent` on `session.measure`, and what does the event look like after `/compact`? | context % on the band |
+| P10 | Can the options stay on screen while a fixed-height body above them scrolls on its own? | REQ-002 debrief view: pinned ship question, or the narrow folded list |
 
 The answers observed on 2.1.318 are in `../results-2.1.318.md`.
 

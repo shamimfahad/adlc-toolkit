@@ -1,7 +1,7 @@
 // Engine behaviour probes for adlc-flightdeck design decisions.
 //
 // Minimal fixtures, one behaviour each, selected by the `mode` atom. The
-// `/probe <id>` command sets the mode (p1..p9, or `off`), so every fixture can
+// `/probe <id>` command sets the mode (p1..p10, or `off`), so every fixture can
 // also be driven by hand in a live session for the probes the test kit
 // cannot exercise (key routing, real placement, real dialogs).
 import { atom, read, update } from 'claude-code'
@@ -17,10 +17,23 @@ const p5Open = atom({ plugin: 'flightdeck-engine-probes', key: 'p5Open' } as con
 const p8Submits = atom({ plugin: 'flightdeck-engine-probes', key: 'p8Submits' } as const, [])
 const p8Inputs = atom({ plugin: 'flightdeck-engine-probes', key: 'p8Inputs' } as const, [])
 const measure = atom({ plugin: 'flightdeck-engine-probes', key: 'measure' } as const, null)
+const p10Offset = atom({ plugin: 'flightdeck-engine-probes', key: 'p10Offset' } as const, 0)
+const p10Scrolls = atom({ plugin: 'flightdeck-engine-probes', key: 'p10Scrolls' } as const, [])
 
 // P2/P3: a band tree of TALL_ROWS rows, the decision row last.
 const TALL_ROWS = 30
 const P5_PANE = 'p5'
+
+// P10: a body of P10_LINES lines in a Box P10_BODY rows tall, which the mod
+// scrolls itself, with three option rows under it. Pinned = the options stay
+// on screen while the body's lines move.
+const P10_LINES = 30
+const P10_BODY = 6
+const P10_OPTIONS = [
+  { key: 'opt-approve', hotkey: 'y', label: 'Approve' },
+  { key: 'opt-revise', hotkey: 'r', label: 'Revise' },
+  { key: 'opt-halt', hotkey: 'h', label: 'Halt' },
+] as const
 
 // P4: what the unawaited write settled to, drawn on the next render. A module
 // variable on purpose: the probe is about a write the state host may refuse.
@@ -32,8 +45,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'probe',
-      description: 'Select an engine probe fixture (p1..p9, off)',
-      argumentHint: '<p1..p9|off>',
+      description: 'Select an engine probe fixture (p1..p10, off)',
+      argumentHint: '<p1..p10|off>',
     })
 
     return next(e)
@@ -50,6 +63,7 @@ export const register: Register = on => {
 
     await update($, mode, () => (id === 'off' ? null : id))
     await update($, bandOffset, () => 0)
+    await update($, p10Offset, () => 0)
 
     if (id === 'p5') {
       const opened = await $.ui.open({ id: P5_PANE, title: 'P5 placement probe' })
@@ -74,9 +88,20 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // P2: the band owns its own scroll while mode is p2.
+  // P2: the band owns its own scroll while mode is p2. P10: every scroll that
+  // reaches the band is logged, and moves the body's own offset, not the band.
   on('ui.scroll', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if ((await read($, mode)) !== 'p2') {
+    const current = await read($, mode)
+
+    if (current === 'p10') {
+      const seen = `by=${e.by} body=${e.bodyRows} content=${e.contentRows} origin=${e.origin.kind} pointer=${e.pointer === undefined ? '-' : JSON.stringify(e.pointer)}`
+      await update($, p10Scrolls, list => log(list, seen))
+      await update($, p10Offset, n => Math.min(P10_LINES - P10_BODY, Math.max(0, (n ?? 0) + e.by)))
+
+      return {}
+    }
+
+    if (current !== 'p2') {
       return next(e)
     }
 
@@ -162,6 +187,32 @@ export const register: Register = on => {
             {e.props.scroll.offset}, maxRows {e.props.maxRows})
           </Text>
           {all.slice(offset, offset + height)}
+        </Box>
+      )
+    }
+
+    if (current === 'p10') {
+      // A fixed-height body that draws its own slice, then the options.
+      const offset = await read($, p10Offset)
+      const scrolls = await read($, p10Scrolls)
+      const lines = Array.from({ length: P10_LINES }, (_, i) => `line ${String(i + 1).padStart(2, '0')}`)
+
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>
+            p10 body {offset + 1}..{offset + P10_BODY} of {P10_LINES} · scrolls seen {scrolls.length} · engine offset{' '}
+            {e.props.scroll.offset} · maxRows {e.props.maxRows}
+          </Text>
+          <Box key="p10-body" flexDirection="column" height={P10_BODY} overflow="hidden">
+            {lines.slice(offset, offset + P10_BODY).map(text => (
+              <Text>{text}</Text>
+            ))}
+          </Box>
+          {P10_OPTIONS.map(option => (
+            <Box key={`row-${option.key}`} flexDirection="row">
+              <Button key={option.key} hotkey={option.hotkey} label={option.label} onPress={press(option.key)} />
+            </Box>
+          ))}
         </Box>
       )
     }
@@ -282,6 +333,8 @@ export const register: Register = on => {
       ['p8Submits', await read($, p8Submits)],
       ['p8Inputs', await read($, p8Inputs)],
       ['measure', await read($, measure)],
+      ['p10Offset', await read($, p10Offset)],
+      ['p10Scrolls', await read($, p10Scrolls)],
     ]
 
     return (

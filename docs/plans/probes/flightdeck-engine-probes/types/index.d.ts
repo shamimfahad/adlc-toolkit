@@ -17,6 +17,8 @@ declare module 'claude-code' {
       p8Submits: string[]
       p8Inputs: string[]
       measure: ProbeMeasure | null
+      p10Offset: number
+      p10Scrolls: string[]
     }
   }
 }
