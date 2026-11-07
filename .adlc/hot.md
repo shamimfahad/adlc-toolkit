@@ -17,6 +17,16 @@ Grep-friendly format: `## [YYYY-MM-DD] kind | description` with optional metadat
 
 <!-- Newest entries below this line, newest first. Each entry is a level-2 heading. -->
 
+## [2026-11-07] ship-gate-cleared | REQ-002-debrief
+## [2026-11-07] req-ready-to-merge | REQ-002-debrief | /debrief skill and the flightdeck DEBRIEF view (toolkit 1.14.0, mod 0.10.0)
+## [2026-11-07] lesson | L-REQ-002-1 — change a rule's code and its prose in one diff
+## [2026-11-07] lesson | L-REQ-002-2 — a field only one client writes is unknown when absent
+## [2026-11-07] lesson | L-REQ-002-3 — scope a protocol exception to what makes it safe; record only what the user chose
+## [2026-11-07] lesson | L-REQ-002-4 — build a fallback over the probe's whole range, from the setting
+## [2026-11-07] lesson | L-REQ-002-5 — keep one copy per runtime and a parity test
+## [2026-11-07] lesson | L-REQ-002-6 — test an event hook through its event, not its regex
+## [2026-11-07] lesson | L-REQ-002-7 — a card example in a skill must parse
+## [2026-11-07] gotcha | G05–G11 — ADR header rows, sandbox tmux, hook main guard, trail ask words, mod test-kit traps, worktree tsc, core/ text ships elsewhere
 ## [2026-11-07] verify-gate-cleared | REQ-002-debrief | findings: C0/M0/m3 (n8, n9, m13 deferred to /wrapup)
 ## [2026-11-07] implement-gate-cleared | REQ-002-debrief
 

@@ -4,7 +4,9 @@ Project-specific vocabulary. Populated incrementally as terms appear in specs, r
 
 | Term | Meaning |
 |---|---|
-| _(empty)_ | Add entries as encountered |
+| Debrief | The story of a REQ in eight sections (IN ONE BREATH … QUESTIONS YOU MAY GET), every claim with a pointer, written by `/debrief` into `debrief.md` in the working set. |
+| Reader condition | `cold`, `warm` or `handover` — how much of the work the reader already holds, judged from the trail by `readerOf` (`trail reader`); sets the debrief's depth. |
+| Ask round | A trail round that records an answer to an ask (`predict`, `summary`, `debrief`), not a gate decision; never closes an open gate round. |
 
 ## Conventions
 

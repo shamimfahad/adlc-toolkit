@@ -12,6 +12,7 @@ A table of contents for the vault, built from the files themselves. Each row lin
 | ID | Title | Status | Kind | Merged | Path |
 |---|---|---|---|---|---|
 | REQ-001 | [[specs/2026-11/sf/REQ-001-flightdeck-compact-ring|Flightdeck: auto-compact at phase boundaries, a context ring, numbered agents]] | ready-to-merge | /proceed | — | `specs/2026-11/sf/REQ-001-flightdeck-compact-ring.md` |
+| REQ-002 | [[specs/2026-11/sf/REQ-002-debrief|The debrief: /debrief and the DEBRIEF view in the gate]] | ready-to-merge | /proceed | — | `specs/2026-11/sf/REQ-002-debrief.md` |
 
 ## ADRs
 

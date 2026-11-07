@@ -113,3 +113,157 @@ _(empty — populated as gotchas are discovered)_
 **Don't:** Claim "types pass" without saying which binary ran.
 
 **Related:** `config.yml` → `verify:` (no typecheck configured).
+
+## G05 — ADR header rows feed the generated ledgers ^g05
+
+| Field | Value |
+|---|---|
+| Discovered | 2026-11-07 |
+| REQ | REQ-002 |
+| Component | .adlc/architecture |
+| Status | confirmed |
+| Severity | careful (check before touching) |
+
+**What:** `adlc.mjs index` reads an ADR's `Decided`, `Author` and `Superseded by` rows and the `^ADR-NNN` anchor on its title. An ADR with a `Date` row prints `Decided: —` in `decisions.md` and `index.md`.
+
+**Where:** `.adlc/architecture/adr-*.md`; generator in `scripts/adlc.mjs`.
+
+**Why it's surprising:** The ADR still reads fine; only the generated tables go blank.
+
+**Why it exists:** The generators read header rows by name, so they stay cheap.
+
+**Don't:** Start a new ADR from memory — copy the header of the last accepted one (ADR-002).
+
+**Related:** [[architecture/adr-003-debrief-ask-dialog]].
+
+## G06 — The agent sandbox blocks tmux sockets and `<(…)` ^g06
+
+| Field | Value |
+|---|---|
+| Discovered | 2026-11-07 |
+| REQ | REQ-002 |
+| Component | docs/plans/probes |
+| Status | `STATUS: needs verification` — true in this machine's sandbox |
+| Severity | careful (check before touching) |
+
+**What:** Inside the agent sandbox, tmux cannot create its socket ("Operation not permitted" under /private/tmp/claude, "File name too long" under the scratchpad), so a live probe has to be run by a person. Process substitution `<(…)` fails too (`/dev/fd/NN: Operation not permitted`).
+
+**Where:** `docs/plans/probes/RUNBOOK.md` Step 2, `docs/plans/probes/results-pin.md` (Live run).
+
+**Why it's surprising:** `claude plugin test` runs fine there, so the structural half of a probe passes and the live half silently cannot.
+
+**Why it exists:** The sandbox refuses unix sockets and /dev/fd.
+
+**Don't:** Plan a live probe as an agent task; write both sides of a diff to `$TMPDIR` files instead of `<(…)`.
+
+**Related:** [[knowledge/lessons/LESSON-REQ-001-3-record-engine-probes]].
+
+## G07 — A hook's main guard must compare real paths ^g07
+
+| Field | Value |
+|---|---|
+| Discovered | 2026-11-07 |
+| REQ | REQ-002 |
+| Component | core/extras/claude/hooks |
+| Status | confirmed |
+| Severity | trap (will bite a normal change) |
+
+**What:** A hook script that is also imported (for tests) guards its entry with `realpathSync(argv[1])` against the module's file path. Compared with `import.meta.url` directly, an installed hook reached through a symlink never runs.
+
+**Where:** `core/extras/claude/hooks/adlc-trail.mjs` (end of file, `isMain`).
+
+**Why it's surprising:** Tests pass (they import), and the live hook becomes a silent no-op.
+
+**Why it exists:** Installs link hooks into `~/.claude`; `import.meta.url` is always the resolved path.
+
+**Don't:** Test the CLI without `--vault <tmp>/.adlc` either — without it the script walks up from cwd and writes into the live `pipeline-state.json`.
+
+**Related:** [[knowledge/lessons/LESSON-REQ-002-6-test-hook-through-event]].
+
+## G08 — `trail gate` closes the open round unless the word is an ask ^g08
+
+| Field | Value |
+|---|---|
+| Discovered | 2026-11-07 |
+| REQ | REQ-002 |
+| Component | adlc-trail |
+| Status | confirmed |
+| Severity | trap (will bite a normal change) |
+
+**What:** `trail gate --decision <d>` closes the last undecided round. Only the ask words (`predict`, `summary`, `debrief` — `ASK_DECISIONS`) are inserted before it instead. A new ask word has to join that set and the mod's copy (the parity test checks). Likewise the Stop hook takes any turn with a line starting `ASK · Predict · `, `ASK · Summary · ` or `DEBRIEF · ` as an ask, not a gate — so a gate card must never carry such a line.
+
+**Where:** `core/extras/claude/hooks/adlc-trail.mjs:61-63` (`ASK_LINE`, `ASK_DECISIONS`), `core/extras/claude/mods/adlc-flightdeck/hooks/model.ts` (`ASK_DECISIONS`).
+
+**Why it's surprising:** `trail gate` accepts any word; the wrong one silently closes a live gate round.
+
+**Why it exists:** Asks and gates share one round list in `pipeline-state.json`.
+
+**Don't:** Run `trail findings` without `--json`/`--file` to see its usage — it records an empty list over the real one.
+
+**Related:** [[knowledge/lessons/LESSON-REQ-002-5-cross-runtime-list-parity]].
+
+## G09 — More mod test-kit traps ^g09
+
+| Field | Value |
+|---|---|
+| Discovered | 2026-11-07 |
+| REQ | REQ-002 |
+| Component | adlc-flightdeck tests |
+| Status | confirmed |
+| Severity | trap (will bite a normal change) |
+
+**What:** On POSIX the host resolves a `D:/…` fixture path against the test's folder, so stub `fs.stat`/`fs.read` by path suffix; `find({ type: 'Text', text })` returns the uncoloured parent first, so anchor the regex `^…$` when asserting a colour; a press that writes a stubbed atom fails the file late ("a rejection nothing handled: update: …"), so leave that key out of the fixture; a new atom key must be typed in `PluginState` — sub-view state belongs on its `FlightSub` variant; escape `+` and `.` when copy goes into a regex.
+
+**Where:** `core/extras/claude/mods/adlc-flightdeck/tests/flightdeck.test.tsx` (debrief tests, ~1683–1790).
+
+**Why it's surprising:** Each one misses silently or fails at the end of the file, not in the test.
+
+**Why it exists:** The test host simulates the engine minimally.
+
+**Don't:** Trust a passing colour or missing-file test until it has failed once.
+
+**Related:** [[knowledge/gotchas#^g03|G03]].
+
+## G10 — In a worktree, `tsc -p .` in a mod folder writes .js files ^g10
+
+| Field | Value |
+|---|---|
+| Discovered | 2026-11-07 |
+| REQ | REQ-002 |
+| Component | adlc-flightdeck |
+| Status | confirmed |
+| Severity | careful (check before touching) |
+
+**What:** A mod's `tsconfig.json` extends `.claude-plugin/types/tsconfig.json`, which a live session generates in the main checkout only. In a worktree it is missing, `noEmit` is lost, and `tsc -p .` writes a `.js` beside every source. Type-check with a scratch tsconfig that extends the main checkout's types and includes the worktree's folders. The probe mod has no types folder at all; borrow the flightdeck one.
+
+**Where:** `core/extras/claude/mods/adlc-flightdeck/tsconfig.json:2`, `docs/plans/probes/flightdeck-engine-probes/tsconfig.json:2`.
+
+**Why it's surprising:** The same command is clean in the main checkout.
+
+**Why it exists:** Generated types are gitignored.
+
+**Don't:** Run tsc in a worktree mod folder without a scratch config.
+
+**Related:** [[knowledge/gotchas#^g04|G04]].
+
+## G11 — Toolkit text in core/ ships into other vaults ^g11
+
+| Field | Value |
+|---|---|
+| Discovered | 2026-11-07 |
+| REQ | REQ-002 |
+| Component | core/ |
+| Status | confirmed |
+| Severity | careful (check before touching) |
+
+**What:** In `core/` text, point at a toolkit ADR as `$TOOLKIT_PATH/.adlc/architecture/…`, never `[[architecture/adr-…]]`: the wikilink resolves inside the user's vault, where ADR-003 is a different decision. Two more release traps: the `adapters-in-sync` sensor (`git diff --exit-code -- adapters`) does not see a new untracked adapter file; and `node --test <dir>` exits 1 on Node 24 — pass file globs (`tests/hooks/*.test.mjs`).
+
+**Where:** `core/GATE-PROTOCOL.md` (*The trail*), `.adlc/config.yml` (`verify`).
+
+**Why it's surprising:** Each looks right in this repo and breaks or passes falsely elsewhere.
+
+**Why it exists:** core/ is the product; this repo's vault is only one user of it.
+
+**Don't:** Trust the adapters sensor for a release that adds a skill — check `git status --porcelain -- adapters` too.
+
+**Related:** [[knowledge/lessons/LESSON-REQ-002-1-rule-and-prose-same-diff]].
