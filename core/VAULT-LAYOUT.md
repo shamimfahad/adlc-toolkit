@@ -125,6 +125,8 @@ So **`prefixed` scans all author folders too.** Scoping it to `specs/*/<author>/
 
 Minting is not cheaper under a partitioned layout. It's a directory-name listing either way; the win here is browsing. If you need per-person ID safety, that comes from `req.id_scheme: prefixed`, which works identically in a flat vault.
 
+The same scan mints BUG IDs: `.adlc/bugs` and `-name 'BUG-*'`, folders and records alike. A bug leaves a record too, so a folders-only scan there re-mints the number of every merged bug whose working set was deleted.
+
 For an explicit ID supplied by the user, run the same scan and collision-check against it before accepting.
 
 `~/.adlc/.global-next-req` (the cross-project counter `/sprint` uses) is outside this file's scope and unchanged.
@@ -148,6 +150,7 @@ Every scheme above yields an ID of this shape, and every tool that recognises a 
 - Matching an ID inside free text (a transcript, a hint, a `## Related` line), require that it is **not preceded by a word character or a hyphen**, so a lesson ID (`L-REQ-035-1`) never yields `REQ-035`.
 - `REQ-\d+` alone is the regression this section exists to stop: it makes every `prefixed` vault invisible. Telling a work folder from a bucket by `^(REQ|BUG)-` (no digits) stays fine.
 - A `ticket` native key (`PROJ-842`) is not covered by this pattern, nor by the `REQ-*` scans in `mint` and `resolve`. Supporting it is one change across all of them, not a per-tool patch.
+- A plan ID (`pl-012`) is not a work-item ID and is kept outside this pattern on purpose — see *The plan folder* below.
 
 The pattern lives as a constant in each tool that runs without the toolkit beside it: `adlc-trail.mjs` (`ID_SRC`), `scripts/vault-gen.mjs` (`WORK_ID_SRC`), the flightdeck mod's `hooks/model.ts` (`ID_SRC`), and `core/manifest.json` → `layout.idPattern`. Change them together. Proof that no narrower copy has crept back:
 
@@ -194,12 +197,65 @@ find .adlc/specs -maxdepth 4 -type f -name 'REQ-*.md'                           
 
 A folder whose record also exists is merged with its working set kept — list it under done, not active. `/status` and `/recover` take the active list from the first command and the done list from the second; `index` (the generator) does the same.
 
+Planned drafts (`.adlc/plan/drafts/`) are never enumerated: they are not work in flight and not finished work. Both commands scan `specs/` only, so they cannot return one.
+
 **The sentinel is the name, not a file inside the folder.** Both obvious alternatives are broken:
 
 - `pipeline-state.json` is gitignored, so on a teammate's fresh clone every folder looks empty and the enumerate returns nothing.
 - `requirement.md` doesn't exist in bug folders — `/bugfix` writes `bug.md`. A `requirement.md` sentinel finds zero bugs, permanently.
 
 Take the display ID from the REQ folder's basename. Under a partitioned vault, the child of `specs/` is a month (`2026-08`), not an ID.
+
+## The plan folder — `.adlc/plan/`
+
+Work that is planned but not started. `/roadmap` writes it; it is never partitioned and **all of it is committed** — except the plan-gate marker, which is one developer's open question and is in the gitignore set below.
+
+```
+.adlc/plan/
+  roadmap.md                       # written at planning time, by /roadmap only
+  brief.md                         # only when no source stated the problem and scope
+  playbook.md
+  risk-register.md                 # merge=union
+  gap-register.md                  # merge=union
+  challenge-log.md                 # merge=union
+  drafts/pl-012-payment-retries.md # one planned item, spec-template format
+  issues/pl-012.md                 # issue text for a human to post — only with a tracker
+  .awaiting-approval               # an open plan gate — gitignored
+```
+
+A draft is the spec template filled in, plus the planning rows (`Plan`, `Source`, `Issue`, `Depends on`, `External gates`, `Touches`, `Run with`). Its `Status` is `planned` and its `REQ` row is `—` until it is promoted; then `promoted` and the real ID. A draft `resync` retired is `dropped`. The planning rows are added by `/roadmap` — the spec template does not carry them, so an ordinary REQ never has them.
+
+**Drafts live outside `specs/` on purpose.** Three facts about `specs/` would each break them there:
+
+- Every `specs/**/REQ-*/` folder is gitignored — a draft inside one would never reach a teammate.
+- A `REQ-*` folder with no record beside it means *in flight* — every planned item would read as started work.
+- A `REQ-*.md` file beside a folder is the record and means *merged* — a draft named like one would read as finished.
+
+**Plan IDs** are `pl-NNN`: lowercase, three digits, minted by `/roadmap` only (max+1 over `plan/drafts/`), kept for the life of the item. Lowercase so a plan ID can never read as a tracker key (`PROJ-8`) and never matches the work-item pattern above — no `REQ-*` scan, matcher or generator picks a draft up. Promotion gives the item a second, separate ID; the plan ID stays in the `Plan` row.
+
+**Resolving a draft.** Three input forms mean "a planned draft": a path under `.adlc/plan/drafts/`, a draft's file name, or a bare plan ID:
+
+```sh
+find .adlc/plan/drafts -maxdepth 1 -type f -name 'pl-012-*.md'
+```
+
+A file name resolves the same way with `-name '<file name>'`. Zero hits: say so and stop. Two hits: show both and ask.
+
+## `promote(draft)` → `<REQ_PATH>`
+
+The one rule for turning a planned draft into a REQ. `/spec`, `/task`, `/proceed` and `/autopilot` point here; none restates it.
+
+1. **Read the draft.** If its `Status` is `dropped`, show the reason it carries and stop. If the vault is in a git repository and the draft is not tracked (`git ls-files --error-unmatch <draft>` fails), stop: the plan has to be committed before an item is started — an untracked `plan/` fails the clean-tree check in branch mode and is missing from a worktree. If its `REQ` row already holds an ID, it was promoted before: resolve that REQ per `resolve(ID)` and continue with it. Never create a second REQ for one draft. If the folder is not on this machine, say which case it is and stop — a record per `record(ID)` means merged; neither folder nor record means someone else started it on their branch.
+2. **Mint** the REQ ID per `mint(scheme)`. Under `ticket`, the draft's `Issue` row is the issue reference; if it is `—`, fall back exactly as `/spec` does and say so in one line.
+3. **Slug** = the draft's file name minus `pl-NNN-` and `.md`.
+4. **Create the REQ folder** per `layout.partition`, as `/spec` does. Copy the draft to `.adlc/<REQ_PATH>/requirement.md`, setting `REQ` to the minted ID and `Status` to `drafting`. Keep every other row, `Plan` included.
+5. `pipeline-state.json` gets one extra field: `"plan": "pl-NNN"`.
+6. **No re-draft.** The calling skill runs its own consultation and validation steps on the copied text and opens its first gate on it.
+7. **Write-back, once that first gate is approved *and* the REQ has a work path** (`/spec`: the spec gate; `/task`: its plan gate): copy the approved `requirement.md` over the draft file **under `<workPath>`**, with `Status: promoted` and the `REQ` row stamped. Whichever step makes the second condition true does it: the gate's `approve` when the work path already exists (`/autopilot`, a `/sprint` runner), otherwise the step that establishes the work path (`/architect` preflight 4, `/task` Phase 2 step 1). Never before the work path exists: the draft is a tracked file, so editing it in the base checkout would trip the clean-tree check in branch mode and would never reach the REQ's branch in worktree mode. This is the one edit a promotion makes under `.adlc/plan/`; it rides on the REQ's branch like any vault edit and follows `git.mode`.
+8. **On abort at that gate**, the draft is left untouched (`Status: planned`, `REQ: —`). It can be promoted again later.
+9. **At wrap-up** the record's `Source` row carries the plan ID after the issue link (`… · plan pl-012`).
+
+Nothing else under `.adlc/plan/` is edited by a pipeline skill; `roadmap.md` is written at planning time and by `/roadmap` only. Drafts are not union-merged: two people promoting the same draft on two branches usually conflict on that file at merge. Not always — under `ticket` both stamp the same ID, and identical write-backs merge silently — so the merge is a backstop, not the lock: on a team the claim is the issue's assignment (`/roadmap` → *Next*). Plan status is derived from the drafts, the records and the tracker — there is no second mapping table.
 
 ---
 
@@ -229,10 +285,13 @@ Per-developer scratch state is ignored; durable knowledge and shared logs are co
 .adlc/bugs/**/source-writeback.md
 .adlc/bugs/**/last-seen.json
 .adlc/sprints/**/*.json
+.adlc/plan/.awaiting-approval
 .adlc/ui-auth.env
 ```
 
 The first two patterns are 1.9.0: the **whole working set** is local, and the record beside it (`REQ-042-slug.md`, a file — the trailing `/` keeps the pattern off it; verified on a scratch repo for both depths) is what gets committed. The per-file lines after them are now redundant under the folder pattern but harmless; `/config migrate` appends the missing lines to an existing `.gitignore` and removes none, so a pre-1.9.0 vault keeps working with its old set until the user accepts the new block.
+
+One pattern touches `.adlc/plan/`: the plan-gate marker, which is per-developer like every other marker. Nothing else there is matched, so the roadmap, the registers and the drafts are committed — on purpose (*The plan folder*, above). Don't add another.
 
 Single-`*` versions of these silently stop matching the moment a vault partitions, and the symptom is per-developer heartbeat files appearing in everyone's diffs with no error anywhere. If you are editing this list, keep the `**`.
 
@@ -271,6 +330,7 @@ Ask one question: *does this outlive the REQ folder?*
 - **No** → it goes inside `<REQ_PATH>/` (the working set, local by default since 1.9.0 — nothing to add to the gitignore).
 - **Yes, and it is about this one item** → it is a section of the record `<REQ_PATH>.md`, ≤6KB in total, IDs and links only.
 - **Yes, and it is about the codebase** → it goes in `knowledge/`, `architecture/`, or `context/`, it is never partitioned, and it refers back by **ID**.
+- **It exists before the REQ does** (planning) → it goes under `plan/`, written by `/roadmap`. It is not a work item, and a pipeline skill's only edit there is `promote(draft)`'s write-back.
 
 ## When you change this file
 

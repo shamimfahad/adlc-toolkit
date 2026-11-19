@@ -15,6 +15,7 @@ Invocation patterns:
 - `/proceed` — pick up the active REQ from `now.md` if there's one in flight; otherwise ask the user.
 - `/proceed REQ-NNN-<slug>` — resume the named REQ from wherever its pipeline-state left off.
 - `/proceed <free-text feature description>` — start a new REQ from scratch.
+- `/proceed pl-NNN` (or a draft's path or file name under `.adlc/plan/drafts/`) — start a REQ from a planned draft written by `/roadmap`.
 - `/proceed [REQ-NNN-<slug>] --resume` — show a catch-up summary (what changed while you were away, recent activity, the pending gate question, a menu) before continuing. Use after a break, a session crash, or any time you want context before pressing forward.
 - `/proceed [REQ-NNN-<slug>] --revert~1` / `--revert~2` / `--revert~3` — walk back N completed phases via a `revert-plan.md` you approve. N is capped at 3; further walkbacks usually mean `--cancel` and re-running is cleaner.
 - `/proceed [REQ-NNN-<slug>] --cancel` — abandon the REQ; writes a `cancelled.md` tombstone with a user-provided reason, frees the worktree (worktree mode), and drafts branch cleanup commands for the user to run.
@@ -30,6 +31,7 @@ These flags assume `pipeline-state.json` is in sync with git reality. If state h
 2. **Read `.adlc/CLAUDE.md`** for the per-project schema doc, and the navigation files: `now.md`, `hot.md` (last 20), `config.yml`, `context/project-overview.md`, `context/conventions.md`.
 3. **Determine REQ identity.** Strip any `--resume`, `--revert~N`, or `--cancel` tokens out of the argument list before parsing the rest — flags are not REQ IDs and not free-text descriptions.
    - If a REQ ID was given, resolve its folder per VAULT-LAYOUT's `resolve` rule — `find .adlc/specs -maxdepth 4 -type d -name 'REQ-NNN-*'`, which covers flat, bucketed, and archived shapes in one pass. No hit: say so and stop. Two hits: show both and ask; never take the first. The hit minus the leading `.adlc/` is `<REQ_PATH>`, and every path below reads `.adlc/<REQ_PATH>/…`. Load `.adlc/<REQ_PATH>/pipeline-state.json`. If the only hit is under `specs/_archive/`, it's completed and archived — report its final state in one line and stop; archived REQs are read-only history (a follow-up change is a new REQ).
+   - If a planned draft was given — a path under `.adlc/plan/drafts/`, a draft's file name, or a bare plan ID (`pl-012`) — it is not free text and never mints a fresh REQ from its words. Run Phase 1 via `/spec` with the draft as its input; `/spec` promotes it per VAULT-LAYOUT's `promote(draft)`. If the draft was promoted before (its `REQ` row holds an ID), continue with that REQ exactly as if its ID had been given.
    - If a free-text description was given (and no flag was set), treat as a brand-new REQ — skip ahead to Phase 1 via `/spec`.
    - If only a flag was given, or no argument at all:
      - Check `now.md`'s active-REQ table. If exactly one REQ is in flight, use it.

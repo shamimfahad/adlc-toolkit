@@ -25,6 +25,10 @@ Load `$TOOLKIT_PATH/core/VAULT-LAYOUT.md`. This skill walks `specs/` and `bugs/`
 - **Measure the hot path** while you're here: `wc -c` on `now.md`, `CLAUDE.md`, each `context/*.md` (skip `*-rationale.md`); `wc -l` on `hot.md`; the newest active REQ's `review-packet.md` and `verification.md` sizes if present. These feed the budget strip in step 5.
 - `.adlc/index.md` — overall vault catalog (for context, not status)
 
+### 1a. An open plan gate
+
+If `.adlc/plan/.awaiting-approval` exists, a `/roadmap` gate is waiting for an answer. It belongs to no REQ, so the walk below never finds it. Read the marker (`Phase:`, `Plan:`, `Ask:`, `Options:`) and show it as the first row of the output, above the REQ list: `PLAN GATE · <Phase> · <Plan>` with the `Ask:` line and the options — it is waiting on the user like any other gate. No marker: say nothing about plan gates.
+
 ### 2. Walk active REQs
 
 List them with VAULT-LAYOUT's `enumerate(active)` rule — `find .adlc/specs -maxdepth 4 -type d -name 'REQ-*' -not -path '*/_archive/*'` — one pass that catches flat and bucketed folders alike and skips the archive (archived REQs are done by definition). The match is on the folder's **own name**. Don't test for `pipeline-state.json` instead: it's gitignored, so on a teammate's fresh clone every folder looks empty and the dashboard comes back blank. Take the display ID from that same folder name — in a bucketed vault the child of `specs/` is a month like `2026-08`, not an ID.

@@ -28,7 +28,8 @@ The defining feature: `/task` is **self-triaging**. Small work runs here; work t
 
 1. **Read the toolkit ETHOS** (`$TOOLKIT_PATH/ETHOS.md`) **, the gate protocol** (`$TOOLKIT_PATH/core/GATE-PROTOCOL.md`)**, the voice guide** (`$TOOLKIT_PATH/core/VOICE.md`)**, and the vault layout** (`$TOOLKIT_PATH/core/VAULT-LAYOUT.md` — where work records live on disk; never hard-code a path under `specs/`, `bugs/`, or `sprints/`) — the shared gate-card format used at both gates below.
 2. **Load vault basics.** `.adlc/CLAUDE.md`, `now.md`, `hot.md` (last 20), `config.yml`, `context/project-overview.md`, `context/conventions.md`.
-3. **Assign the REQ ID.** Mint it per `config.yml` → `req.id_scheme` (default `sequential`), exactly as `/spec` preflight does — one scan, `find .adlc/specs -maxdepth 4 -type d -name 'REQ-*'`, which covers every month bucket, every author folder, and `_archive/`. `sequential` takes max+1 padded to 3 (`REQ-NNN`); `prefixed` (`REQ-<req.prefix>-NNN`) narrows the `-name` to `REQ-<req.prefix>-*` but keeps the depth — scoped to your own author folder it would re-mint someone else's live IDs; `ticket` takes the issue key when invoked with an issue ref + `sources.issues`, else falls back to prefixed/sequential, noting it. `/task` uses the **same ID namespace and `specs/` tree as `/spec`** — this is what makes escalation to `/proceed` a clean handoff rather than a migration. Throughout, `REQ-NNN` denotes the assigned ID in whatever form the scheme produced.
+2a. **A planned draft?** If invoked with a planned draft written by `/roadmap` — a path under `.adlc/plan/drafts/`, a draft's file name, or a bare plan ID (`pl-012`) — follow VAULT-LAYOUT's `promote(draft)`. It drives steps 3–5 (ID, slug from the draft's file name, folder with the draft copied in as `requirement.md`); skip step 6. If `promote` returns a REQ that already exists, mint and create nothing: say where it stands in one line and hand it to `/proceed <REQ ID>`, which resumes it from its `pipeline-state.json`.
+3. **Assign the REQ ID.** Mint it per `config.yml` → `req.id_scheme` (default `sequential`), exactly as `/spec` preflight does — one scan per VAULT-LAYOUT's `mint` rule, folders **and** records to depth 4, which covers every month bucket, every author folder, `_archive/`, and merged items whose working set was deleted. `sequential` takes max+1 padded to 3 (`REQ-NNN`); `prefixed` (`REQ-<req.prefix>-NNN`) narrows the `-name` to `REQ-<req.prefix>-*` but keeps the depth — scoped to your own author folder it would re-mint someone else's live IDs; `ticket` takes the issue key when invoked with an issue ref + `sources.issues`, else falls back to prefixed/sequential, noting it. `/task` uses the **same ID namespace and `specs/` tree as `/spec`** — this is what makes escalation to `/proceed` a clean handoff rather than a migration. Throughout, `REQ-NNN` denotes the assigned ID in whatever form the scheme produced.
 4. **Determine the slug.** Short kebab-case, ≤40 chars.
 5. **Create the REQ folder.** Same rule as `/spec` preflight step 5: read `config.yml` → `layout.partition`; `none` gives `specs/REQ-NNN-<slug>`, `month-author` gives `specs/<YYYY-MM>/<author>/REQ-NNN-<slug>` — today's month (the creation month, fixed from here) and `<author>` the first of `layout.author`, `req.prefix`, initials from `git config user.name`, or `_`. `mkdir -p` the parents. **That vault-relative path is `<REQ_PATH>` below** — no `.adlc/` prefix, so paths read `.adlc/<REQ_PATH>/…`, and agent dispatch prompts get it written out in full (the agents resolve nothing).
 6. **Resolve a source reference (optional).** Same resolver as `/spec` preflight step 6 (issue ref / URL via `gh` → MCP → fetch when `sources.issues` is set). Additive; never blocks.
@@ -74,6 +75,8 @@ Write a compact `.adlc/<REQ_PATH>/requirement.md` — not the full spec template
 
 Add `kind: task` to the frontmatter so the vault and `/status` can tell task-REQs from full-pipeline REQs.
 
+**Promoting a planned draft:** don't write a compact requirement — `promote(draft)` already copied the draft in, and its Goal and acceptance criteria are what triage (step 2) and the gate judge. Keep its text; add only the **Approach** bullets and `kind: task`. Triage still runs as written and may still recommend `/proceed`.
+
 ### 4. Initialize pipeline state
 
 `.adlc/<REQ_PATH>/pipeline-state.json`:
@@ -94,6 +97,8 @@ Add `kind: task` to the frontmatter so the vault and `/status` can tell task-REQ
 }
 ```
 
+When promoting a planned draft, add `"plan": "pl-NNN"` (`promote(draft)` step 5).
+
 Work path is created only after this gate clears (so an escalate/abort leaves no branch behind).
 
 ### 5. Plan gate card
@@ -101,7 +106,7 @@ Work path is created only after this gate clears (so an escalate/abort leaves no
 Emit per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A task plan gate folds spec + architect into one and adds an `escalate` option:
 
 - **Verdict** — "small & low-risk — recommend approve", or "bigger than a task — recommend escalate".
-- **READY** — triage call (TASK, one-line why); `requirement.md`: goal (one line), `<N>` acceptance criteria, approach (`<N>` bullets, ~`<M>` files).
+- **READY** — triage call (TASK, one-line why); `requirement.md`: goal (one line), `<N>` acceptance criteria, approach (`<N>` bullets, ~`<M>` files). For a promoted draft, first `from planned draft pl-NNN — once approved, the requirement is copied back to it on the task's branch`; its `abort` option says the draft is left as it was.
 - **NEEDS YOU** — only if triage leans escalate (name the signal — sensitive surface / blast radius / ADR needed). Omit when it's cleanly a task.
 - **CHECKS** — acceptance testable · scope bounded, no sensitive surface · approach concrete (files named).
 - **MY READ** — recommendation + why (risk forces escalate regardless of size).
@@ -127,13 +132,13 @@ The answer is the user's next message: read its first words for the option and t
 On `approve`: delete the marker, set `gateState: "cleared"`, append `## [DATE] task-plan-cleared | REQ-NNN-<slug>` to `hot.md`, continue to Phase 2.
 On `escalate`: delete the marker, then follow **Escalation handoff**.
 On `revise`: apply it, rewrite the marker, re-emit the card, and end the turn.
-On `abort`: ask once, plainly, and end the turn — act only on a yes in the next reply.
+On `abort`: ask once, plainly, and end the turn — act only on a yes in the next reply. A promoted draft is left untouched (`promote(draft)` step 8); say so when you ask.
 
 ## Phase 2 — Implement (no gate)
 
 ### 1. Establish the work path
 
-Same pattern as `/architect`'s work-path step. Read `config.yml.workflow.isolation`; in `auto`/`branch` mode verify a clean tree and `git checkout -b feat/REQ-NNN-<slug>`; in `worktree` mode `git worktree add`. Record `isolation`, `workPath`, `branch`, `worktree` in pipeline-state. Append `## [DATE] work-path-set | REQ-NNN-<slug> | <mode>` to `hot.md`.
+Same pattern as `/architect`'s work-path step. Read `config.yml.workflow.isolation`; in `auto`/`branch` mode verify a clean tree and `git checkout -b feat/REQ-NNN-<slug>`; in `worktree` mode `git worktree add`. Record `isolation`, `workPath`, `branch`, `worktree` in pipeline-state. Append `## [DATE] work-path-set | REQ-NNN-<slug> | <mode>` to `hot.md`. If `pipeline-state.json` has a `plan` field, now write the approved requirement back over the draft under `<workPath>` (`promote(draft)` step 7) — here, not at the gate, so the edit is on the task's branch.
 
 ### 2. Make the change
 
@@ -210,7 +215,7 @@ Gate clearance mirrors `/wrapup`: on `approve`, delete the marker, set `gateStat
 When triage or mid-flight escalation routes to `/proceed`, hand off cleanly — nothing is recreated:
 
 1. The `REQ-NNN-<slug>` folder, `requirement.md`, and any branch/worktree already exist and stay.
-2. Update `pipeline-state.json`: drop `kind: task`, set the phase so `/proceed` resumes correctly — Phase 1 `cleared` if escalation happened at the plan gate (proceed runs architect next), or keep the current phase if work was already underway (escalation mid-implement resumes at architect over the started branch). Append `## [DATE] task-escalated-to-proceed | REQ-NNN-<slug> | <reason>` to `hot.md`.
+2. Update `pipeline-state.json`: drop `kind: task`, set the phase so `/proceed` resumes correctly — Phase 1 `cleared` if escalation happened at the plan gate (proceed runs architect next), or keep the current phase if work was already underway (escalation mid-implement resumes at architect over the started branch). Keep `plan` if it is set: when escalation happens at the plan gate, the draft has not been written back yet, and `/architect` does it when it establishes the work path. Append `## [DATE] task-escalated-to-proceed | REQ-NNN-<slug> | <reason>` to `hot.md`.
 3. The lightweight `requirement.md` becomes the seed `/proceed`'s architect phase reads. `/architect` may expand it (full blast radius, task DAG, ADR if needed) — escalation exists precisely because that rigor is now warranted.
 4. Invoke `/proceed REQ-NNN-<slug>` and exit `/task`.
 
@@ -233,4 +238,5 @@ Per `REQ-NNN-<slug>` (kind: task):
 - `lesson-candidates.md` (with verdicts; zero non-discard allowed)
 - `source-writeback.md` (only when configured and an issue is linked)
 - `pipeline-state.json`
+- The planned draft under `.adlc/plan/drafts/`, written back once the plan gate is approved and the work path exists (only when promoted from one)
 - The record `.adlc/<REQ_PATH>.md`; vault updates: `hot.md`, `now.md`, any promoted lessons/gotchas, and the generated `index.md` / `knowledge/lessons.md`

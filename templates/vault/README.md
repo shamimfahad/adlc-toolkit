@@ -31,6 +31,7 @@ toolkit:
 | `architecture/` | High-level architecture + ADRs |
 | `specs/` | Per requirement: a **record** `specs/REQ-042-slug.md` (one committed file, written once at wrap-up, ≤6KB — goal, criteria, what changed, decisions, verdict, knowledge IDs, follow-ups) beside its **working set** `specs/REQ-042-slug/` (everything the pipeline produced; local, gitignored, deleted on `merged` when you say so). Bucketed vaults keep the same tail: `specs/2026-08/sf/REQ-042-slug.md` + `/` |
 | `specs/_archive/` | Working sets you chose to **keep** after merge, moved here whole (offered at `merged` only when the folder was kept). Records never move — they are the history |
+| `plan/` | Planned work, before it is a REQ — written by `/roadmap`: the roadmap, playbook and registers, and one committed draft spec per item in `plan/drafts/pl-012-slug.md`. A pipeline skill given a draft promotes it to a REQ and copies the approved spec back |
 | `templates/` | Per-project copies of toolkit templates |
 | `config.yml` | Stack config — deploy targets, repo layout, `toolkit.repo` (where to get the toolkit) |
 | `local.yml` | **Yours only, gitignored.** `toolkit.path` — where your toolkit clone lives on this machine |

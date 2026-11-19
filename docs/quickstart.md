@@ -91,7 +91,7 @@ It creates `.adlc/`, scans existing docs (README, ARCHITECTURE, CONTRIBUTING, li
 /spec      → approve → /architect → approve → /implement → approve → /review → approve → /wrapup → approve
 ```
 
-Or run the whole thing with `/proceed`. Each gate pauses for your approval. For bugs, use `/bugfix`; for a small change, `/task` runs a slim two-gate pipeline that still records a REQ (and escalates to `/proceed` if it turns out large).
+Or run the whole thing with `/proceed`. Each gate pauses for your approval. When the work is more than one REQ — a new product, a large feature, a PRD or an estimate to turn into work — start with `/roadmap` instead: it writes a dependency roadmap and one draft spec per REQ under `.adlc/plan/`, and `/spec pl-012` starts any of them ([planning guide](planning.md)). For bugs, use `/bugfix`; for a small change, `/task` runs a slim two-gate pipeline that still records a REQ (and escalates to `/proceed` if it turns out large).
 
 ## Changing settings
 

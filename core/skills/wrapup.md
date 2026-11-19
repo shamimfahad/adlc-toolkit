@@ -140,7 +140,7 @@ Copy `.adlc/templates/record-template.md` (toolkit fallback `$TOOLKIT_PATH/templ
 
 | Section | Source |
 |---|---|
-| Header table | `pipeline-state.json` (path kind, branch, rounds, PR), `git log --oneline <base>..HEAD` and `--shortstat` (commits, lines), `usage.json` if present |
+| Header table | `pipeline-state.json` (path kind, branch, rounds, PR), `git log --oneline <base>..HEAD` and `--shortstat` (commits, lines), `usage.json` if present. `Source` gets ` · plan pl-NNN` after the issue link when `pipeline-state.json` has a `plan` field |
 | Goal | `requirement.md` Goal, past tense (you wrote this for the PR body at step 2 — reuse it) |
 | Acceptance criteria | `requirement.md`, ticked from `verification.md`'s cross-check |
 | What changed | `architecture.md` blast-radius table, paths only; two to four sentences of approach |

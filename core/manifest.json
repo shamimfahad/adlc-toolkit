@@ -10,7 +10,7 @@
       "bugs": ["month", "author"],
       "sprints": ["month"]
     },
-    "flat": ["audits", "knowledge", "architecture", "context"],
+    "flat": ["audits", "knowledge", "architecture", "context", "plan"],
     "monthFormat": "YYYY-MM",
     "maxDepth": 4,
     "idPattern": "(?:REQ|BUG)-(?:[a-z][a-z0-9]{0,7}-)?\\d+",
@@ -154,6 +154,13 @@
       "summary": "Standalone UX & design-system audit — static source pass + runtime browser pass, consolidated."
     },
     {
+      "name": "roadmap",
+      "category": "standalone",
+      "gate": true,
+      "agents": ["plan-challenger", "codebase-explorer"],
+      "summary": "Plan the work above a single REQ — dependency roadmap, one minimal draft spec per REQ, optional estimate and playbook. Sizes itself to the task; never assigns work to people."
+    },
+    {
       "name": "status",
       "category": "utility",
       "gate": false,
@@ -238,6 +245,14 @@
       "readonly": true,
       "dispatchable": true,
       "role": "Runtime UI/UX review — runs the app in a browser to verify render, flows, and design match. Browser mechanism auto-resolves and degrades. Read-only re: source."
+    },
+    {
+      "name": "plan-challenger",
+      "tier": "balanced",
+      "readonly": true,
+      "dispatchable": true,
+      "web": true,
+      "role": "Attacks a /roadmap plan through one lens (platform facts, alternatives, sequencing, risk) against current outside information; reports only project-specific, evidenced suggestions. Read-only."
     },
     {
       "name": "design-system-auditor",

@@ -11,7 +11,7 @@
 | Commits | `{{FIRST_SHA}}..{{LAST_SHA}}` ({{N}} commits, +{{ADDED}}/−{{REMOVED}} lines) |
 | Review rounds | {{ROUNDS}} |
 | Cost | {{USD}} · {{WEIGHTED_M}}M weighted _(from `usage.json`; "—" when absent)_ |
-| Source | {{ISSUE_OR_TICKET_LINK}} _(optional)_ |
+| Source | {{ISSUE_OR_TICKET_LINK}} _(optional; ` · plan pl-NNN` after it when the item came from a planned draft)_ |
 
 ## Goal
 

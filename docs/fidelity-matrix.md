@@ -22,6 +22,9 @@ All five assistants converged on the same three primitives — a memory/context 
 | Isolated sub-agents | ✅ | ⚠️ inline | ✅ | ✅ | ✅ |
 | **Reviewer read-only on source** | ⚠️ instruction | ⚠️ instruction | ⚠️ instruction | ⚠️ instruction | ⚠️ instruction |
 | Parallel sub-agents (`/sprint`) | ✅ | ❌ sequential | ⚠️ handoffs | ✅ | ✅ |
+| Independent plan challenge (`/roadmap`) | ✅ web tools granted | ❌ same context | ⚠️ handoffs | ⚠️ needs web search enabled | ⚠️ needs web access |
+| Plan gates (`/roadmap`) shown by `/status` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Plan gates seen by hooks (notify, re-read after compaction) | ❌ not yet — the extras scan `REQ-*`/`BUG-*` folders only | — | — | — | — |
 | Per-agent model tier | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Vault budgets enforced (hook) | ✅ `adlc-budget.mjs` | ❌ prose only | ❌ prose only | ❌ prose only | ❌ prose only |
 | Path-scoped conventions (`conventions-paths.md`) | ✅ native `.claude/rules/adlc-*.md` on read + hook on first write | ⚠️ skills grep the file by path | ⚠️ grep | ⚠️ grep | ⚠️ grep |

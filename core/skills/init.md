@@ -21,6 +21,7 @@ You are bootstrapping a new project's `.adlc/` vault. Invoke this skill once per
 3. Check whether `.adlc/` exists in the repo.
    - **Does not exist** → proceed.
    - **Exists but empty** → proceed, fill it in.
+   - **Holds only `plan/`** (written by `/roadmap`, which runs this protocol to bootstrap a new project) → proceed, and leave `plan/` untouched.
    - **Exists and non-empty** → **stop**. Surface what's there and ask the user whether to abort or overwrite (overwrite is destructive — confirm explicitly).
 
 ## Steps
@@ -387,6 +388,7 @@ If `.gitignore` exists at the repo root, **propose** (don't auto-write) appendin
 .adlc/bugs/**/source-writeback.md
 .adlc/bugs/**/last-seen.json
 .adlc/sprints/**/*.json
+.adlc/plan/.awaiting-approval
 .adlc/ui-auth.env
 ```
 

@@ -4,6 +4,26 @@ All notable changes to the ADLC toolkit. The toolkit version lives in `core/mani
 
 Labels used below: **[breaking]** needs action on update, **[protocol]** changes how a skill behaves, **[vault-format]** changes on-disk vault layout, **[tooling]** install/build only.
 
+## [Unreleased]
+
+### Planning — the layer above the REQ **[protocol]** **[vault-format]** **[tooling]**
+
+Nothing sat above a single REQ: no roadmap, no dependencies between REQs, nowhere for work that is planned but not started. Planning a project meant a long one-off prompt, and its drafts fought the vault — committed drafts needed a `.gitignore` exception, every planned folder under `specs/` read as work in flight, planning IDs clashed with the ID scheme, and starting one needed a hand-written script.
+
+- **`/roadmap`** — new skill. Reads whatever the project has (an idea, a PRD, an RFQ, an estimate, a tracker backlog, a repo) for the *roles* its parts fill, not for a format, and writes a dependency roadmap and one minimal draft spec per REQ; on request an estimate workbook and a playbook. It sizes itself: a run plan you approve first, and a one-REQ job is handed straight to `/spec` or `/task`. Modes `resync` (a source changed), `next` (what can start now), `issues` (record posted issue references), `challenge`. Its steps are modules in `core/skills/roadmap/`, each loaded only when selected and each overridable from `local/skills/roadmap/`. Guide: `docs/planning.md`.
+- **`.adlc/plan/`** — new vault folder, committed: `roadmap.md`, `drafts/pl-NNN-<slug>.md`, `playbook.md`, the registers. Drafts stay out of `specs/` on purpose (`VAULT-LAYOUT.md` → *The plan folder*). Plan IDs are lowercase `pl-NNN`, so one never reads as a tracker key or matches the work-item pattern.
+- **`promote(draft)`** — one rule in `VAULT-LAYOUT.md`, followed by `/spec`, `/task`, `/proceed` and `/autopilot`: each accepts `pl-012` (or the draft's path), mints the real REQ ID, opens its first gate on the draft's text without re-drafting, and writes the approved spec back over the draft once the REQ's branch exists. A draft whose `REQ` row is stamped never yields a second REQ; `/sprint` promotes its draft arguments through `/spec` first and its runner does the write-back in the worktree. The record's `Source` row carries the plan ID.
+- **Plan gates** (`GATE-PROTOCOL.md`) — a gate with no REQ: marker at `.adlc/plan/.awaiting-approval`, no trail call. Added to the gitignore set, in `/init`'s block, and in this repo's own `.gitignore`.
+- **No owners.** A plan never assigns work to people; an item is ready when its dependencies are merged, its inputs mitigated, and nothing in flight shares its `Touches`. For a team that needs a claim everyone can see, which the vault cannot give (working folders are local; `hot.md` union-merges two claims silently) — so `/roadmap` drafts issue text for a human to post and reads issue assignment as the claim. It never posts.
+- **`plan-challenger`** — new agent. Attacks a plan through one lens (platform facts, alternatives, sequencing, risk) against current outside information. A finding is reported only with the plan line it contradicts, the evidence, and a pass of the swap test (would it be equally true of an unrelated project?). Rejected findings are logged and not raised again.
+- **`pack-chat`** — `node scripts/adlc.mjs pack-chat` packs the same modules into one `SKILL.md` (`dist/chat/plan-with-adlc/`) for planning in a chat before a repo exists. `--check` reports a stale pack.
+- **Fixed:** `/spec`, `/task` and `/bugfix` minted IDs off a folders-only scan while `VAULT-LAYOUT.md`'s `mint` rule scans folders and records; a merged item whose working set was deleted could have its number re-minted. All three now follow the rule, and the rule names `bugs/BUG-*`.
+- **Fixed:** on a CRLF checkout (`core.autocrlf=true`) `build` and `sync` read no frontmatter — `parseFrontmatter` in `scripts/adlc.mjs` matched Unix line endings only — so every stub's description silently fell back to the manifest's one-line summary. It now normalises first, as `vault-gen.mjs` already did. If you synced from a Windows checkout, re-run `sync` to restore the full descriptions.
+- `/status` shows an open plan gate (`.adlc/plan/.awaiting-approval`) above the REQ list. `pack-chat --check` says MISSING when the pack was never built and STALE only when it differs. `/config templates` no longer offers to copy the four planning templates into a vault.
+- Templates: `roadmap`, `playbook`, `risk-register`, `gap-register`; the spec template is unchanged — planning rows are added to drafts by `/roadmap`, so an ordinary REQ never carries them. `templates/vault/.gitattributes` union-merges the two registers and the challenge log.
+- `core/manifest.json`: 19 skills, 14 agents; `layout.flat` gains `plan`. Adapters regenerated. Version not bumped here.
+- **On update:** run `/config migrate` in each project for the new `.gitignore` line and `.gitattributes` rules.
+
 ## [1.13.0]
 
 ### Where the toolkit lives, and where to get it **[vault-format]** **[tooling]**

@@ -117,10 +117,10 @@ Run phases one at a time, or chain them with `proceed` (gates between each), `au
 
 ## Skills
 
-Five phase skills, three orchestrators, two slim pipelines, and a set of standalone audits and utilities — each installed as a slash command in your assistant.
+Five phase skills, three orchestrators, two slim pipelines, a planning skill, and a set of standalone audits and utilities — each installed as a slash command in your assistant.
 
 <details>
-<summary><b>All 18 skills</b></summary>
+<summary><b>All 19 skills</b></summary>
 
 | Skill            | What it does                                                                                                               | Ends in gate? |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------- |
@@ -138,6 +138,7 @@ Five phase skills, three orchestrators, two slim pipelines, and a set of standal
 | `analyze`        | Standalone codebase health audit                                                                                           | No            |
 | `optimize`       | Standalone performance/cost scan                                                                                           | No            |
 | `ux-doctor`      | Standalone UX & design-system audit — static source pass + runtime browser pass; segments large apps into resumable phases | No            |
+| `roadmap`        | Plan the work above one REQ — dependency roadmap, a minimal draft spec per REQ, optional estimate and playbook             | Yes           |
 | `status`         | Show every active REQ and gate state                                                                                       | No            |
 | `recover`        | Reconcile pipeline-state with git reality; back-fill the vault                                                             | No            |
 | `config`         | View/change `.adlc/config.yml` settings (git mode, isolation, autonomy…) via guided options                                | No            |
@@ -184,11 +185,12 @@ flowchart LR
     uxd([ux-doctor]) --> dsa[design-system-auditor]
     uxd --> ui3[ui-reviewer]
     sprint2([sprint]) --> prn[pipeline-runner]
+    roadmap2([roadmap]) --> pc[plan-challenger]
     autopilot2([autopilot]) --> dm[decision-maker]
 ```
 
 <details>
-<summary><b>All 13 agents, their tiers and roles</b></summary>
+<summary><b>All 14 agents, their tiers and roles</b></summary>
 
 | Agent                  | Tier     | Role                                                                                                                         |
 | ---------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -201,6 +203,7 @@ flowchart LR
 | reflector              | balanced | Self-review against captured lessons. Read-only.                                                                             |
 | ui-reviewer            | balanced | Runtime UI/UX review — drives a browser to verify render, flows, and design match. Read-only re: source.                     |
 | design-system-auditor  | balanced | Static design-system audit: token compliance, scale coherence, duplication, drift. Read-only.                                |
+| plan-challenger        | balanced | Attacks a `roadmap` plan through one lens against current outside information; evidenced, project-specific findings only. Read-only. |
 | health-auditor         | balanced | Codebase health audit for `analyze`. Read-only.                                                                              |
 | performance-scanner    | balanced | API cost + DB perf + latency for `optimize`. Read-only.                                                                      |
 | pipeline-runner        | deep     | Runs the full pipeline for one REQ in a worktree for `sprint`. No sub-agents. Git per `git.mode` (feature branch only).      |

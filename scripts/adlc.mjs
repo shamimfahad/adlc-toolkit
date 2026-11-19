@@ -214,7 +214,9 @@ const localManifest = hasLocal('manifest.json')
 const manifest = mergeManifest(coreManifest, localManifest);
 
 function parseFrontmatter(text) {
-  const m = text.match(/^---\n([\s\S]*?)\n---/);
+  // Normalise first: on a CRLF checkout (core.autocrlf=true) `^---\n` never matched, so every
+  // description silently fell back to the manifest's one-line summary.
+  const m = text.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---/);
   const fm = {};
   if (m) {
     for (const line of m[1].split('\n')) {
@@ -310,7 +312,8 @@ function buildModel(toolkitPath) {
     ].join('\n');
   }
   const claudeTools = (a) =>
-    'Read, Write, Edit, Grep, Glob, Bash'; // all agents get Write; read-only agents write ONLY their own findings (role doc + ETHOS #3), never source
+    'Read, Write, Edit, Grep, Glob, Bash' + // all agents get Write; read-only agents write ONLY their own findings (role doc + ETHOS #3), never source
+    (a.web ? ', WebSearch, WebFetch' : ''); // manifest `web: true` — an agent whose job is checking outside facts (plan-challenger)
   const model = (tool, tier) =>
     (manifest.tierToModel[tool] && manifest.tierToModel[tool][tier]) || 'default';
   const effortLine = (tool, tier) => {
@@ -800,6 +803,7 @@ function usage() {
   log(`  node scripts/adlc.mjs rules   [--vault <dir>] [--check]   generate <repo>/.claude/rules/adlc-*.md from <vault>/context/conventions-paths.md`);
   log(`  node scripts/adlc.mjs settings --repo <path> [--dry-run] [--no-statusline]   wire the Claude extras (hooks, statusline) into <repo>/.claude/settings.local.json — this repo, this developer only`);
   log(`  node scripts/adlc.mjs trail gate|findings|show --req <id> …   record a gate answer / findings verdicts into the REQ's pipeline-state.json (1.10; the skills call this)`);
+  log(`  node scripts/adlc.mjs pack-chat [--out=<dir>] [--check]   pack the chat-home copy of /roadmap (one SKILL.md) from core/skills/roadmap/ into dist/chat/`);
   log(`  node scripts/adlc.mjs settings --global                                     the same into ~/.claude/settings.json — every session on this machine (opt-in)`);
 }
 
@@ -826,6 +830,15 @@ switch (SUB) {
       execFileSync(process.execPath, [join(__dirname, '..', 'core', 'extras', 'claude', 'hooks', 'adlc-trail.mjs'), ...process.argv.slice(3)], { stdio: 'inherit' });
     } catch (e) {
       process.exit(e.status ?? 1);
+    }
+    break;
+  }
+  case 'pack-chat': {
+    // The chat-home copy of /roadmap: one SKILL.md packed from the same module files the repo skill reads.
+    try {
+      execFileSync(process.execPath, [join(__dirname, 'pack-chat.mjs'), ...process.argv.slice(3)], { stdio: 'inherit' });
+    } catch (e) {
+      process.exit(e.status ?? 1); // --check reports STALE with exit 1; pass it through without a stack trace
     }
     break;
   }

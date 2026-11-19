@@ -91,6 +91,17 @@ Three more rounds ride the same command (1.11): `--decision predict` for what th
 
 The predict and summary asks end the turn the same way a gate does — a one-line header `ASK · Predict · <REQ>` (or `ASK · Summary · <REQ>`), the question, and `skip` as the one listed option — with no marker, since they are not gates, and never through a question dialog. They are skipped under `/autopilot` and `/sprint` (nobody is there to answer), when `config.yml.autonomy.predict_first` / `autonomy.review_summary` is `false`, and when that round is already in the trail.
 
+## Plan gates — a gate with no REQ
+
+`/roadmap` gates decide a plan, not a work item, so there is no REQ folder to hold the marker or the state. A plan gate differs in four places and nowhere else:
+
+- **Marker** at `.adlc/plan/.awaiting-approval` — the same fields, with the `REQ:` line replaced by `Plan: <plan slug>`. `Phase:` is the gate's name.
+- **Header** `PLAN GATE <n>/<m> · <name> · <plan slug>`.
+- **No trail.** There is no `trail gate` call — it needs a `<REQ_PATH>`.
+- **No `pipeline-state.json`.** Nothing is stamped before the card; the marker is the gate's whole state.
+
+Every invariant above holds unchanged: card and marker both written, done kept apart from needs-decision, a recommendation, every option with its consequence, the decision last, the turn ends, and the user's reply is the answer. After a compaction, re-read the skill, this file and the plan marker. `/task`'s *Plan* gate (gate 1/2) is not one of these — it belongs to a REQ and follows the normal rules.
+
 ## Diagrams
 
 Text-first (invariant 6). Render a structural thing as compact text when it earns space — a DAG as `T1,T2 → T3,T4 → T5`. The full Mermaid stays in the artifact file, where it renders in Obsidian / GitHub / IDE preview. Don't add a dedicated "Diagrams: …" line — the file is already named in what's done.

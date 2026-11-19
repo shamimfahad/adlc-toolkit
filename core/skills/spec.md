@@ -14,13 +14,15 @@ You are running Phase 1 of the ADLC pipeline: drafting and validating a requirem
 ## Inputs
 
 - The user's feature description (free text in chat), **or** a source reference — a bare issue number (`#8`), a tracker key (`PROJ-8`), or a full issue URL — when `sources.issues` is configured. The reference seeds the draft; the user still reviews it at the gate.
+- **Or** a planned draft written by `/roadmap` — a path under `.adlc/plan/drafts/`, a draft's file name (`pl-012-payment-retries.md`), or a bare plan ID (`pl-012`). The draft is the spec; preflight step 2a promotes it.
 - An optional REQ ID (if the user is overwriting an existing spec). Default: assign a new sequential ID.
 
 ## Preflight
 
 1. **Read the toolkit ETHOS** and **gate protocol.** Load `$TOOLKIT_PATH/ETHOS.md`, `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`, `$TOOLKIT_PATH/core/VOICE.md`, and `$TOOLKIT_PATH/core/VAULT-LAYOUT.md` (where work records live on disk — never hard-code a path under `specs/`, `bugs/`, or `sprints/`) into context (`$TOOLKIT_PATH` is the toolkit install dir, stamped into your command/adapter as a "Toolkit root:" line). The gate protocol is the shared gate-card format used at step 6.
 2. **Read the vault basics.** Load `.adlc/CLAUDE.md`, `.adlc/now.md`, `.adlc/hot.md` (last 20 entries), `.adlc/config.yml`, `.adlc/context/project-overview.md`, `.adlc/context/conventions.md`.
-3. **Determine the REQ ID.** Read `config.yml` → `req.id_scheme` (default `sequential` if absent) and `req.prefix`. Every scheme mints off the one scan from VAULT-LAYOUT's `mint` rule — `find .adlc/specs -maxdepth 4 -type d -name 'REQ-*'` — where depth 4 covers every month bucket, every author folder, **and** `_archive/` in a single pass. Archived REQs still own their numbers; other people's folders hold live ones.
+2a. **A planned draft?** If the input is a planned draft (see Inputs), follow VAULT-LAYOUT's `promote(draft)`. It drives steps 3–5: the ID is minted by step 3's scan (under `ticket`, from the draft's `Issue` row), the slug comes from the draft's file name, and the folder is created as step 5 says, with the draft copied in as `requirement.md`. Skip step 6 — the draft already carries its `Source` and `Issue` rows. If `promote` returns a REQ that already exists (the draft was promoted before), mint and create nothing: say in one line where that REQ stands, and treat this run as the existing-REQ case — its `requirement.md` is not overwritten without explicit confirmation.
+3. **Determine the REQ ID.** Read `config.yml` → `req.id_scheme` (default `sequential` if absent) and `req.prefix`. Every scheme mints off the one scan in VAULT-LAYOUT's `mint` rule — folders **and** records, to depth 4 — which covers every month bucket, every author folder, `_archive/`, and merged items whose working set was deleted, in a single pass. Archived REQs and records still own their numbers; other people's folders hold live ones.
    - If the user passed an explicit ID, run the same scan first and refuse if it collides.
    - Otherwise mint one per the scheme:
      - **`sequential`** — highest `REQ-NNN` in that scan, increment, pad to 3 digits → `REQ-NNN`. (Solo default; numbers can collide across people's branches.)
@@ -38,6 +40,8 @@ You are running Phase 1 of the ADLC pipeline: drafting and validating a requirem
 ## Steps
 
 ### 1. Draft the spec
+
+**Promoting a planned draft:** skip this step — the draft is the spec. `promote(draft)` already copied it to `requirement.md` with `REQ` set and `Status: drafting`. Do not re-draft or re-fill its sections; steps 2–6 run on it as written, and anything they flag goes on the card for the user to `revise`.
 
 Copy `.adlc/templates/spec-template.md` to `.adlc/<REQ_PATH>/requirement.md`. Substitute the placeholders using:
 
@@ -94,6 +98,8 @@ Create `.adlc/<REQ_PATH>/pipeline-state.json`:
 }
 ```
 
+When promoting a planned draft, add one field, `"plan": "pl-NNN"` (`promote(draft)` step 5). Nothing else changes.
+
 `notes[]` is a log line per phase event, ≤160 characters each — `spec-gate-cleared 2026-09-08`, `TASK-003 done: 41 passed · hatch precedes translator`. It is read in full by every phase preflight and by `/status`, `/proceed --resume`, and `/recover`, so a paragraph here is paid dozens of times. Narrative belongs in the artifact it describes (task file, `verification.md`, `hot.md` entry).
 
 Isolation, workPath, worktree, and branch get filled when the user moves to `/architect` (the architect skill or `/proceed` orchestrator creates them).
@@ -130,12 +136,15 @@ Files:
   - .adlc/<REQ_PATH>/requirement.md
 ```
 
+When promoting a planned draft, the `approve` and `abort` lines also say what happens to the draft — `approve — ready for /architect; the planned draft pl-NNN is updated to match on the REQ's branch` and `abort — deletes this REQ's folder; the planned draft pl-NNN is left as it was` — and `Files:` lists the draft too.
+
 ### 6. Emit the gate card
 
 Emit the gate per `$TOOLKIT_PATH/core/GATE-PROTOCOL.md`. A spec gate is one of the leanest — often just verdict + `CHECKS` + `MY READ` + decision, since there's nothing structural to show. Map:
 
 - **Header** — `Gate 1 of 5 · Spec · REQ-NNN-<slug>`.
 - **Verdict** — "clean — nothing flagged, recommend approve", or "ready — `<k>` item(s) need your call".
+- **From the plan** (promoted drafts only) — one line under the verdict: `from planned draft pl-NNN — once approved, the spec is copied back to it on the REQ's branch`.
 - **NEEDS YOU** (only if any) — open questions that bear on scope, or a vault lesson that should change an acceptance criterion. Omit when there are none.
 - **CHECKS** — the step-4 inline validation, one compact line: criteria testable · goal specific · assumptions explicit · no design · non-goals present. Note any vault references found (`[[…]]`) here or under READY.
 - **MY READ** — your recommendation + one-line why.
@@ -163,6 +172,7 @@ Decision →  approve (recommended — ready for /architect) · revise <what> ·
 
 If the user replies `approve`:
 
+0. **Promoted from a plan** (`pipeline-state.json` has a `plan` field): if `workPath` is already set (an `/autopilot` run, a `/sprint` runner), write the approved spec back now, per `promote(draft)` step 7 — copy `requirement.md` over the draft file under `<workPath>`, with `Status: promoted` and the `REQ` row stamped. If `workPath` is null, write nothing to the draft here: `/architect` does the write-back when it establishes the work path, so the edit lands on the REQ's branch and not in the base checkout.
 1. Delete `.awaiting-approval`.
 2. Update `pipeline-state.json`: `gateState: "cleared"`.
 3. Append to `.adlc/hot.md`: `## [DATE] spec-gate-cleared | REQ-NNN-<slug>`.
@@ -176,14 +186,16 @@ If the user replies with `revise: ...`:
 
 If the user replies `abort`:
 
-1. Ask once, plainly, and end the turn — "This deletes `.adlc/<REQ_PATH>/`. Abort?" — and act only on a yes in the next reply.
+1. Ask once, plainly, and end the turn — "This deletes `.adlc/<REQ_PATH>/`. Abort?" — and act only on a yes in the next reply. For a promoted draft, say that only the REQ folder goes: "This deletes `.adlc/<REQ_PATH>/` only — the planned draft `<draft path>` is not touched. Abort?"
 2. On that yes, delete the REQ folder.
 3. Append to `hot.md`: `## [DATE] spec-aborted | REQ-NNN-<slug>`.
+4. For a promoted draft, leave the draft untouched (`promote(draft)` step 8) and say so in one line: it is still `planned` and can be promoted again. If its `Issue` row names an issue assigned to this developer, remind them to unassign it — on a team the assignment is the claim (`/roadmap` → *Next*), and this skill never writes to the tracker.
 
 ## Constraints
 
 - **Never run git.** Work path creation (branch or worktree) is `/architect`'s or `/proceed`'s job.
 - **Never overwrite an existing requirement.md** without explicit confirmation.
+- **One edit under `.adlc/plan/`, and only one:** the write-back of a promoted draft, after `approve` and only under the REQ's work path (`promote(draft)` step 7). Nothing else there — `roadmap.md`, the registers, other drafts — is touched.
 - **Never proceed past the gate** without an `approve` response.
 - **Don't draft architecture or implementation details.** Resist the urge.
 
@@ -193,3 +205,4 @@ If the user replies `abort`:
 - `.adlc/<REQ_PATH>/pipeline-state.json`
 - `.adlc/<REQ_PATH>/.awaiting-approval` (until gate cleared)
 - New entry in `.adlc/hot.md` (on gate clearance or abort)
+- The planned draft under `.adlc/plan/drafts/`, written back after `approve` (only when promoting; here if the work path exists, else by `/architect`)

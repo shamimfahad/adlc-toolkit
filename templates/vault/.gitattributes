@@ -24,3 +24,11 @@ knowledge/gotchas.md  merge=union
 # never removes any — the lesson-ledger.md line stays harmless on a migrated vault.)
 knowledge/lessons.md        merge=union
 knowledge/lesson-ledger.md  merge=union
+
+# plan/ — /roadmap's registers are append-only tables, so union keeps the rows
+# both branches added. roadmap.md, playbook.md and plan/drafts/* are deliberately
+# NOT listed: a draft written back on two branches must conflict — that conflict
+# is the signal that two people promoted the same planned item.
+plan/risk-register.md   merge=union
+plan/gap-register.md    merge=union
+plan/challenge-log.md   merge=union

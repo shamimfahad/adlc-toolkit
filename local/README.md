@@ -20,6 +20,9 @@ pulling a new upstream release merges cleanly — there's nothing to rebase arou
 - Drop a file with the **same name** into `local/skills/` or `local/agents/`.
   The stub will point at your version instead of the core one. The core file is
   untouched, so upstream can keep improving it; you just shadow it.
+- `/roadmap` is built from modules in `core/skills/roadmap/`. Override one step
+  without copying the whole skill: put `local/skills/roadmap/<module>.md` beside
+  it. The skill (and `pack-chat`) reads your file in place of the core module.
 
 **Disable a core skill or agent** — drop one you don't use
 
